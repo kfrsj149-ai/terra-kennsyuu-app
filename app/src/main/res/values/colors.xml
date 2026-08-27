@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Single source of truth for the whole app's palette. Every screen reads
+      colors through TerraColors (ui/theme/Color.kt), which just wraps these
+      values — change a hex here and it propagates everywhere. Values below
+      are the provisional field-test palette: high-contrast, high-saturation,
+      always-light (no dark mode) for outdoor daylight visibility.
+    -->
+
+    <!-- Brand -->
+    <color name="terra_primary">#1B5E20</color>          <!-- deep forest green -->
+    <color name="terra_primary_variant">#0D3B12</color>
+    <color name="terra_secondary">#E65100</color>         <!-- log-cut orange -->
+    <color name="terra_secondary_variant">#BF360C</color>
+
+    <!-- Surfaces (always light) -->
+    <color name="terra_background">#FFFFFF</color>
+    <color name="terra_surface">#F5F5F0</color>
+    <color name="terra_surface_variant">#E8E5DC</color>
+
+    <!-- Text -->
+    <color name="terra_on_background">#1A1A1A</color>
+    <color name="terra_on_surface">#1A1A1A</color>
+    <color name="terra_on_primary">#FFFFFF</color>
+    <color name="terra_on_secondary">#FFFFFF</color>
+
+    <!-- Diameter grid card -->
+    <color name="terra_card_default">#2E7D32</color>
+    <color name="terra_card_default_text">#FFFFFF</color>
+    <color name="terra_card_flash">#FFEB3B</color>
+
+    <!-- Action buttons -->
+    <color name="terra_button_start">#1B5E20</color>
+    <color name="terra_button_cancel">#C62828</color>
+    <color name="terra_button_export">#E65100</color>
+    <color name="terra_button_voice">#0277BD</color>
+    <color name="terra_button_voice_active">#C62828</color>
+
+    <!-- Status -->
+    <color name="terra_error">#C62828</color>
+    <color name="terra_success">#2E7D32</color>
+    <color name="terra_cancelled_text">#9E9E9E</color>
+
+    <!-- Dividers / outlines -->
+    <color name="terra_outline">#BDBDBD</color>
+</resources>

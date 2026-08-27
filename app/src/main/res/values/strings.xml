@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TERRA</string>
+
+    <!-- Common -->
+    <string name="common_yes">はい</string>
+    <string name="common_back">戻る</string>
+    <string name="common_cancel">キャンセル</string>
+    <string name="common_save">保存</string>
+    <string name="common_delete">削除</string>
+    <string name="common_edit">編集</string>
+    <string name="common_add">追加</string>
+    <string name="common_close">閉じる</string>
+    <string name="common_ok">OK</string>
+    <string name="common_none">なし</string>
+    <string name="common_optional">任意</string>
+
+    <!-- Hamburger menu -->
+    <string name="menu_title">メニュー</string>
+    <string name="menu_open_cd">メニューを開く</string>
+    <string name="menu_settings_section">設定・事前登録</string>
+    <string name="menu_companies">会社名の登録</string>
+    <string name="menu_trucks">トラック車番の登録</string>
+    <string name="menu_language">表示言語</string>
+    <string name="menu_button_side">ボタン配置</string>
+    <string name="menu_presets">よく使う設定</string>
+    <string name="menu_history">伝票履歴</string>
+    <string name="menu_backup">自動バックアップ</string>
+
+    <!-- Company management -->
+    <string name="company_title">会社名の登録</string>
+    <string name="company_name_hint">会社名</string>
+    <string name="company_add_button">会社名を追加</string>
+    <string name="company_empty">登録された会社名がありません</string>
+
+    <!-- Truck management -->
+    <string name="truck_title">トラック車番の登録</string>
+    <string name="truck_number_hint">車番</string>
+    <string name="truck_add_button">車番を追加</string>
+    <string name="truck_empty">登録された車番がありません</string>
+
+    <!-- Language -->
+    <string name="language_title">表示言語</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_vietnamese">Tiếng Việt</string>
+    <string name="language_tagalog">Tagalog</string>
+    <string name="language_thai">ไทย</string>
+    <string name="language_malay">Bahasa Melayu</string>
+
+    <!-- Button side -->
+    <string name="button_side_title">操作ボタンの配置</string>
+    <string name="button_side_description">データ出力・音声入力ボタンの位置を選べます</string>
+    <string name="button_side_left">左下</string>
+    <string name="button_side_right">右下</string>
+
+    <!-- Presets ("よく使う設定") -->
+    <string name="preset_title">よく使う設定</string>
+    <string name="preset_add">よく使う設定を追加</string>
+    <string name="preset_name_hint">設定名</string>
+    <string name="preset_species_hint">樹種</string>
+    <string name="preset_length_hint">規格長さ (m)</string>
+    <string name="preset_min_diameter">最小径級</string>
+    <string name="preset_max_diameter">最大径級</string>
+    <string name="preset_empty">登録された「よく使う設定」がありません</string>
+
+    <!-- History -->
+    <string name="history_title">伝票履歴</string>
+    <string name="history_empty">伝票履歴がありません</string>
+    <string name="history_reopen">詳細を見る</string>
+    <string name="history_export_again">再出力</string>
+    <string name="history_slip_summary">%1$s　%2$s本　%3$sm³</string>
+
+    <!-- Setup screen -->
+    <string name="setup_title">計測準備</string>
+    <string name="setup_species_label">樹種</string>
+    <string name="setup_species_hint">樹種を入力</string>
+    <string name="setup_length_label">規格長さ</string>
+    <string name="setup_length_hint">例: 4 または 4.15</string>
+    <string name="setup_diameter_range_label">納入規格範囲（径級 cm）</string>
+    <string name="setup_diameter_min">最小径級</string>
+    <string name="setup_diameter_max">最大径級</string>
+    <string name="setup_truck_label">トラック車番</string>
+    <string name="setup_site_label">現場名</string>
+    <string name="setup_destination_label">納入先</string>
+    <string name="setup_company_label">自社名</string>
+    <string name="setup_memo_label">備考</string>
+    <string name="setup_memo_hint">備考（任意）</string>
+    <string name="setup_start_button">計測開始</string>
+    <string name="setup_preset_shortcut_title">よく使う設定から選ぶ</string>
+    <string name="setup_select_placeholder">選択してください</string>
+    <string name="setup_error_species_required">樹種を入力してください</string>
+    <string name="setup_error_length_invalid">規格長さを正しく入力してください</string>
+    <string name="setup_error_diameter_range_invalid">最小径級は最大径級以下にしてください</string>
+
+    <!-- Start confirm dialog -->
+    <string name="start_confirm_title">計測開始の確認</string>
+    <string name="start_confirm_message">%1$s、%2$sm、納入規格 %3$s〜%4$scm\nこの内容で開始しますか？</string>
+
+    <!-- Measurement screen -->
+    <string name="measure_total_count_label">合計本数</string>
+    <string name="measure_total_volume_label">合計材積</string>
+    <string name="measure_unit_count">本</string>
+    <string name="measure_unit_volume">m³</string>
+    <string name="measure_history_title">入力履歴</string>
+    <string name="measure_history_empty">まだ入力がありません</string>
+    <string name="measure_undo_last_button">直前取消</string>
+    <string name="measure_undo_last_hint">長押しで径級ごとの取消もできます</string>
+    <string name="measure_export_button">データ出力</string>
+    <string name="measure_voice_button_cd">音声入力</string>
+    <string name="measure_diameter_unit_suffix">cm</string>
+    <string name="measure_cancelled_tag">取消</string>
+    <string name="measure_diameter_card_cd">径級%1$scm、%2$s本、%3$sm³</string>
+    <string name="measure_long_press_cancel_toast">%1$scmを1本取消しました</string>
+
+    <!-- Output confirm dialog -->
+    <string name="output_confirm_title">出力確認</string>
+    <string name="output_confirm_species">樹種：%1$s</string>
+    <string name="output_confirm_length">規格長さ：%1$sm</string>
+    <string name="output_confirm_count">合計本数：%1$s本</string>
+    <string name="output_confirm_volume">合計材積：%1$sm³</string>
+    <string name="output_confirm_memo_label">備考（追記）</string>
+    <string name="output_confirm_memo_hint">出力時のメモ（任意）</string>
+    <string name="output_confirm_message">本当によろしいですか？</string>
+    <string name="output_share_chooser_title">検収データを共有</string>
+    <string name="output_no_data_toast">入力データがありません</string>
+
+    <!-- CSV -->
+    <string name="csv_header_date">日付</string>
+    <string name="csv_header_slip_no">伝票番号</string>
+    <string name="csv_header_spec_diameter">納入規格(cm)</string>
+    <string name="csv_header_spec_length">規格長(m)</string>
+    <string name="csv_header_diameter">径級(cm)</string>
+    <string name="csv_header_count">本数</string>
+    <string name="csv_header_subtotal_volume">小計材積(m³)</string>
+    <string name="csv_header_cumulative_count">累計本数</string>
+    <string name="csv_header_cumulative_volume">累計材積(m³)</string>
+    <string name="csv_header_memo">メモ</string>
+    <string name="csv_filename_prefix">TERRA_検収</string>
+
+    <!-- Voice input -->
+    <string name="voice_permission_rationale">音声入力には録音権限が必要です</string>
+    <string name="voice_permission_denied">録音権限が許可されていません</string>
+    <string name="voice_listening">聞き取り中…</string>
+    <string name="voice_not_recognized">認識できませんでした</string>
+    <string name="voice_out_of_range">範囲外の径級です：%1$scm</string>
+
+    <!-- Backup -->
+    <string name="backup_title">Googleドライブ自動バックアップ</string>
+    <string name="backup_description">Wi-Fi接続時に1日1回、検収データを自動的にGoogleドライブへバックアップします</string>
+    <string name="backup_enable">自動バックアップを有効にする</string>
+    <string name="backup_sign_in">Googleアカウントでログイン</string>
+    <string name="backup_sign_out">ログアウト</string>
+    <string name="backup_signed_in_as">ログイン中：%1$s</string>
+    <string name="backup_last_success">前回のバックアップ：%1$s</string>
+    <string name="backup_never">バックアップ未実行</string>
+    <string name="backup_run_now">今すぐバックアップ</string>
+
+    <!-- Errors -->
+    <string name="error_generic">エラーが発生しました</string>
+    <string name="error_db_write_failed">データの保存に失敗しました</string>
+</resources>

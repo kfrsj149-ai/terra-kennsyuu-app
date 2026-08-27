@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base theme is Compose-driven (see ui/theme/Theme.kt); this XML theme
+         only sets the window/system-bar look so the launch screen and
+         non-Compose chrome match before Compose takes over. Always light —
+         TERRA intentionally does not offer a dark theme (outdoor daylight
+         legibility takes priority over battery/eye-strain concerns). -->
+    <style name="Theme.Terra" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/terra_primary_variant</item>
+        <item name="android:navigationBarColor">@color/terra_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item>
+    </style>
+</resources>

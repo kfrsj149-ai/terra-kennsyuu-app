@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Auto-backup to the OS is disabled (android:allowBackup="false") because
+  TERRA ships its own explicit, Wi-Fi-gated Google Drive backup of the Room
+  database. This file is kept only to satisfy the manifest attribute and is
+  inert while allowBackup is false.
+-->
+<full-backup-content>
+</full-backup-content>
