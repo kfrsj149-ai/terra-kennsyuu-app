@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TERRA</string>
+
+    <string name="common_yes">Oo</string>
+    <string name="common_back">Bumalik</string>
+    <string name="common_cancel">Kanselahin</string>
+    <string name="common_save">I-save</string>
+    <string name="common_delete">Tanggalin</string>
+    <string name="common_edit">I-edit</string>
+    <string name="common_add">Idagdag</string>
+    <string name="common_close">Isara</string>
+    <string name="common_ok">OK</string>
+    <string name="common_none">Wala</string>
+    <string name="common_optional">Opsyonal</string>
+
+    <string name="menu_title">Menu</string>
+    <string name="menu_open_cd">Buksan ang menu</string>
+    <string name="menu_settings_section">Mga Setting / Paunang Pagpaparehistro</string>
+    <string name="menu_companies">Pagpaparehistro ng Pangalan ng Kompanya</string>
+    <string name="menu_trucks">Pagpaparehistro ng Plaka ng Trak</string>
+    <string name="menu_language">Wika ng Display</string>
+    <string name="menu_button_side">Posisyon ng Buton</string>
+    <string name="menu_presets">Madalas Gamitin na Setting</string>
+    <string name="menu_history">Kasaysayan ng Resibo</string>
+    <string name="menu_backup">Awtomatikong Backup</string>
+
+    <string name="company_title">Pagpaparehistro ng Pangalan ng Kompanya</string>
+    <string name="company_name_hint">Pangalan ng Kompanya</string>
+    <string name="company_add_button">Magdagdag ng Pangalan ng Kompanya</string>
+    <string name="company_empty">Walang naka-rehistrong pangalan ng kompanya</string>
+
+    <string name="truck_title">Pagpaparehistro ng Plaka ng Trak</string>
+    <string name="truck_number_hint">Plaka ng Trak</string>
+    <string name="truck_add_button">Magdagdag ng Plaka</string>
+    <string name="truck_empty">Walang naka-rehistrong plaka ng trak</string>
+
+    <string name="language_title">Wika ng Display</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_vietnamese">Tiếng Việt</string>
+    <string name="language_tagalog">Tagalog</string>
+    <string name="language_thai">ไทย</string>
+    <string name="language_malay">Bahasa Melayu</string>
+
+    <string name="button_side_title">Posisyon ng mga Buton</string>
+    <string name="button_side_description">Piliin ang posisyon ng mga buton ng Pag-export ng Data / Voice Input</string>
+    <string name="button_side_left">Ibabang Kaliwa</string>
+    <string name="button_side_right">Ibabang Kanan</string>
+
+    <string name="preset_title">Madalas Gamitin na Setting</string>
+    <string name="preset_add">Magdagdag ng Madalas Gamitin na Setting</string>
+    <string name="preset_name_hint">Pangalan ng Setting</string>
+    <string name="preset_species_hint">Uri ng Kahoy</string>
+    <string name="preset_length_hint">Standard na Haba (m)</string>
+    <string name="preset_min_diameter">Pinakamaliit na Diameter</string>
+    <string name="preset_max_diameter">Pinakamalaking Diameter</string>
+    <string name="preset_empty">Walang naka-rehistrong madalas gamitin na setting</string>
+
+    <string name="history_title">Kasaysayan ng Resibo</string>
+    <string name="history_empty">Walang kasaysayan ng resibo</string>
+    <string name="history_reopen">Tingnan ang Detalye</string>
+    <string name="history_export_again">I-export Muli</string>
+    <string name="history_slip_summary">%1$s　%2$s piraso　%3$sm³</string>
+
+    <string name="setup_title">Paghahanda sa Pagsukat</string>
+    <string name="setup_species_label">Uri ng Kahoy</string>
+    <string name="setup_species_hint">Ilagay ang uri ng kahoy</string>
+    <string name="setup_length_label">Standard na Haba</string>
+    <string name="setup_length_hint">Hal: 4 o 4.15</string>
+    <string name="setup_diameter_range_label">Saklaw ng Diameter ng Delivery (cm)</string>
+    <string name="setup_diameter_min">Pinakamaliit na Diameter</string>
+    <string name="setup_diameter_max">Pinakamalaking Diameter</string>
+    <string name="setup_truck_label">Plaka ng Trak</string>
+    <string name="setup_site_label">Pangalan ng Site</string>
+    <string name="setup_destination_label">Padadalhan</string>
+    <string name="setup_company_label">Sariling Kompanya</string>
+    <string name="setup_memo_label">Tala</string>
+    <string name="setup_memo_hint">Tala (opsyonal)</string>
+    <string name="setup_start_button">Simulan ang Pagsukat</string>
+    <string name="setup_preset_shortcut_title">Pumili mula sa Madalas Gamitin na Setting</string>
+    <string name="setup_select_placeholder">Mangyaring pumili</string>
+    <string name="setup_error_species_required">Mangyaring ilagay ang uri ng kahoy</string>
+    <string name="setup_error_length_invalid">Mangyaring wastong ilagay ang standard na haba</string>
+    <string name="setup_error_diameter_range_invalid">Ang pinakamaliit na diameter ay dapat mas mababa o katumbas ng pinakamalaking diameter</string>
+
+    <string name="start_confirm_title">Kumpirmasyon ng Pagsisimula ng Pagsukat</string>
+    <string name="start_confirm_message">%1$s, %2$sm, saklaw %3$s〜%4$scm\nMagsisimula ba?</string>
+
+    <string name="measure_total_count_label">Kabuuang Bilang</string>
+    <string name="measure_total_volume_label">Kabuuang Volume</string>
+    <string name="measure_unit_count">piraso</string>
+    <string name="measure_unit_volume">m³</string>
+    <string name="measure_history_title">Kasaysayan ng Input</string>
+    <string name="measure_history_empty">Wala pang input</string>
+    <string name="measure_undo_last_button">Kanselahin ang Huli</string>
+    <string name="measure_undo_last_hint">Pindutin nang matagal para kanselahin ayon sa diameter</string>
+    <string name="measure_export_button">I-export ang Data</string>
+    <string name="measure_voice_button_cd">Voice Input</string>
+    <string name="measure_diameter_unit_suffix">cm</string>
+    <string name="measure_cancelled_tag">Nakansela</string>
+    <string name="measure_diameter_card_cd">diameter %1$scm, %2$s piraso, %3$sm³</string>
+    <string name="measure_long_press_cancel_toast">Nakansela ang 1 piraso na %1$scm</string>
+
+    <string name="output_confirm_title">Kumpirmasyon ng Pag-export</string>
+    <string name="output_confirm_species">Uri ng Kahoy: %1$s</string>
+    <string name="output_confirm_length">Standard na Haba: %1$sm</string>
+    <string name="output_confirm_count">Kabuuang Bilang: %1$s piraso</string>
+    <string name="output_confirm_volume">Kabuuang Volume: %1$sm³</string>
+    <string name="output_confirm_memo_label">Tala (karagdagan)</string>
+    <string name="output_confirm_memo_hint">Tala sa pag-export (opsyonal)</string>
+    <string name="output_confirm_message">Sigurado ka ba?</string>
+    <string name="output_share_chooser_title">Ibahagi ang Data ng Inspeksyon</string>
+    <string name="output_no_data_toast">Walang data na i-eexport</string>
+
+    <string name="csv_header_date">Petsa</string>
+    <string name="csv_header_slip_no">Numero ng Resibo</string>
+    <string name="csv_header_spec_diameter">Saklaw ng Delivery(cm)</string>
+    <string name="csv_header_spec_length">Standard na Haba(m)</string>
+    <string name="csv_header_diameter">Diameter(cm)</string>
+    <string name="csv_header_count">Bilang</string>
+    <string name="csv_header_subtotal_volume">Subtotal na Volume(m³)</string>
+    <string name="csv_header_cumulative_count">Kabuuang Bilang</string>
+    <string name="csv_header_cumulative_volume">Kabuuang Volume(m³)</string>
+    <string name="csv_header_memo">Tala</string>
+    <string name="csv_filename_prefix">TERRA_Inspeksyon</string>
+
+    <string name="voice_permission_rationale">Kailangan ng pahintulot sa pag-record para sa voice input</string>
+    <string name="voice_permission_denied">Hindi pinahintulutan ang pag-record</string>
+    <string name="voice_listening">Nakikinig…</string>
+    <string name="voice_not_recognized">Hindi nakilala</string>
+    <string name="voice_out_of_range">Diameter na labas sa saklaw: %1$scm</string>
+
+    <string name="backup_title">Awtomatikong Backup sa Google Drive</string>
+    <string name="backup_description">Awtomatikong nagba-back up ng data ng inspeksyon sa Google Drive isang beses sa isang araw kapag naka-Wi-Fi</string>
+    <string name="backup_enable">I-enable ang Awtomatikong Backup</string>
+    <string name="backup_sign_in">Mag-sign in gamit ang Google Account</string>
+    <string name="backup_sign_out">Mag-sign out</string>
+    <string name="backup_signed_in_as">Naka-sign in bilang: %1$s</string>
+    <string name="backup_last_success">Huling Backup: %1$s</string>
+    <string name="backup_never">Wala pang Backup</string>
+    <string name="backup_run_now">I-backup Ngayon</string>
+
+    <string name="error_generic">May naganap na error</string>
+    <string name="error_db_write_failed">Nabigo ang pag-save ng data</string>
+</resources>

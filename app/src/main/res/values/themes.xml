@@ -5,7 +5,7 @@
          non-Compose chrome match before Compose takes over. Always light —
          TERRA intentionally does not offer a dark theme (outdoor daylight
          legibility takes priority over battery/eye-strain concerns). -->
-    <style name="Theme.Terra" parent="Theme.Material3.Light.NoActionBar">
+    <style name="Theme.Terra" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:statusBarColor">@color/terra_primary_variant</item>
         <item name="android:navigationBarColor">@color/terra_background</item>
         <item name="android:windowLightStatusBar">false</item>

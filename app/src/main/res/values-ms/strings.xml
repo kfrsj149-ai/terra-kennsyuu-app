@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TERRA</string>
+
+    <string name="common_yes">Ya</string>
+    <string name="common_back">Kembali</string>
+    <string name="common_cancel">Batal</string>
+    <string name="common_save">Simpan</string>
+    <string name="common_delete">Padam</string>
+    <string name="common_edit">Edit</string>
+    <string name="common_add">Tambah</string>
+    <string name="common_close">Tutup</string>
+    <string name="common_ok">OK</string>
+    <string name="common_none">Tiada</string>
+    <string name="common_optional">Pilihan</string>
+
+    <string name="menu_title">Menu</string>
+    <string name="menu_open_cd">Buka menu</string>
+    <string name="menu_settings_section">Tetapan / Pendaftaran Awal</string>
+    <string name="menu_companies">Pendaftaran Nama Syarikat</string>
+    <string name="menu_trucks">Pendaftaran Nombor Plat Trak</string>
+    <string name="menu_language">Bahasa Paparan</string>
+    <string name="menu_button_side">Kedudukan Butang</string>
+    <string name="menu_presets">Tetapan Kerap Digunakan</string>
+    <string name="menu_history">Sejarah Resit</string>
+    <string name="menu_backup">Sandaran Automatik</string>
+
+    <string name="company_title">Pendaftaran Nama Syarikat</string>
+    <string name="company_name_hint">Nama Syarikat</string>
+    <string name="company_add_button">Tambah Nama Syarikat</string>
+    <string name="company_empty">Tiada nama syarikat didaftarkan</string>
+
+    <string name="truck_title">Pendaftaran Nombor Plat Trak</string>
+    <string name="truck_number_hint">Nombor Plat</string>
+    <string name="truck_add_button">Tambah Nombor Plat</string>
+    <string name="truck_empty">Tiada nombor plat didaftarkan</string>
+
+    <string name="language_title">Bahasa Paparan</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_vietnamese">Tiếng Việt</string>
+    <string name="language_tagalog">Tagalog</string>
+    <string name="language_thai">ไทย</string>
+    <string name="language_malay">Bahasa Melayu</string>
+
+    <string name="button_side_title">Kedudukan Butang Operasi</string>
+    <string name="button_side_description">Pilih kedudukan butang Eksport Data / Input Suara</string>
+    <string name="button_side_left">Bawah Kiri</string>
+    <string name="button_side_right">Bawah Kanan</string>
+
+    <string name="preset_title">Tetapan Kerap Digunakan</string>
+    <string name="preset_add">Tambah Tetapan Kerap Digunakan</string>
+    <string name="preset_name_hint">Nama Tetapan</string>
+    <string name="preset_species_hint">Jenis Kayu</string>
+    <string name="preset_length_hint">Panjang Piawai (m)</string>
+    <string name="preset_min_diameter">Diameter Minimum</string>
+    <string name="preset_max_diameter">Diameter Maksimum</string>
+    <string name="preset_empty">Tiada tetapan kerap digunakan didaftarkan</string>
+
+    <string name="history_title">Sejarah Resit</string>
+    <string name="history_empty">Tiada sejarah resit</string>
+    <string name="history_reopen">Lihat Butiran</string>
+    <string name="history_export_again">Eksport Semula</string>
+    <string name="history_slip_summary">%1$s　%2$s batang　%3$sm³</string>
+
+    <string name="setup_title">Persediaan Pengukuran</string>
+    <string name="setup_species_label">Jenis Kayu</string>
+    <string name="setup_species_hint">Masukkan jenis kayu</string>
+    <string name="setup_length_label">Panjang Piawai</string>
+    <string name="setup_length_hint">Cth: 4 atau 4.15</string>
+    <string name="setup_diameter_range_label">Julat Diameter Penghantaran (cm)</string>
+    <string name="setup_diameter_min">Diameter Minimum</string>
+    <string name="setup_diameter_max">Diameter Maksimum</string>
+    <string name="setup_truck_label">Nombor Plat Trak</string>
+    <string name="setup_site_label">Nama Tapak</string>
+    <string name="setup_destination_label">Destinasi Penghantaran</string>
+    <string name="setup_company_label">Syarikat Sendiri</string>
+    <string name="setup_memo_label">Nota</string>
+    <string name="setup_memo_hint">Nota (pilihan)</string>
+    <string name="setup_start_button">Mula Pengukuran</string>
+    <string name="setup_preset_shortcut_title">Pilih daripada Tetapan Kerap Digunakan</string>
+    <string name="setup_select_placeholder">Sila pilih</string>
+    <string name="setup_error_species_required">Sila masukkan jenis kayu</string>
+    <string name="setup_error_length_invalid">Sila masukkan panjang piawai dengan betul</string>
+    <string name="setup_error_diameter_range_invalid">Diameter minimum mesti kurang daripada atau sama dengan diameter maksimum</string>
+
+    <string name="start_confirm_title">Pengesahan Mula Pengukuran</string>
+    <string name="start_confirm_message">%1$s, %2$sm, julat %3$s〜%4$scm\nAdakah anda ingin mula?</string>
+
+    <string name="measure_total_count_label">Jumlah Batang</string>
+    <string name="measure_total_volume_label">Jumlah Isipadu</string>
+    <string name="measure_unit_count">batang</string>
+    <string name="measure_unit_volume">m³</string>
+    <string name="measure_history_title">Sejarah Input</string>
+    <string name="measure_history_empty">Tiada input lagi</string>
+    <string name="measure_undo_last_button">Batal Terakhir</string>
+    <string name="measure_undo_last_hint">Tekan lama untuk membatalkan mengikut diameter</string>
+    <string name="measure_export_button">Eksport Data</string>
+    <string name="measure_voice_button_cd">Input Suara</string>
+    <string name="measure_diameter_unit_suffix">cm</string>
+    <string name="measure_cancelled_tag">Dibatalkan</string>
+    <string name="measure_diameter_card_cd">diameter %1$scm, %2$s batang, %3$sm³</string>
+    <string name="measure_long_press_cancel_toast">1 batang %1$scm telah dibatalkan</string>
+
+    <string name="output_confirm_title">Pengesahan Eksport</string>
+    <string name="output_confirm_species">Jenis Kayu: %1$s</string>
+    <string name="output_confirm_length">Panjang Piawai: %1$sm</string>
+    <string name="output_confirm_count">Jumlah Batang: %1$s batang</string>
+    <string name="output_confirm_volume">Jumlah Isipadu: %1$sm³</string>
+    <string name="output_confirm_memo_label">Nota (tambahan)</string>
+    <string name="output_confirm_memo_hint">Nota semasa eksport (pilihan)</string>
+    <string name="output_confirm_message">Adakah anda pasti?</string>
+    <string name="output_share_chooser_title">Kongsi Data Pemeriksaan</string>
+    <string name="output_no_data_toast">Tiada data untuk dieksport</string>
+
+    <string name="csv_header_date">Tarikh</string>
+    <string name="csv_header_slip_no">Nombor Resit</string>
+    <string name="csv_header_spec_diameter">Julat Penghantaran(cm)</string>
+    <string name="csv_header_spec_length">Panjang Piawai(m)</string>
+    <string name="csv_header_diameter">Diameter(cm)</string>
+    <string name="csv_header_count">Bilangan</string>
+    <string name="csv_header_subtotal_volume">Jumlah Kecil Isipadu(m³)</string>
+    <string name="csv_header_cumulative_count">Bilangan Terkumpul</string>
+    <string name="csv_header_cumulative_volume">Isipadu Terkumpul(m³)</string>
+    <string name="csv_header_memo">Nota</string>
+    <string name="csv_filename_prefix">TERRA_Pemeriksaan</string>
+
+    <string name="voice_permission_rationale">Kebenaran rakaman diperlukan untuk input suara</string>
+    <string name="voice_permission_denied">Kebenaran rakaman tidak diberikan</string>
+    <string name="voice_listening">Sedang mendengar…</string>
+    <string name="voice_not_recognized">Tidak dapat dikenali</string>
+    <string name="voice_out_of_range">Diameter di luar julat: %1$scm</string>
+
+    <string name="backup_title">Sandaran Automatik ke Google Drive</string>
+    <string name="backup_description">Menyandarkan data pemeriksaan secara automatik ke Google Drive sekali sehari apabila disambungkan ke Wi-Fi</string>
+    <string name="backup_enable">Aktifkan Sandaran Automatik</string>
+    <string name="backup_sign_in">Log Masuk dengan Akaun Google</string>
+    <string name="backup_sign_out">Log Keluar</string>
+    <string name="backup_signed_in_as">Log masuk sebagai: %1$s</string>
+    <string name="backup_last_success">Sandaran Terakhir: %1$s</string>
+    <string name="backup_never">Belum Disandarkan</string>
+    <string name="backup_run_now">Sandarkan Sekarang</string>
+
+    <string name="error_generic">Ralat berlaku</string>
+    <string name="error_db_write_failed">Gagal menyimpan data</string>
+</resources>

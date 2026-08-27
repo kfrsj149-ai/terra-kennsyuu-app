@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TERRA</string>
+
+    <string name="common_yes">Có</string>
+    <string name="common_back">Quay lại</string>
+    <string name="common_cancel">Hủy</string>
+    <string name="common_save">Lưu</string>
+    <string name="common_delete">Xóa</string>
+    <string name="common_edit">Sửa</string>
+    <string name="common_add">Thêm</string>
+    <string name="common_close">Đóng</string>
+    <string name="common_ok">OK</string>
+    <string name="common_none">Không có</string>
+    <string name="common_optional">Tùy chọn</string>
+
+    <string name="menu_title">Menu</string>
+    <string name="menu_open_cd">Mở menu</string>
+    <string name="menu_settings_section">Cài đặt / Đăng ký trước</string>
+    <string name="menu_companies">Đăng ký tên công ty</string>
+    <string name="menu_trucks">Đăng ký biển số xe</string>
+    <string name="menu_language">Ngôn ngữ hiển thị</string>
+    <string name="menu_button_side">Vị trí nút</string>
+    <string name="menu_presets">Cài đặt thường dùng</string>
+    <string name="menu_history">Lịch sử phiếu</string>
+    <string name="menu_backup">Sao lưu tự động</string>
+
+    <string name="company_title">Đăng ký tên công ty</string>
+    <string name="company_name_hint">Tên công ty</string>
+    <string name="company_add_button">Thêm tên công ty</string>
+    <string name="company_empty">Chưa có tên công ty nào được đăng ký</string>
+
+    <string name="truck_title">Đăng ký biển số xe</string>
+    <string name="truck_number_hint">Biển số xe</string>
+    <string name="truck_add_button">Thêm biển số xe</string>
+    <string name="truck_empty">Chưa có biển số xe nào được đăng ký</string>
+
+    <string name="language_title">Ngôn ngữ hiển thị</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_vietnamese">Tiếng Việt</string>
+    <string name="language_tagalog">Tagalog</string>
+    <string name="language_thai">ไทย</string>
+    <string name="language_malay">Bahasa Melayu</string>
+
+    <string name="button_side_title">Vị trí nút thao tác</string>
+    <string name="button_side_description">Bạn có thể chọn vị trí nút Xuất dữ liệu / Nhập bằng giọng nói</string>
+    <string name="button_side_left">Dưới bên trái</string>
+    <string name="button_side_right">Dưới bên phải</string>
+
+    <string name="preset_title">Cài đặt thường dùng</string>
+    <string name="preset_add">Thêm cài đặt thường dùng</string>
+    <string name="preset_name_hint">Tên cài đặt</string>
+    <string name="preset_species_hint">Loại gỗ</string>
+    <string name="preset_length_hint">Chiều dài quy cách (m)</string>
+    <string name="preset_min_diameter">Đường kính nhỏ nhất</string>
+    <string name="preset_max_diameter">Đường kính lớn nhất</string>
+    <string name="preset_empty">Chưa có cài đặt thường dùng nào</string>
+
+    <string name="history_title">Lịch sử phiếu</string>
+    <string name="history_empty">Không có lịch sử phiếu</string>
+    <string name="history_reopen">Xem chi tiết</string>
+    <string name="history_export_again">Xuất lại</string>
+    <string name="history_slip_summary">%1$s　%2$s cây　%3$sm³</string>
+
+    <string name="setup_title">Chuẩn bị đo</string>
+    <string name="setup_species_label">Loại gỗ</string>
+    <string name="setup_species_hint">Nhập loại gỗ</string>
+    <string name="setup_length_label">Chiều dài quy cách</string>
+    <string name="setup_length_hint">VD: 4 hoặc 4.15</string>
+    <string name="setup_diameter_range_label">Phạm vi đường kính giao hàng (cm)</string>
+    <string name="setup_diameter_min">Đường kính nhỏ nhất</string>
+    <string name="setup_diameter_max">Đường kính lớn nhất</string>
+    <string name="setup_truck_label">Biển số xe</string>
+    <string name="setup_site_label">Tên công trường</string>
+    <string name="setup_destination_label">Nơi giao hàng</string>
+    <string name="setup_company_label">Tên công ty</string>
+    <string name="setup_memo_label">Ghi chú</string>
+    <string name="setup_memo_hint">Ghi chú (không bắt buộc)</string>
+    <string name="setup_start_button">Bắt đầu đo</string>
+    <string name="setup_preset_shortcut_title">Chọn từ cài đặt thường dùng</string>
+    <string name="setup_select_placeholder">Vui lòng chọn</string>
+    <string name="setup_error_species_required">Vui lòng nhập loại gỗ</string>
+    <string name="setup_error_length_invalid">Vui lòng nhập đúng chiều dài quy cách</string>
+    <string name="setup_error_diameter_range_invalid">Đường kính nhỏ nhất phải nhỏ hơn hoặc bằng đường kính lớn nhất</string>
+
+    <string name="start_confirm_title">Xác nhận bắt đầu đo</string>
+    <string name="start_confirm_message">%1$s, %2$sm, quy cách %3$s〜%4$scm\nBạn có muốn bắt đầu không?</string>
+
+    <string name="measure_total_count_label">Tổng số cây</string>
+    <string name="measure_total_volume_label">Tổng thể tích</string>
+    <string name="measure_unit_count">cây</string>
+    <string name="measure_unit_volume">m³</string>
+    <string name="measure_history_title">Lịch sử nhập</string>
+    <string name="measure_history_empty">Chưa có dữ liệu nhập</string>
+    <string name="measure_undo_last_button">Hủy lần cuối</string>
+    <string name="measure_undo_last_hint">Nhấn giữ để hủy theo từng đường kính</string>
+    <string name="measure_export_button">Xuất dữ liệu</string>
+    <string name="measure_voice_button_cd">Nhập bằng giọng nói</string>
+    <string name="measure_diameter_unit_suffix">cm</string>
+    <string name="measure_cancelled_tag">Đã hủy</string>
+    <string name="measure_diameter_card_cd">đường kính %1$scm, %2$s cây, %3$sm³</string>
+    <string name="measure_long_press_cancel_toast">Đã hủy 1 cây đường kính %1$scm</string>
+
+    <string name="output_confirm_title">Xác nhận xuất dữ liệu</string>
+    <string name="output_confirm_species">Loại gỗ: %1$s</string>
+    <string name="output_confirm_length">Chiều dài quy cách: %1$sm</string>
+    <string name="output_confirm_count">Tổng số cây: %1$s cây</string>
+    <string name="output_confirm_volume">Tổng thể tích: %1$sm³</string>
+    <string name="output_confirm_memo_label">Ghi chú (bổ sung)</string>
+    <string name="output_confirm_memo_hint">Ghi chú khi xuất (không bắt buộc)</string>
+    <string name="output_confirm_message">Bạn có chắc chắn không?</string>
+    <string name="output_share_chooser_title">Chia sẻ dữ liệu nghiệm thu</string>
+    <string name="output_no_data_toast">Không có dữ liệu để xuất</string>
+
+    <string name="csv_header_date">Ngày</string>
+    <string name="csv_header_slip_no">Số phiếu</string>
+    <string name="csv_header_spec_diameter">Quy cách giao hàng(cm)</string>
+    <string name="csv_header_spec_length">Chiều dài quy cách(m)</string>
+    <string name="csv_header_diameter">Đường kính(cm)</string>
+    <string name="csv_header_count">Số lượng</string>
+    <string name="csv_header_subtotal_volume">Thể tích tổng phụ(m³)</string>
+    <string name="csv_header_cumulative_count">Số lượng lũy kế</string>
+    <string name="csv_header_cumulative_volume">Thể tích lũy kế(m³)</string>
+    <string name="csv_header_memo">Ghi chú</string>
+    <string name="csv_filename_prefix">TERRA_NghiemThu</string>
+
+    <string name="voice_permission_rationale">Cần quyền ghi âm để sử dụng nhập bằng giọng nói</string>
+    <string name="voice_permission_denied">Quyền ghi âm chưa được cấp</string>
+    <string name="voice_listening">Đang lắng nghe…</string>
+    <string name="voice_not_recognized">Không nhận dạng được</string>
+    <string name="voice_out_of_range">Đường kính ngoài phạm vi: %1$scm</string>
+
+    <string name="backup_title">Sao lưu tự động lên Google Drive</string>
+    <string name="backup_description">Tự động sao lưu dữ liệu nghiệm thu lên Google Drive mỗi ngày 1 lần khi kết nối Wi-Fi</string>
+    <string name="backup_enable">Bật sao lưu tự động</string>
+    <string name="backup_sign_in">Đăng nhập bằng tài khoản Google</string>
+    <string name="backup_sign_out">Đăng xuất</string>
+    <string name="backup_signed_in_as">Đã đăng nhập: %1$s</string>
+    <string name="backup_last_success">Sao lưu gần nhất: %1$s</string>
+    <string name="backup_never">Chưa từng sao lưu</string>
+    <string name="backup_run_now">Sao lưu ngay</string>
+
+    <string name="error_generic">Đã xảy ra lỗi</string>
+    <string name="error_db_write_failed">Lưu dữ liệu thất bại</string>
+</resources>

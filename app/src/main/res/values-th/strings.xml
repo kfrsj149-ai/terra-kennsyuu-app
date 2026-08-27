@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TERRA</string>
+
+    <string name="common_yes">ใช่</string>
+    <string name="common_back">ย้อนกลับ</string>
+    <string name="common_cancel">ยกเลิก</string>
+    <string name="common_save">บันทึก</string>
+    <string name="common_delete">ลบ</string>
+    <string name="common_edit">แก้ไข</string>
+    <string name="common_add">เพิ่ม</string>
+    <string name="common_close">ปิด</string>
+    <string name="common_ok">ตกลง</string>
+    <string name="common_none">ไม่มี</string>
+    <string name="common_optional">ไม่บังคับ</string>
+
+    <string name="menu_title">เมนู</string>
+    <string name="menu_open_cd">เปิดเมนู</string>
+    <string name="menu_settings_section">การตั้งค่า / ลงทะเบียนล่วงหน้า</string>
+    <string name="menu_companies">ลงทะเบียนชื่อบริษัท</string>
+    <string name="menu_trucks">ลงทะเบียนทะเบียนรถบรรทุก</string>
+    <string name="menu_language">ภาษาที่แสดง</string>
+    <string name="menu_button_side">ตำแหน่งปุ่ม</string>
+    <string name="menu_presets">การตั้งค่าที่ใช้บ่อย</string>
+    <string name="menu_history">ประวัติใบส่งของ</string>
+    <string name="menu_backup">สำรองข้อมูลอัตโนมัติ</string>
+
+    <string name="company_title">ลงทะเบียนชื่อบริษัท</string>
+    <string name="company_name_hint">ชื่อบริษัท</string>
+    <string name="company_add_button">เพิ่มชื่อบริษัท</string>
+    <string name="company_empty">ไม่มีชื่อบริษัทที่ลงทะเบียนไว้</string>
+
+    <string name="truck_title">ลงทะเบียนทะเบียนรถบรรทุก</string>
+    <string name="truck_number_hint">ทะเบียนรถ</string>
+    <string name="truck_add_button">เพิ่มทะเบียนรถ</string>
+    <string name="truck_empty">ไม่มีทะเบียนรถที่ลงทะเบียนไว้</string>
+
+    <string name="language_title">ภาษาที่แสดง</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_vietnamese">Tiếng Việt</string>
+    <string name="language_tagalog">Tagalog</string>
+    <string name="language_thai">ไทย</string>
+    <string name="language_malay">Bahasa Melayu</string>
+
+    <string name="button_side_title">ตำแหน่งปุ่มควบคุม</string>
+    <string name="button_side_description">เลือกตำแหน่งปุ่มส่งออกข้อมูล / ป้อนข้อมูลด้วยเสียง</string>
+    <string name="button_side_left">ล่างซ้าย</string>
+    <string name="button_side_right">ล่างขวา</string>
+
+    <string name="preset_title">การตั้งค่าที่ใช้บ่อย</string>
+    <string name="preset_add">เพิ่มการตั้งค่าที่ใช้บ่อย</string>
+    <string name="preset_name_hint">ชื่อการตั้งค่า</string>
+    <string name="preset_species_hint">ชนิดไม้</string>
+    <string name="preset_length_hint">ความยาวมาตรฐาน (ม.)</string>
+    <string name="preset_min_diameter">เส้นผ่านศูนย์กลางต่ำสุด</string>
+    <string name="preset_max_diameter">เส้นผ่านศูนย์กลางสูงสุด</string>
+    <string name="preset_empty">ไม่มีการตั้งค่าที่ใช้บ่อยที่ลงทะเบียนไว้</string>
+
+    <string name="history_title">ประวัติใบส่งของ</string>
+    <string name="history_empty">ไม่มีประวัติใบส่งของ</string>
+    <string name="history_reopen">ดูรายละเอียด</string>
+    <string name="history_export_again">ส่งออกอีกครั้ง</string>
+    <string name="history_slip_summary">%1$s　%2$s ท่อน　%3$sm³</string>
+
+    <string name="setup_title">เตรียมการวัด</string>
+    <string name="setup_species_label">ชนิดไม้</string>
+    <string name="setup_species_hint">ป้อนชนิดไม้</string>
+    <string name="setup_length_label">ความยาวมาตรฐาน</string>
+    <string name="setup_length_hint">เช่น 4 หรือ 4.15</string>
+    <string name="setup_diameter_range_label">ช่วงเส้นผ่านศูนย์กลางที่ส่งมอบ (ซม.)</string>
+    <string name="setup_diameter_min">เส้นผ่านศูนย์กลางต่ำสุด</string>
+    <string name="setup_diameter_max">เส้นผ่านศูนย์กลางสูงสุด</string>
+    <string name="setup_truck_label">ทะเบียนรถบรรทุก</string>
+    <string name="setup_site_label">ชื่อไซต์งาน</string>
+    <string name="setup_destination_label">ปลายทางส่งมอบ</string>
+    <string name="setup_company_label">บริษัทของตนเอง</string>
+    <string name="setup_memo_label">หมายเหตุ</string>
+    <string name="setup_memo_hint">หมายเหตุ (ไม่บังคับ)</string>
+    <string name="setup_start_button">เริ่มการวัด</string>
+    <string name="setup_preset_shortcut_title">เลือกจากการตั้งค่าที่ใช้บ่อย</string>
+    <string name="setup_select_placeholder">กรุณาเลือก</string>
+    <string name="setup_error_species_required">กรุณาป้อนชนิดไม้</string>
+    <string name="setup_error_length_invalid">กรุณาป้อนความยาวมาตรฐานให้ถูกต้อง</string>
+    <string name="setup_error_diameter_range_invalid">เส้นผ่านศูนย์กลางต่ำสุดต้องน้อยกว่าหรือเท่ากับเส้นผ่านศูนย์กลางสูงสุด</string>
+
+    <string name="start_confirm_title">ยืนยันการเริ่มวัด</string>
+    <string name="start_confirm_message">%1$s、%2$sม.、ช่วง %3$s〜%4$sซม.\nต้องการเริ่มหรือไม่?</string>
+
+    <string name="measure_total_count_label">จำนวนรวม</string>
+    <string name="measure_total_volume_label">ปริมาตรรวม</string>
+    <string name="measure_unit_count">ท่อน</string>
+    <string name="measure_unit_volume">m³</string>
+    <string name="measure_history_title">ประวัติการป้อนข้อมูล</string>
+    <string name="measure_history_empty">ยังไม่มีการป้อนข้อมูล</string>
+    <string name="measure_undo_last_button">ยกเลิกรายการล่าสุด</string>
+    <string name="measure_undo_last_hint">กดค้างเพื่อยกเลิกตามขนาดเส้นผ่านศูนย์กลาง</string>
+    <string name="measure_export_button">ส่งออกข้อมูล</string>
+    <string name="measure_voice_button_cd">ป้อนข้อมูลด้วยเสียง</string>
+    <string name="measure_diameter_unit_suffix">ซม.</string>
+    <string name="measure_cancelled_tag">ยกเลิกแล้ว</string>
+    <string name="measure_diameter_card_cd">เส้นผ่านศูนย์กลาง %1$sซม. %2$s ท่อน %3$sm³</string>
+    <string name="measure_long_press_cancel_toast">ยกเลิก 1 ท่อนขนาด %1$sซม. แล้ว</string>
+
+    <string name="output_confirm_title">ยืนยันการส่งออกข้อมูล</string>
+    <string name="output_confirm_species">ชนิดไม้: %1$s</string>
+    <string name="output_confirm_length">ความยาวมาตรฐาน: %1$sม.</string>
+    <string name="output_confirm_count">จำนวนรวม: %1$s ท่อน</string>
+    <string name="output_confirm_volume">ปริมาตรรวม: %1$sm³</string>
+    <string name="output_confirm_memo_label">หมายเหตุ (เพิ่มเติม)</string>
+    <string name="output_confirm_memo_hint">หมายเหตุตอนส่งออก (ไม่บังคับ)</string>
+    <string name="output_confirm_message">ยืนยันหรือไม่?</string>
+    <string name="output_share_chooser_title">แชร์ข้อมูลการตรวจรับ</string>
+    <string name="output_no_data_toast">ไม่มีข้อมูลให้ส่งออก</string>
+
+    <string name="csv_header_date">วันที่</string>
+    <string name="csv_header_slip_no">เลขที่ใบส่งของ</string>
+    <string name="csv_header_spec_diameter">ช่วงส่งมอบ(ซม.)</string>
+    <string name="csv_header_spec_length">ความยาวมาตรฐาน(ม.)</string>
+    <string name="csv_header_diameter">เส้นผ่านศูนย์กลาง(ซม.)</string>
+    <string name="csv_header_count">จำนวน</string>
+    <string name="csv_header_subtotal_volume">ปริมาตรย่อย(m³)</string>
+    <string name="csv_header_cumulative_count">จำนวนสะสม</string>
+    <string name="csv_header_cumulative_volume">ปริมาตรสะสม(m³)</string>
+    <string name="csv_header_memo">หมายเหตุ</string>
+    <string name="csv_filename_prefix">TERRA_ตรวจรับ</string>
+
+    <string name="voice_permission_rationale">ต้องได้รับอนุญาตให้บันทึกเสียงเพื่อใช้การป้อนข้อมูลด้วยเสียง</string>
+    <string name="voice_permission_denied">ไม่ได้รับอนุญาตให้บันทึกเสียง</string>
+    <string name="voice_listening">กำลังฟัง…</string>
+    <string name="voice_not_recognized">ไม่สามารถจดจำได้</string>
+    <string name="voice_out_of_range">เส้นผ่านศูนย์กลางนอกช่วง: %1$sซม.</string>
+
+    <string name="backup_title">สำรองข้อมูลอัตโนมัติไปยัง Google ไดรฟ์</string>
+    <string name="backup_description">สำรองข้อมูลการตรวจรับไปยัง Google ไดรฟ์โดยอัตโนมัติวันละ 1 ครั้งเมื่อเชื่อมต่อ Wi-Fi</string>
+    <string name="backup_enable">เปิดใช้งานสำรองข้อมูลอัตโนมัติ</string>
+    <string name="backup_sign_in">เข้าสู่ระบบด้วยบัญชี Google</string>
+    <string name="backup_sign_out">ออกจากระบบ</string>
+    <string name="backup_signed_in_as">เข้าสู่ระบบเป็น: %1$s</string>
+    <string name="backup_last_success">สำรองข้อมูลล่าสุด: %1$s</string>
+    <string name="backup_never">ยังไม่เคยสำรองข้อมูล</string>
+    <string name="backup_run_now">สำรองข้อมูลตอนนี้</string>
+
+    <string name="error_generic">เกิดข้อผิดพลาด</string>
+    <string name="error_db_write_failed">บันทึกข้อมูลไม่สำเร็จ</string>
+</resources>

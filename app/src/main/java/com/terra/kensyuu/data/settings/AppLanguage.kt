@@ -23,5 +23,9 @@ enum class AppLanguage(val tag: String, @StringRes val displayNameRes: Int) {
         /** デバイスのシステム言語から対応言語を推定する。非対応言語は日本語。 */
         fun fromSystemLocaleTag(languageTag: String): AppLanguage =
             entries.firstOrNull { languageTag.startsWith(it.tag) } ?: DEFAULT
+
+        /** ユーザーが手動選択していれば優先し、なければシステム言語から自動選択する。 */
+        fun resolveEffective(overrideTag: String?, systemLocaleTag: String): AppLanguage =
+            overrideTag?.let { fromTag(it) } ?: fromSystemLocaleTag(systemLocaleTag)
     }
 }
