@@ -248,17 +248,21 @@
 <dialog id="dlg-output">
   <div class="dlg-body">
     <div class="dlg-title" data-i18n="output.title">出力内容の確認</div>
-    <table class="summary-table" id="output-summary"></table>
+    <!-- 伝票番号は転記時に真っ先に必要なので最上部に置く -->
     <div class="field">
       <label for="out-ticket-no" data-i18n="output.ticketNo">伝票番号</label>
       <input type="text" id="out-ticket-no" inputmode="numeric" autocomplete="off">
     </div>
+    <table class="summary-table" id="output-summary"></table>
+    <!-- 手書き伝票への転記元になる明細表 -->
+    <table class="detail-table" id="output-detail"></table>
     <div class="field">
       <label for="out-note" data-i18n="output.note">備考</label>
       <textarea id="out-note"></textarea>
     </div>
-    <p class="dlg-question" data-i18n="output.confirm">本当によろしいですか？</p>
   </div>
+  <!-- 確認文はスクロールの外。表を読んでいる途中でも必ず目に入る -->
+  <p class="dlg-question dlg-confirm" data-i18n="output.confirm">本当によろしいですか？</p>
   <div class="dlg-foot">
     <button type="button" class="btn btn-primary" id="output-yes" data-i18n="common.yes">はい</button>
     <button type="button" class="btn" id="output-no" data-i18n="common.back">戻る</button>

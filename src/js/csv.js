@@ -3,7 +3,19 @@
  * 日付,伝票番号,納入規格(cm),規格長(m),径級(cm),本数,小計材積(m³),累計本数,累計材積(m³),メモ
  */
 import { t } from './i18n.js';
-import { formatVolume, formatLength, toHundredths, volumeNumerator, diameterRange } from './jas.js';
+import { formatVolume, formatLength, toHundredths, volumeNumerator, truncateNumerator, diameterRange } from './jas.js';
+
+/**
+ * 合計材積の丸め方針。ここ1か所を変えれば画面もCSVも同時に切り替わる。
+ *   'exact'       : 端数を保持したまま合計し、表示の瞬間だけ切り捨てる
+ *                   （CLAUDE.mdのテストケース 12m材38本 = 166.698m³ に一致する）
+ *   'perDiameter' : 径級ごとに切り捨ててから合計する
+ *                   （材積表を使った手計算と1円単位まで一致するが、合計は 166.683m³ になる）
+ */
+export const VOLUME_ROUNDING = 'exact';
+
+const applyRounding = (numerator) =>
+  (VOLUME_ROUNDING === 'perDiameter' ? truncateNumerator(numerator) : numerator);
 
 const CSV_KEYS = [
   'csv.date', 'csv.ticketNo', 'csv.spec', 'csv.length', 'csv.diameter',
@@ -32,22 +44,30 @@ export function aggregate(ticket) {
   for (const d of order) {
     const n = counts.get(d) ?? 0;
     if (n === 0) continue;
-    const subtotal = volumeNumerator(ticket.lengthM, d) * BigInt(n);
+    const perLog = volumeNumerator(ticket.lengthM, d);          // 1本あたりの材積（単材積）
+    const subtotal = applyRounding(perLog * BigInt(n));
     runningCount += n;
     runningVolume += subtotal;
-    rows.push({ d, count: n, subtotal, runningCount, runningVolume });
+    rows.push({ d, count: n, perLog, subtotal, runningCount, runningVolume });
   }
   return { rows, totalCount: runningCount, totalVolume: runningVolume };
 }
 
-/** 取消を除いた合計（画面のリアルタイム表示用） */
+/**
+ * 取消を除いた合計（画面のリアルタイム表示用）。
+ * 出力確認画面・CSVと必ず同じ数字になるよう、径級ごとに集計してから丸め方針を適用する。
+ */
 export function totalsOf(entries, lengthM) {
+  const counts = new Map();
   let count = 0;
-  let volume = 0n;
   for (const e of entries) {
     if (e.cancelled) continue;
     count += 1;
-    volume += volumeNumerator(lengthM, e.d);
+    counts.set(e.d, (counts.get(e.d) ?? 0) + 1);
+  }
+  let volume = 0n;
+  for (const [d, n] of counts) {
+    volume += applyRounding(volumeNumerator(lengthM, d) * BigInt(n));
   }
   return { count, volume };
 }

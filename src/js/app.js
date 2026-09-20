@@ -451,8 +451,10 @@ function renderMeasure() {
 /** 入力履歴（取消済みも消さずに残す） */
 function renderHistory() {
   const box = $('#history');
-  const entries = state.draft.entries.slice(-150).reverse();
+  // 1行しか見せないので、描画するのも直近ぶんだけでよい（数百本入力しても重くならない）
+  const entries = state.draft.entries.slice(-40);
   box.innerHTML = '';
+  box.classList.toggle('is-empty', entries.length === 0);
   if (entries.length === 0) {
     const p = document.createElement('div');
     p.id = 'history-empty';
@@ -460,7 +462,7 @@ function renderHistory() {
     box.appendChild(p);
     return;
   }
-  // 時刻や単位は出さず、径級の数字だけを区切って横に並べる（1画面により多く入る）
+  // 時刻や単位は出さず、径級の数字だけを古い順に並べる。最新が常に右端に残る
   for (const e of entries) {
     const item = document.createElement('span');
     item.className = 'hist-item' + (e.cancelled ? ' is-cancelled' : '');
@@ -500,7 +502,7 @@ function setupVoice() {
  * ================================================================== */
 async function openOutputDialog() {
   const draft = state.draft;
-  const { totalCount, totalVolume } = aggregate(draft);
+  const { rows, totalCount, totalVolume } = aggregate(draft);
   if (totalCount === 0) {
     feedbackError();
     toast(t('output.empty'));
@@ -508,11 +510,35 @@ async function openOutputDialog() {
   }
   const table = $('#output-summary');
   table.innerHTML = `
+    <tr><th>${t('csv.date')}</th><td>${draft.dateStr}</td></tr>
     <tr><th>${t('setup.species')}</th><td>${draft.species}</td></tr>
     <tr><th>${t('setup.length')}</th><td>${formatLength(toHundredths(draft.lengthM))} m</td></tr>
     <tr><th>${t('setup.range')}</th><td>${draft.minD}-${draft.maxD} cm</td></tr>
     <tr><th>${t('measure.count')}</th><td><b>${totalCount}</b> ${t('measure.unitCount')}</td></tr>
     <tr><th>${t('measure.volume')}</th><td><b>${formatVolume(totalVolume)}</b> m³</td></tr>`;
+
+  // 工場の手書き伝票へ書き写すための明細。径級・単材積・本数・小計材積を並べる
+  $('#output-detail').innerHTML = `
+    <thead><tr>
+      <th>${t('csv.diameter')}</th>
+      <th>${t('output.perLog')}</th>
+      <th>${t('csv.count')}</th>
+      <th>${t('csv.subtotal')}</th>
+    </tr></thead>
+    <tbody>${rows.map((r) => `
+      <tr>
+        <td>${r.d}</td>
+        <td class="per">${formatVolume(r.perLog, 4)}</td>
+        <td class="n">${r.count}</td>
+        <td class="v">${formatVolume(r.subtotal)}</td>
+      </tr>`).join('')}
+    </tbody>
+    <tfoot><tr>
+      <td>${t('common.total')}</td>
+      <td></td>
+      <td>${totalCount}</td>
+      <td>${formatVolume(totalVolume)}</td>
+    </tr></tfoot>`;
   $('#out-ticket-no').value = draft.ticketNo ?? await nextTicketNo(draft.dateStr);
   $('#out-note').value = draft.note ?? '';
   $('#dlg-output').showModal();

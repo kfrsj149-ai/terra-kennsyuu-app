@@ -98,15 +98,30 @@ export function volumeNumerator(lengthM, diameterCm) {
 }
 
 /**
- * 材積の分子を「小数第4位以下切り捨て」の文字列にする。四捨五入は行わない。
+ * 材積の分子を切り捨ての文字列にする。四捨五入は行わない。
+ * 既定は仕様どおり小数第3位まで（第4位以下切り捨て）。
+ * 単材積を表示するときだけ decimals=4 を使う。3桁だと
+ * 「単材積 × 本数 = 小計材積」が手計算で合わなくなり、工場での突き合わせで揉めるため。
  * @param {bigint} numerator
+ * @param {number} [decimals=3]
  * @returns {string} 例 "166.698"
  */
-export function formatVolume(numerator) {
-  const milli = numerator / MILLI_DIVISOR; // BigInt除算は正数では切り捨て
-  const int = milli / 1000n;
-  const frac = milli % 1000n;
-  return `${int}.${String(frac).padStart(3, '0')}`;
+export function formatVolume(numerator, decimals = 3) {
+  const scale = 10n ** BigInt(decimals);
+  const units = numerator / (VOLUME_DENOMINATOR / scale); // BigInt除算は正数では切り捨て
+  const int = units / scale;
+  const frac = units % scale;
+  return `${int}.${String(frac).padStart(decimals, '0')}`;
+}
+
+/**
+ * 分子を「小数第4位以下を切り捨てた値」の分子に丸める。
+ * 径級ごとに切り捨ててから合計する方針を採る場合に使う。
+ * @param {bigint} numerator
+ * @returns {bigint}
+ */
+export function truncateNumerator(numerator) {
+  return (numerator / MILLI_DIVISOR) * MILLI_DIVISOR;
 }
 
 /**

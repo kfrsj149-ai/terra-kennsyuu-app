@@ -100,6 +100,20 @@ test('径級の刻みと丸め', () => {
   assert.deepEqual(diameterRange(20, 20), [20]);
 });
 
+test('単材積は4桁表示で「単材積×本数=小計」の手計算が合う', () => {
+  // 14cm/4m: 0.0784 -> 3桁だと0.078になり 0.078*27=2.106 で小計2.116と食い違う
+  assert.equal(formatVolume(volumeNumerator(4, 14), 4), '0.0784');
+  assert.equal(formatVolume(volumeNumerator(4, 14)), '0.078');
+  for (const d of diameterRange(6, 72)) {
+    for (const n of [1, 7, 27, 53, 100]) {
+      const perLog4 = formatVolume(volumeNumerator(4, d), 4);
+      const subtotal = formatVolume(volumeNumerator(4, d) * BigInt(n));
+      const handCalc = Math.floor(Number(perLog4) * n * 1000 + 1e-6) / 1000;
+      assert.equal(handCalc.toFixed(3), subtotal, `D=${d} n=${n}`);
+    }
+  }
+});
+
 test('大量本数でも誤差が蓄積しない', () => {
   // 0.1728m³ の丸太を10000本 -> ちょうど 1728.000m³
   let sum = 0n;

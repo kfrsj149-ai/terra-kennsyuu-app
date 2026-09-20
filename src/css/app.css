@@ -177,18 +177,30 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .total-box .value { font-size: var(--fs-dash-value); font-weight: 800; line-height: 1.1; }
 .total-box .unit { font-size: .8rem; font-weight: 600; margin-left: 2px; }
 
+/*
+ * 入力履歴は「1行だけ」。国有林の研修などで数百本入力しても画面を埋めない。
+ * 古い方から左へ流れ出て、最新が常に右端に残る。
+ */
 #history {
-  flex: 1 1 auto;
-  line-height: 1.7;
-  word-break: keep-all;
-  min-height: 48px;
-  overflow-y: auto;
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  height: calc(1.7em + 6px);
+  overflow: hidden;
+  white-space: nowrap;
   font-size: var(--fs-history);
   border-top: 1px dashed var(--c-border);
   padding-top: 4px;
 }
+/* 左へ流れ出た古い入力が途中で切れて見えないよう、左端をぼかす */
+#history:not(.is-empty) {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18px);
+  mask-image: linear-gradient(to right, transparent 0, #000 18px);
+}
+#history.is-empty { justify-content: flex-start; }
 /* 数字と区切りをひとかたまりで折り返す（行頭に区切り文字が落ちるのを防ぐ） */
-.hist-item { display: inline-block; font-weight: 700; }
+.hist-item { flex: 0 0 auto; font-weight: 700; }
 /* 区切り文字。inline-block にすることで、取消の取り消し線が区切りまで伸びない */
 .hist-item:not(:last-child)::after {
   content: var(--hist-sep);
@@ -332,12 +344,28 @@ dialog {
   color: var(--c-text);
 }
 dialog::backdrop { background: rgba(0,0,0,.55); }
-.dlg-body { padding: 16px; overflow-y: auto; max-height: 64dvh; }
+.dlg-body { padding: 16px; overflow-y: auto; max-height: 72dvh; }
 .dlg-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 10px; }
 .dlg-question { font-size: 1.25rem; font-weight: 800; line-height: 1.5; }
+.dlg-confirm { margin: 0; padding: 10px 16px 0; border-top: 2px solid var(--c-border); }
 .dlg-foot { display: flex; gap: var(--gap); padding: 12px 16px 16px; }
 .dlg-foot .btn { flex: 1; }
 /* 「はい」は必ず左、「戻る」は右（仕様） */
+/* 手書き伝票への転記元になる明細表。数字を読み違えないことを最優先にする */
+.detail-table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.detail-table th, .detail-table td { padding: 5px 4px; border-bottom: 1px solid var(--c-border); text-align: right; font-size: .95rem; }
+.detail-table thead th { font-size: .78rem; color: var(--c-text-weak); position: sticky; top: 0; background: var(--c-surface); }
+.detail-table td:first-child, .detail-table th:first-child { text-align: left; font-weight: 800; font-size: 1.05rem; }
+.detail-table td.n { font-weight: 800; font-size: 1.05rem; }
+.detail-table td.v { font-weight: 800; }
+.detail-table td.per { color: var(--c-text-weak); }
+.detail-table tfoot td {
+  border-top: 3px solid var(--c-text);
+  border-bottom: none;
+  font-size: 1.15rem;
+  font-weight: 900;
+  padding-top: 8px;
+}
 .summary-table { width: 100%; border-collapse: collapse; margin: 8px 0; }
 .summary-table th, .summary-table td { border-bottom: 1px solid var(--c-border); padding: 6px 4px; text-align: left; font-size: .95rem; }
 .summary-table td:last-child, .summary-table th:last-child { text-align: right; }
