@@ -49,7 +49,7 @@
   /* 入力履歴の区切り文字。ここ1か所で全体の見え方が変わる */
   --hist-sep: ", ";
   --grid-cols: 2;          /* 径級ボタンの列数 */
-  --fs-card-d: 2rem;
+  --fs-card-d: 2.2rem;
   --fs-card-sub: 1rem;
   --fs-action: 1.25rem;
 }

@@ -269,6 +269,18 @@
   </div>
 </dialog>
 
+<!-- 本数の直接入力（本数の数字を長押し） -->
+<dialog id="dlg-count">
+  <div class="dlg-body">
+    <div class="dlg-title" id="count-title"></div>
+    <input type="number" id="count-input" inputmode="numeric" min="0" max="9999" step="1">
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-primary" id="count-ok" data-i18n="common.confirm">確定</button>
+    <button type="button" class="btn" id="count-cancel" data-i18n="common.back">戻る</button>
+  </div>
+</dialog>
+
 <!-- 径級ごとの取消 -->
 <dialog id="dlg-cancel-pick">
   <div class="dlg-body">

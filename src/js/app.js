@@ -10,7 +10,7 @@ import {
 import { t, applyTranslations, setLocale, detectLocale, getLocale, LOCALES } from './i18n.js';
 import * as db from './db.js';
 import { totalsOf, aggregate, buildCsv, shareCsv } from './csv.js';
-import { feedbackAdd, feedbackUndo, feedbackError, beep, requestWakeLock, releaseWakeLock, initWakeLockAutoRenew } from './feedback.js';
+import { feedbackAdd, feedbackUndo, feedbackError, beep, vibrate, requestWakeLock, releaseWakeLock, initWakeLockAutoRenew } from './feedback.js';
 import { VoiceInput, isVoiceSupported, isVoiceAvailable } from './voice.js';
 import * as subscription from './subscription.js';
 import * as backup from './backup.js';
@@ -311,12 +311,10 @@ function buildGrid() {
     card.type = 'button';
     card.className = 'dia-card';
     card.dataset.d = String(d);
+    // 入力ボタンには材積を出さない（押す数字＝本数だけに集中させる）
     card.innerHTML = `
-      <span class="top">
-        <span class="d">${d}<small>cm</small></span>
-        <span class="n" data-role="n">0<small>${t('measure.unitCount')}</small></span>
-      </span>
-      <span class="v" data-role="v">0.000</span>`;
+      <span class="d">${d}<small>cm</small></span>
+      <span class="n" data-role="n">0<small>${t('measure.unitCount')}</small></span>`;
     attachCardHandlers(card, d);
     grid.appendChild(card);
   }
@@ -342,7 +340,12 @@ function autoSizeCards() {
   document.documentElement.style.setProperty('--card-h', `${h}px`);
 }
 
-/** タップ=+1、2秒長押し=-1 */
+/**
+ * タップ = +1
+ * 長押し(2秒) = 押した場所で動作が変わる
+ *   本数の数字の上 → 本数を直接入力（山を数えてまとめて入れるとき用）
+ *   それ以外       → -1（押し間違いの取消）
+ */
 function attachCardHandlers(card, d) {
   let timer = null;
   let longFired = false;
@@ -351,15 +354,19 @@ function attachCardHandlers(card, d) {
     clearTimeout(timer);
     timer = null;
     card.classList.remove('is-longpress');
+    delete card.dataset.lp;
   };
 
-  const onDown = () => {
+  const onDown = (ev) => {
     longFired = false;
+    const mode = ev.target.closest('.n') ? 'count' : 'minus';
+    card.dataset.lp = mode;
     card.classList.add('is-longpress');
     timer = setTimeout(() => {
       longFired = true;
       clear();
-      cancelOne(d);
+      if (mode === 'count') openCountDialog(d);
+      else cancelOne(d);
     }, LONG_PRESS_MS);
   };
 
@@ -402,6 +409,53 @@ function cancelOne(d) {
   return false;
 }
 
+/** その径級の現在の本数（取消を除く） */
+function countOf(d) {
+  return state.draft.entries.filter((e) => e.d === d && !e.cancelled).length;
+}
+
+/**
+ * その径級の本数を指定の数にそろえる。
+ * 増やすぶんは入力を追加し、減らすぶんは新しい方から取消として印を付ける。
+ * こうすることで履歴・取消の扱いがタップ入力とまったく同じになる。
+ */
+function setCount(d, target) {
+  const draft = state.draft;
+  const current = countOf(d);
+  if (target === current) return;
+  if (target > current) {
+    for (let i = current; i < target; i++) {
+      draft.entries.push({ id: uid(), ts: Date.now(), d, source: 'manual', cancelled: false });
+    }
+  } else {
+    let remove = current - target;
+    for (let i = draft.entries.length - 1; i >= 0 && remove > 0; i--) {
+      const e = draft.entries[i];
+      if (e.d === d && !e.cancelled) {
+        e.cancelled = true;
+        e.cancelledAt = Date.now();
+        remove -= 1;
+      }
+    }
+  }
+  renderMeasure();
+  persistDraft();
+}
+
+/** 本数の直接入力ダイアログを開く */
+function openCountDialog(d) {
+  const dlg = $('#dlg-count');
+  dlg.dataset.d = String(d);
+  $('#count-title').textContent = t('measure.directTitle', { d });
+  const input = $('#count-input');
+  input.value = String(countOf(d));
+  beep('tap');
+  vibrate(40);
+  dlg.showModal();
+  input.focus();
+  input.select();
+}
+
 /** 直前の1件を取消す */
 function undoLast() {
   if (!state.draft) return;
@@ -437,7 +491,6 @@ function renderMeasure() {
     const n = counts.get(d) ?? 0;
     card.dataset.hasCount = String(n > 0);
     card.querySelector('[data-role="n"]').innerHTML = `${n}<small>${t('measure.unitCount')}</small>`;
-    card.querySelector('[data-role="v"]').textContent = formatVolume(volumeNumerator(draft.lengthM, d) * BigInt(n));
   }
 
   const { count, volume } = totalsOf(draft.entries, draft.lengthM);
@@ -773,6 +826,20 @@ function wireEvents() {
   undoBtn.addEventListener('pointercancel', clearUndo);
 
   $('#cancel-pick-close').addEventListener('click', () => $('#dlg-cancel-pick').close());
+
+  // 本数の直接入力
+  const applyCount = () => {
+    const dlg = $('#dlg-count');
+    const d = Number(dlg.dataset.d);
+    const raw = Number($('#count-input').value);
+    if (!Number.isFinite(raw) || raw < 0) { feedbackError(); return; }
+    setCount(d, Math.min(9999, Math.trunc(raw)));
+    dlg.close();
+    beep('done');
+  };
+  $('#count-ok').addEventListener('click', applyCount);
+  $('#count-cancel').addEventListener('click', () => $('#dlg-count').close());
+  $('#count-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyCount(); });
 
   // データ出力（ボタンとポップアップを分離して誤出力を防ぐ）
   $('#export-btn').addEventListener('click', openOutputDialog);

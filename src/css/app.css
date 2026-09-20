@@ -225,9 +225,10 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 }
 .dia-card {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
   width: 100%;
   min-height: var(--card-h, 72px);
   height: var(--card-h, 72px);
@@ -241,21 +242,30 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   overflow: hidden;
 }
 .dia-card[data-has-count='true'] { background: var(--c-tap-active); }
-.dia-card .top { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; width: 100%; }
 .dia-card .d { font-size: var(--fs-card-d); font-weight: 900; line-height: 1.05; }
 .dia-card .d small { font-size: .45em; font-weight: 700; }
-.dia-card .n { font-size: var(--fs-card-d); font-weight: 900; line-height: 1.05; }
+/* 本数側は長押しで直接入力できる。点線の下線でそれと分かるようにする */
+.dia-card .n {
+  font-size: var(--fs-card-d);
+  font-weight: 900;
+  line-height: 1.05;
+  padding: 2px 2px 0;
+  border-bottom: 3px dotted rgba(0, 0, 0, .3);
+}
 .dia-card .n small { font-size: .45em; font-weight: 700; margin-left: 1px; }
-.dia-card .v { font-size: var(--fs-card-sub); font-weight: 700; width: 100%; text-align: right; line-height: 1.1; opacity: .85; }
 .dia-card.is-hit::after {
   content: '';
   position: absolute;
   inset: 0;
   background: var(--c-glow);
   animation: glow .28s ease-out;
+  /* 発光中でも当たり判定を奪わない。
+     これがないと、タップ直後に長押しした場合に押した場所を判別できなくなる */
+  pointer-events: none;
 }
 @keyframes glow { from { opacity: .85; } to { opacity: 0; } }
-.dia-card.is-longpress { outline: 4px solid var(--c-danger); outline-offset: -4px; }
+.dia-card.is-longpress[data-lp='minus'] { outline: 4px solid var(--c-danger); outline-offset: -4px; }
+.dia-card.is-longpress[data-lp='count'] { outline: 4px solid var(--c-accent); outline-offset: -4px; }
 
 /* 操作バー */
 #action-bar {
@@ -369,6 +379,18 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 .summary-table { width: 100%; border-collapse: collapse; margin: 8px 0; }
 .summary-table th, .summary-table td { border-bottom: 1px solid var(--c-border); padding: 6px 4px; text-align: left; font-size: .95rem; }
 .summary-table td:last-child, .summary-table th:last-child { text-align: right; }
+
+#count-input {
+  width: 100%;
+  min-height: 72px;
+  font-size: 2.2rem;
+  font-weight: 800;
+  text-align: center;
+  border: 2px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  user-select: text;
+}
 
 .cancel-pick { display: flex; flex-wrap: wrap; gap: 8px; }
 .cancel-pick button {
