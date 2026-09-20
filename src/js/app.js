@@ -49,11 +49,6 @@ function todayStr(d = new Date()) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function clockStr(ts) {
-  const d = new Date(ts);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
 function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -317,9 +312,11 @@ function buildGrid() {
     card.className = 'dia-card';
     card.dataset.d = String(d);
     card.innerHTML = `
-      <span class="d">${d}<small>cm</small></span>
-      <span class="v" data-role="v">0.000</span>
-      <span class="n" data-role="n">0<small>${t('measure.unitCount')}</small></span>`;
+      <span class="top">
+        <span class="d">${d}<small>cm</small></span>
+        <span class="n" data-role="n">0<small>${t('measure.unitCount')}</small></span>
+      </span>
+      <span class="v" data-role="v">0.000</span>`;
     attachCardHandlers(card, d);
     grid.appendChild(card);
   }
@@ -331,12 +328,17 @@ function buildGrid() {
  */
 function autoSizeCards() {
   const wrap = $('#grid-wrap');
+  const grid = $('#grid');
   const n = state.diameters.length;
   if (n === 0) return;
+  const cols = Number(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols')) || 2;
+  const rows = Math.ceil(n / cols);
   const avail = wrap.clientHeight - 16;
   const gap = 6;
-  const ideal = Math.floor((avail - gap * (n - 1)) / n);
-  const h = Math.max(56, Math.min(160, ideal));
+  const ideal = Math.floor((avail - gap * (rows - 1)) / rows);
+  // 上限はカード幅（＝正方形）まで。それ以上伸ばしても押しやすくならず間延びする
+  const cardWidth = grid.firstElementChild?.getBoundingClientRect().width ?? 160;
+  const h = Math.max(72, Math.min(Math.round(cardWidth), ideal));
   document.documentElement.style.setProperty('--card-h', `${h}px`);
 }
 
@@ -449,7 +451,7 @@ function renderMeasure() {
 /** 入力履歴（取消済みも消さずに残す） */
 function renderHistory() {
   const box = $('#history');
-  const entries = state.draft.entries.slice(-40).reverse();
+  const entries = state.draft.entries.slice(-150).reverse();
   box.innerHTML = '';
   if (entries.length === 0) {
     const p = document.createElement('div');
@@ -458,14 +460,12 @@ function renderHistory() {
     box.appendChild(p);
     return;
   }
+  // 時刻や単位は出さず、径級の数字だけを区切って横に並べる（1画面により多く入る）
   for (const e of entries) {
-    const row = document.createElement('div');
-    row.className = 'hist-item' + (e.cancelled ? ' is-cancelled' : '');
-    row.innerHTML = `<span class="t">${clockStr(e.ts)}</span>` +
-      `<span class="d">${e.d}cm</span>` +
-      `<span class="src">${e.source === 'voice' ? '🎤' : ''}</span>` +
-      `<span class="src">${e.cancelled ? t('measure.cancelled') : ''}</span>`;
-    box.appendChild(row);
+    const item = document.createElement('span');
+    item.className = 'hist-item' + (e.cancelled ? ' is-cancelled' : '');
+    item.textContent = String(e.d);
+    box.appendChild(item);
   }
 }
 

@@ -179,31 +179,47 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
 #history {
   flex: 1 1 auto;
+  line-height: 1.7;
+  word-break: keep-all;
   min-height: 48px;
   overflow-y: auto;
   font-size: var(--fs-history);
   border-top: 1px dashed var(--c-border);
   padding-top: 4px;
 }
-.hist-item { display: flex; gap: 6px; padding: 2px 0; }
-.hist-item .t { color: var(--c-text-weak); flex: 0 0 auto; }
-.hist-item .d { font-weight: 700; }
-.hist-item .src { color: var(--c-text-weak); }
+/* 数字と区切りをひとかたまりで折り返す（行頭に区切り文字が落ちるのを防ぐ） */
+.hist-item { display: inline-block; font-weight: 700; }
+/* 区切り文字。inline-block にすることで、取消の取り消し線が区切りまで伸びない */
+.hist-item:not(:last-child)::after {
+  content: var(--hist-sep);
+  display: inline-block;
+  white-space: pre;
+  color: var(--c-text-weak);
+  font-weight: 400;
+}
 /* 取消済みは消さずに薄いグレー＋赤の取り消し線で残す */
 .hist-item.is-cancelled { color: #9aa396; text-decoration: line-through; text-decoration-color: var(--c-danger); text-decoration-thickness: 2px; }
 #history-empty { color: var(--c-text-weak); }
 
 /* 径級グリッド */
 #grid-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--gap); }
-#grid { display: flex; flex-direction: column; gap: 6px; min-height: 100%; }
+#grid {
+  display: grid;
+  grid-template-columns: repeat(var(--grid-cols), 1fr);
+  gap: 6px;
+  /* 径級数が少ないときは下（親指側）に寄せる。多くて収まらないときは上詰めに戻る */
+  min-height: 100%;
+  align-content: safe end;
+}
 .dia-card {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
   width: 100%;
-  min-height: var(--card-h, 56px);
-  height: var(--card-h, 56px);
-  padding: 0 10px;
+  min-height: var(--card-h, 72px);
+  height: var(--card-h, 72px);
+  padding: 4px 8px;
   border-radius: var(--r-md);
   background: var(--c-tap);
   color: var(--c-tap-ink);
@@ -213,11 +229,12 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   overflow: hidden;
 }
 .dia-card[data-has-count='true'] { background: var(--c-tap-active); }
-.dia-card .d { font-size: var(--fs-card-d); font-weight: 900; flex: 0 0 4.2em; }
+.dia-card .top { display: flex; align-items: baseline; justify-content: space-between; gap: 4px; width: 100%; }
+.dia-card .d { font-size: var(--fs-card-d); font-weight: 900; line-height: 1.05; }
 .dia-card .d small { font-size: .45em; font-weight: 700; }
-.dia-card .n { font-size: var(--fs-card-d); font-weight: 900; flex: 1; text-align: right; }
-.dia-card .n small { font-size: .45em; font-weight: 700; margin-left: 2px; }
-.dia-card .v { font-size: var(--fs-card-sub); font-weight: 700; flex: 0 0 7.5em; text-align: right; }
+.dia-card .n { font-size: var(--fs-card-d); font-weight: 900; line-height: 1.05; }
+.dia-card .n small { font-size: .45em; font-weight: 700; margin-left: 1px; }
+.dia-card .v { font-size: var(--fs-card-sub); font-weight: 700; width: 100%; text-align: right; line-height: 1.1; opacity: .85; }
 .dia-card.is-hit::after {
   content: '';
   position: absolute;
