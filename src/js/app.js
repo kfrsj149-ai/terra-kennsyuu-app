@@ -845,6 +845,9 @@ async function boot() {
   await renderSubscription();
   subscription.revalidate().then(() => renderSubscription());
 
+  // 保存できない環境なら、黙って動くのではなくはっきり伝える
+  if (db.isMemoryMode()) toast(t('storage.memoryWarn'), 6000);
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }

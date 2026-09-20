@@ -92,6 +92,7 @@ export default {
   'backup.never': 'まだバックアップされていません',
   'backup.unconfigured': 'この配布ではバックアップは未設定です',
   'backup.now': '今すぐバックアップ',
+  'storage.memoryWarn': 'この端末ではデータを保存できません。閉じると消えるのでご注意ください。',
   'csv.date': '日付',
   'csv.ticketNo': '伝票番号',
   'csv.spec': '納入規格(cm)',

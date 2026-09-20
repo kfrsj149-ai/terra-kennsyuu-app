@@ -92,6 +92,7 @@ export default {
   'backup.never': 'Chưa sao lưu lần nào',
   'backup.unconfigured': 'Bản phát hành này chưa cấu hình sao lưu',
   'backup.now': 'Sao lưu ngay',
+  'storage.memoryWarn': 'Thiết bị này không lưu được dữ liệu. Dữ liệu sẽ mất khi đóng ứng dụng.',
   'csv.date': 'Ngày',
   'csv.ticketNo': 'Số phiếu',
   'csv.spec': 'Quy cách(cm)',

@@ -92,6 +92,7 @@ export default {
   'backup.never': 'Belum pernah disandarkan',
   'backup.unconfigured': 'Sandaran tidak ditetapkan dalam edisi ini',
   'backup.now': 'Sandarkan sekarang',
+  'storage.memoryWarn': 'Peranti ini tidak dapat menyimpan data. Data akan hilang apabila ditutup.',
   'csv.date': 'Tarikh',
   'csv.ticketNo': 'Nombor nota hantar',
   'csv.spec': 'Piawai(cm)',

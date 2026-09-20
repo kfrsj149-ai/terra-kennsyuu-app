@@ -92,6 +92,7 @@ export default {
   'backup.never': 'Wala pang backup',
   'backup.unconfigured': 'Hindi naka-set up ang backup sa bersyong ito',
   'backup.now': 'Mag-backup ngayon',
+  'storage.memoryWarn': 'Hindi makapag-save ng data ang device na ito. Mawawala ito kapag isinara.',
   'csv.date': 'Petsa',
   'csv.ticketNo': 'Numero ng resibo',
   'csv.spec': 'Istandard(cm)',

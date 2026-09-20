@@ -1,18 +1,37 @@
 /**
  * IndexedDB ラッパ（依存ライブラリなし）
  * オフラインファースト設計の土台。入力の都度ここに即時書き込む。
+ *
+ * 【フォールバック】
+ * プライベートブラウズやサンドボックス環境など、IndexedDBが使えない端末が現実に存在する。
+ * その場合でもアプリが起動しなくなることは避け、メモリ上の一時保管へ自動的に切り替える
+ * （＝その場では普通に使えるが、閉じると消える）。isMemoryMode() で画面側に警告を出す。
  */
 
 const DB_NAME = 'terra-kennsyuu';
 const DB_VERSION = 1;
+const STORES = ['kv', 'options', 'presets', 'tickets'];
 
 /** @type {Promise<IDBDatabase>|null} */
 let dbPromise = null;
+let memoryMode = false;
+const memory = Object.fromEntries(STORES.map((s) => [s, new Map()]));
 
-export function openDb() {
+export function isMemoryMode() {
+  return memoryMode;
+}
+
+function openDb() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    if (!globalThis.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+    let req;
+    try {
+      req = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (err) {
+      reject(err);
+      return;
+    }
     req.onupgradeneeded = () => {
       const db = req.result;
       // 設定・下書きなどの単純なキー値
@@ -21,8 +40,7 @@ export function openDb() {
       }
       // 事前登録リスト（会社名・車番・現場名・納入先）
       if (!db.objectStoreNames.contains('options')) {
-        const s = db.createObjectStore('options', { keyPath: 'id' });
-        s.createIndex('kind', 'kind');
+        db.createObjectStore('options', { keyPath: 'id' }).createIndex('kind', 'kind');
       }
       // よく使う設定
       if (!db.objectStoreNames.contains('presets')) {
@@ -37,26 +55,20 @@ export function openDb() {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+    req.onblocked = () => reject(new Error('IndexedDB blocked'));
   });
   return dbPromise;
 }
 
-async function tx(store, mode, fn) {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(store, mode);
-    const s = t.objectStore(store);
-    let result;
-    try {
-      result = fn(s);
-    } catch (err) {
-      reject(err);
-      return;
-    }
-    t.oncomplete = () => resolve(result && result.result !== undefined ? result.result : result);
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error);
-  });
+/** IndexedDBが使えなければ null を返し、以降はメモリ動作へ切り替える */
+async function getDb() {
+  if (memoryMode) return null;
+  try {
+    return await openDb();
+  } catch {
+    memoryMode = true;
+    return null;
+  }
 }
 
 const asResult = (req) => new Promise((resolve, reject) => {
@@ -64,77 +76,106 @@ const asResult = (req) => new Promise((resolve, reject) => {
   req.onerror = () => reject(req.error);
 });
 
+/** 読み取り。失敗したらメモリ側の値を返す */
+async function read(store, fn, memoryFn) {
+  const db = await getDb();
+  if (!db) return memoryFn();
+  try {
+    const t = db.transaction(store, 'readonly');
+    return await fn(t.objectStore(store));
+  } catch {
+    memoryMode = true;
+    return memoryFn();
+  }
+}
+
+/** 書き込み。失敗したらメモリ側へ書く（入力を絶対に失わせない） */
+async function write(store, fn, memoryFn) {
+  const db = await getDb();
+  if (db) {
+    try {
+      await new Promise((resolve, reject) => {
+        const t = db.transaction(store, 'readwrite');
+        fn(t.objectStore(store));
+        t.oncomplete = resolve;
+        t.onerror = () => reject(t.error);
+        t.onabort = () => reject(t.error);
+      });
+      return;
+    } catch {
+      memoryMode = true;
+    }
+  }
+  memoryFn();
+}
+
 /* ------------ kv ------------ */
 export async function kvGet(key, fallback = null) {
-  const db = await openDb();
-  const t = db.transaction('kv', 'readonly');
-  const v = await asResult(t.objectStore('kv').get(key));
+  const v = await read('kv', (s) => asResult(s.get(key)), () => memory.kv.get(key));
   return v === undefined ? fallback : v;
 }
 
 export async function kvSet(key, value) {
-  return tx('kv', 'readwrite', (s) => s.put(value, key));
+  return write('kv', (s) => s.put(value, key), () => memory.kv.set(key, value));
 }
 
 export async function kvDelete(key) {
-  return tx('kv', 'readwrite', (s) => s.delete(key));
+  return write('kv', (s) => s.delete(key), () => memory.kv.delete(key));
 }
 
 /* ------------ options（事前登録リスト） ------------ */
 export async function listOptions(kind) {
-  const db = await openDb();
-  const t = db.transaction('options', 'readonly');
-  const all = await asResult(t.objectStore('options').index('kind').getAll(kind));
+  const all = await read(
+    'options',
+    (s) => asResult(s.index('kind').getAll(kind)),
+    () => [...memory.options.values()].filter((o) => o.kind === kind),
+  );
   return all.sort((a, b) => a.value.localeCompare(b.value, 'ja'));
 }
 
 export async function addOption(kind, value) {
   const item = { id: `${kind}:${value}`, kind, value };
-  await tx('options', 'readwrite', (s) => s.put(item));
+  await write('options', (s) => s.put(item), () => memory.options.set(item.id, item));
   return item;
 }
 
 export async function removeOption(id) {
-  return tx('options', 'readwrite', (s) => s.delete(id));
+  return write('options', (s) => s.delete(id), () => memory.options.delete(id));
 }
 
 /* ------------ presets（よく使う設定） ------------ */
 export async function listPresets() {
-  const db = await openDb();
-  const t = db.transaction('presets', 'readonly');
-  return asResult(t.objectStore('presets').getAll());
+  return read('presets', (s) => asResult(s.getAll()), () => [...memory.presets.values()]);
 }
 
 export async function savePreset(preset) {
-  await tx('presets', 'readwrite', (s) => s.put(preset));
+  await write('presets', (s) => s.put(preset), () => memory.presets.set(preset.id, preset));
   return preset;
 }
 
 export async function removePreset(id) {
-  return tx('presets', 'readwrite', (s) => s.delete(id));
+  return write('presets', (s) => s.delete(id), () => memory.presets.delete(id));
 }
 
 /* ------------ tickets（伝票） ------------ */
 export async function listTickets(limit = 200) {
-  const db = await openDb();
-  const t = db.transaction('tickets', 'readonly');
-  const all = await asResult(t.objectStore('tickets').getAll());
+  const all = await read('tickets', (s) => asResult(s.getAll()), () => [...memory.tickets.values()]);
   return all.sort((a, b) => b.createdAt - a.createdAt).slice(0, limit);
 }
 
 export async function getTicket(id) {
-  const db = await openDb();
-  const t = db.transaction('tickets', 'readonly');
-  return asResult(t.objectStore('tickets').get(id));
+  return read('tickets', (s) => asResult(s.get(id)), () => memory.tickets.get(id));
 }
 
 export async function saveTicket(ticket) {
-  await tx('tickets', 'readwrite', (s) => s.put(ticket));
+  await write('tickets', (s) => s.put(ticket), () => memory.tickets.set(ticket.id, ticket));
   return ticket;
 }
 
 export async function listPendingTickets() {
-  const db = await openDb();
-  const t = db.transaction('tickets', 'readonly');
-  return asResult(t.objectStore('tickets').index('syncState').getAll('pending'));
+  return read(
+    'tickets',
+    (s) => asResult(s.index('syncState').getAll('pending')),
+    () => [...memory.tickets.values()].filter((t) => t.syncState === 'pending'),
+  );
 }
