@@ -30,7 +30,7 @@ test('【回帰】径級補正(D-12)/2を加える誤った式に戻っていな
 
 test('長尺材(6m以上)は長さ補正のみで、径級による補正はしない', () => {
   // D=14, L=12 -> (14 + (12-4)/2)^2 * 12/10000 = 18^2 * 0.0012 = 0.3888
-  assert.equal(formatVolume(volumeNumerator(12, 14)), '0.388');
+  assert.equal(formatVolume(volumeNumerator(12, 14)), '0.389');
   // D=72, L=12 -> 76^2 * 0.0012 = 6.9312
   assert.equal(formatVolume(volumeNumerator(12, 72)), '6.931');
   // D=6, L=12 -> 10^2 * 0.0012 = 0.12
@@ -49,20 +49,21 @@ test('短尺材(6m未満)は径級によらず補正なし V = D^2 * L / 10000',
 
 test('長さの端数は補正の計算では切り捨てる（L′＝長さの整数部）', () => {
   // 6.0m も 6.8m も補正は (6-4)/2 = 1cm。長さ本体には実寸を使う
-  assert.equal(formatVolume(volumeNumerator(6, 20)), '0.264');     // 21^2 * 6 /10000 = 0.2646
-  assert.equal(formatVolume(volumeNumerator('6.8', 20)), '0.299'); // 21^2 * 6.8/10000 = 0.29988
+  assert.equal(formatVolume(volumeNumerator(6, 20)), '0.265');     // 21^2 * 6 /10000 = 0.2646
+  assert.equal(formatVolume(volumeNumerator('6.8', 20)), '0.300'); // 21^2 * 6.8/10000 = 0.29988
   // 7.0m になると補正が (7-4)/2 = 1.5cm に上がる
-  assert.equal(formatVolume(volumeNumerator(7, 20)), '0.323');     // 21.5^2 * 7 /10000 = 0.32335
+  assert.equal(formatVolume(volumeNumerator(7, 20)), '0.324');     // 21.5^2 * 7 /10000 = 0.32335
 });
 
 test('6.00m ちょうどから長尺式に切り替わる', () => {
-  assert.equal(formatVolume(volumeNumerator(6, 20)), '0.264');
-  assert.equal(formatVolume(volumeNumerator('5.99', 20)), '0.239'); // 短尺式 400*5.99/10000
+  assert.equal(formatVolume(volumeNumerator(6, 20)), '0.265');
+  assert.equal(formatVolume(volumeNumerator('5.99', 20)), '0.240'); // 短尺式 400*5.99/10000
 });
 
-test('切り捨て（四捨五入ではない）', () => {
-  assert.equal(formatVolume(volumeNumerator(12, 8)), '0.172');  // 0.1728 -> 0.172
+test('端数処理は四捨五入（工場が引く丸太材積表に合わせている）', () => {
+  assert.equal(formatVolume(volumeNumerator(12, 8)), '0.173');  // 0.1728 -> 0.173
   assert.equal(formatVolume(volumeNumerator(4, 14)), '0.078');  // 0.0784 -> 0.078
+  assert.equal(formatVolume(volumeNumerator('6.8', 20)), '0.300'); // 0.29988 -> 0.300
 });
 
 test('単材積は4桁表示で「単材積×本数=小計」の手計算が合う', () => {
@@ -72,7 +73,7 @@ test('単材積は4桁表示で「単材積×本数=小計」の手計算が合�
     for (const n of [1, 7, 27, 53, 100]) {
       const perLog4 = formatVolume(volumeNumerator(4, d), 4);
       const subtotal = formatVolume(volumeNumerator(4, d) * BigInt(n));
-      const handCalc = Math.floor(Number(perLog4) * n * 1000 + 1e-6) / 1000;
+      const handCalc = Math.round(Number(perLog4) * n * 1000) / 1000;
       assert.equal(handCalc.toFixed(3), subtotal, `D=${d} n=${n}`);
     }
   }
