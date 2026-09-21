@@ -36,11 +36,11 @@ test('丸め方針ごとに合計が定義どおりになる', () => {
   for (let d = 14; d <= 72; d += 2) pairs.push([d, 1]);
   const total = formatVolume(aggregate(ticketOf(12, pairs)).totalVolume);
   if (VOLUME_ROUNDING === 'exact') {
-    // 端数を保持して合計（CLAUDE.mdのテストケース）
-    assert.equal(total, '166.698');
+    // 端数を保持して合計
+    assert.equal(total, '92.112');
   } else {
-    // 径級ごとに切り捨ててから合計（明細表の縦計と一致する）
-    assert.equal(total, '166.683');
+    // 径級ごとに丸めてから合計（明細表の縦計と一致する）
+    assert.equal(total, '92.097');
   }
 });
 

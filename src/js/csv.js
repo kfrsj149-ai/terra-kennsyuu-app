@@ -3,7 +3,7 @@
  * 日付,伝票番号,納入規格(cm),規格長(m),径級(cm),本数,小計材積(m³),累計本数,累計材積(m³),メモ
  */
 import { t } from './i18n.js';
-import { formatVolume, formatLength, toHundredths, volumeNumerator, truncateNumerator, diameterRange } from './jas.js';
+import { formatVolume, formatLength, toHundredths, volumeNumerator, quantizeNumerator, diameterRange } from './jas.js';
 
 /**
  * 合計材積の丸め方針。ここ1か所を変えれば画面もCSVも同時に切り替わる。
@@ -15,7 +15,7 @@ import { formatVolume, formatLength, toHundredths, volumeNumerator, truncateNume
 export const VOLUME_ROUNDING = 'exact';
 
 const applyRounding = (numerator) =>
-  (VOLUME_ROUNDING === 'perDiameter' ? truncateNumerator(numerator) : numerator);
+  (VOLUME_ROUNDING === 'perDiameter' ? quantizeNumerator(numerator) : numerator);
 
 const CSV_KEYS = [
   'csv.date', 'csv.ticketNo', 'csv.spec', 'csv.length', 'csv.diameter',

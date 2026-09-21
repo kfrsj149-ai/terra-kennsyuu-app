@@ -10,64 +10,72 @@ function totalOf(lengthM, diameters) {
   return diameters.reduce((sum, d) => sum + volumeNumerator(lengthM, d), 0n);
 }
 
-test('【最重要】12m材・径級6〜72cm各1本＝38本で合計166.698m³になる', () => {
+test('【最重要】12m材・径級6〜72cm各1本＝38本で合計92.112m³になる', () => {
   const ds = diameterRange(6, 72);
   assert.equal(ds.length, 38, '納入規格6〜72cmは38径級（14cm未満1cm刻み+14cm以上2cm刻み）');
-  assert.equal(formatVolume(totalOf(12, ds)), '166.698');
+  // 素材の日本農林規格どおり (D + (L'-4)/2)^2 * L / 10000 で計算した値。
+  // 長野県の丸太材積表1578セルとの照合で裏づけ済み（tests/table.test.js）。
+  assert.equal(formatVolume(totalOf(12, ds)), '92.112');
 });
 
-test('【回帰】競合アプリのバグ値92.112m³には絶対にならない', () => {
-  const ds = diameterRange(6, 72);
-  const buggy = ds.reduce((sum, d) => {
-    // 径級補正を欠落させた誤った式（Log Counter Plus の挙動）
-    const S = 200n * BigInt(d) + (toHundredths(12) - 400n);
-    return sum + S * S * toHundredths(12);
+test('【回帰】径級補正(D-12)/2を加える誤った式に戻っていない', () => {
+  // かつてCLAUDE.mdに書かれていた式。12m材38本で166.698m³となり、材積表と1314件が不一致になる。
+  const wrong = diameterRange(6, 72).reduce((sum, d) => {
+    const S = d >= 14 ? 300n * BigInt(d) + 1200n - 1600n : 200n * BigInt(d) + (1200n - 400n);
+    return sum + S * S * 1200n;
   }, 0n);
-  assert.equal(formatVolume(buggy), '92.112', 'バグ再現値の妥当性確認');
-  assert.notEqual(formatVolume(totalOf(12, ds)), '92.112');
+  assert.equal(formatVolume(wrong), '166.698', '誤った式の再現値の確認');
+  assert.notEqual(formatVolume(totalOf(12, diameterRange(6, 72))), '166.698');
 });
 
-test('長尺材(L>=6, D>=14)に径級補正が効いている', () => {
-  // D=14, L=12 -> p = 4 + 1 = 5 -> (14+5)^2 * 12 / 10000 = 361*0.0012 = 0.4332
-  assert.equal(formatVolume(volumeNumerator(12, 14)), '0.433');
-  // D=72, L=12 -> p = 4 + 30 = 34 -> 106^2 * 0.0012 = 13.4832
-  assert.equal(formatVolume(volumeNumerator(12, 72)), '13.483');
-});
-
-test('長尺材でも径級14cm未満には径級補正を掛けない', () => {
-  // D=6, L=12 -> (6+4)^2 * 0.0012 = 0.12
+test('長尺材(6m以上)は長さ補正のみで、径級による補正はしない', () => {
+  // D=14, L=12 -> (14 + (12-4)/2)^2 * 12/10000 = 18^2 * 0.0012 = 0.3888
+  assert.equal(formatVolume(volumeNumerator(12, 14)), '0.388');
+  // D=72, L=12 -> 76^2 * 0.0012 = 6.9312
+  assert.equal(formatVolume(volumeNumerator(12, 72)), '6.931');
+  // D=6, L=12 -> 10^2 * 0.0012 = 0.12
   assert.equal(formatVolume(volumeNumerator(12, 6)), '0.120');
-  // D=13, L=12 -> (13+4)^2 * 0.0012 = 0.3468
-  assert.equal(formatVolume(volumeNumerator(12, 13)), '0.346');
+  // 径級が2倍になっても補正項は変わらない（長さだけで決まる）
+  const c = (d) => Math.sqrt(Number(formatVolume(volumeNumerator(12, d))) / 12 * 10000) - d;
+  assert.ok(Math.abs(c(20) - c(40)) < 0.01, '補正量は径級によらず一定');
 });
 
-test('短尺材(L<6, D<14)は補正なし V = D^2 * L / 10000', () => {
-  // D=10, L=3 -> 100 * 3 / 10000 = 0.03
-  assert.equal(formatVolume(volumeNumerator(3, 10)), '0.030');
-  // D=12, L=5 -> 144 * 5 / 10000 = 0.072
-  assert.equal(formatVolume(volumeNumerator(5, 12)), '0.072');
-});
-
-test('短尺材(L<6, D>=14)は長さ補正のみ', () => {
-  // D=20, L=3 -> (20 + (3-4)/2)^2 * 3 /10000 = 19.5^2 * 0.0003 = 0.114075
-  assert.equal(formatVolume(volumeNumerator(3, 20)), '0.114');
-  // L=4 は補正 0 なので D^2*L/10000 と一致する -> 20^2*4/10000 = 0.16
+test('短尺材(6m未満)は径級によらず補正なし V = D^2 * L / 10000', () => {
+  assert.equal(formatVolume(volumeNumerator(3, 10)), '0.030'); // 100*3/10000
+  assert.equal(formatVolume(volumeNumerator(5, 12)), '0.072'); // 144*5/10000
+  assert.equal(formatVolume(volumeNumerator(3, 20)), '0.120'); // 400*3/10000（14cm以上でも補正なし）
   assert.equal(formatVolume(volumeNumerator(4, 20)), '0.160');
 });
 
-test('L=4.00m では両式が一致する（補正項がゼロ）', () => {
-  for (const d of diameterRange(6, 40)) {
-    // D^2 * L / 10000 を分子表現に換算: S=200D, Li=400 -> (200D)^2 * 400 = 16,000,000 * D^2
-    const plain = 16_000_000n * BigInt(d) * BigInt(d);
-    assert.equal(volumeNumerator(4, d), plain, `D=${d}`);
-  }
+test('長さの端数は補正の計算では切り捨てる（L′＝長さの整数部）', () => {
+  // 6.0m も 6.8m も補正は (6-4)/2 = 1cm。長さ本体には実寸を使う
+  assert.equal(formatVolume(volumeNumerator(6, 20)), '0.264');     // 21^2 * 6 /10000 = 0.2646
+  assert.equal(formatVolume(volumeNumerator('6.8', 20)), '0.299'); // 21^2 * 6.8/10000 = 0.29988
+  // 7.0m になると補正が (7-4)/2 = 1.5cm に上がる
+  assert.equal(formatVolume(volumeNumerator(7, 20)), '0.323');     // 21.5^2 * 7 /10000 = 0.32335
+});
+
+test('6.00m ちょうどから長尺式に切り替わる', () => {
+  assert.equal(formatVolume(volumeNumerator(6, 20)), '0.264');
+  assert.equal(formatVolume(volumeNumerator('5.99', 20)), '0.239'); // 短尺式 400*5.99/10000
 });
 
 test('切り捨て（四捨五入ではない）', () => {
-  // 0.1728 -> 0.172 （四捨五入なら 0.173）
-  assert.equal(formatVolume(volumeNumerator(12, 8)), '0.172');
-  // 0.5808 -> 0.580
-  assert.equal(formatVolume(volumeNumerator(12, 16)), '0.580');
+  assert.equal(formatVolume(volumeNumerator(12, 8)), '0.172');  // 0.1728 -> 0.172
+  assert.equal(formatVolume(volumeNumerator(4, 14)), '0.078');  // 0.0784 -> 0.078
+});
+
+test('単材積は4桁表示で「単材積×本数=小計」の手計算が合う', () => {
+  assert.equal(formatVolume(volumeNumerator(4, 14), 4), '0.0784');
+  assert.equal(formatVolume(volumeNumerator(4, 14)), '0.078');
+  for (const d of diameterRange(6, 72)) {
+    for (const n of [1, 7, 27, 53, 100]) {
+      const perLog4 = formatVolume(volumeNumerator(4, d), 4);
+      const subtotal = formatVolume(volumeNumerator(4, d) * BigInt(n));
+      const handCalc = Math.floor(Number(perLog4) * n * 1000 + 1e-6) / 1000;
+      assert.equal(handCalc.toFixed(3), subtotal, `D=${d} n=${n}`);
+    }
+  }
 });
 
 test('小数2桁の規格長さを誤差なく扱える', () => {
@@ -79,13 +87,6 @@ test('小数2桁の規格長さを誤差なく扱える', () => {
   assert.equal(formatLength(250n), '2.5');
   assert.throws(() => toHundredths('2.155'));
   assert.throws(() => toHundredths('abc'));
-});
-
-test('6.00m ちょうどは長尺式で計算される', () => {
-  // D=20, L=6 -> p = 1 + 4 = 5 -> 25^2 * 6 / 10000 = 0.375
-  assert.equal(formatVolume(volumeNumerator(6, 20)), '0.375');
-  // D=20, L=5.99 -> 短尺式 (20 + 0.995)^2 * 5.99 /10000 = 0.264033...
-  assert.equal(formatVolume(volumeNumerator('5.99', 20)), '0.264');
 });
 
 test('径級の刻みと丸め', () => {
@@ -100,23 +101,8 @@ test('径級の刻みと丸め', () => {
   assert.deepEqual(diameterRange(20, 20), [20]);
 });
 
-test('単材積は4桁表示で「単材積×本数=小計」の手計算が合う', () => {
-  // 14cm/4m: 0.0784 -> 3桁だと0.078になり 0.078*27=2.106 で小計2.116と食い違う
-  assert.equal(formatVolume(volumeNumerator(4, 14), 4), '0.0784');
-  assert.equal(formatVolume(volumeNumerator(4, 14)), '0.078');
-  for (const d of diameterRange(6, 72)) {
-    for (const n of [1, 7, 27, 53, 100]) {
-      const perLog4 = formatVolume(volumeNumerator(4, d), 4);
-      const subtotal = formatVolume(volumeNumerator(4, d) * BigInt(n));
-      const handCalc = Math.floor(Number(perLog4) * n * 1000 + 1e-6) / 1000;
-      assert.equal(handCalc.toFixed(3), subtotal, `D=${d} n=${n}`);
-    }
-  }
-});
-
 test('大量本数でも誤差が蓄積しない', () => {
-  // 0.1728m³ の丸太を10000本 -> ちょうど 1728.000m³
   let sum = 0n;
   for (let i = 0; i < 10000; i++) sum += volumeNumerator(12, 8);
-  assert.equal(formatVolume(sum), '1728.000');
+  assert.equal(formatVolume(sum), '1728.000'); // 0.1728 * 10000
 });

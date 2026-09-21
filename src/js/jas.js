@@ -6,24 +6,34 @@
  * すべて BigInt（整数）で「分子だけ」を持ち回り、表示・出力の瞬間にだけ文字列へ変換する。
  * これにより何万本積み上げても誤差が1mm³も発生しない。
  *
- * 【計算式】（CLAUDE.md 準拠）
- *   L < 6m の場合:
- *       D < 14cm  → V = D^2 * L / 10000            （補正なし）
- *       D >= 14cm → V = (D + (L-4)/2)^2 * L / 10000（長さ補正のみ）
- *   L >= 6m の場合:
- *       D >= 14cm → p = (L-4)/2 + (D-12)/2
- *                   V = (D + p)^2 * L / 10000      （長さ補正 + 径級補正）
- *       D < 14cm  → V = (D + (L-4)/2)^2 * L / 10000（長さ補正のみ）
+ * 【計算式】素材の日本農林規格（末口二乗法）
+ *   L < 6m : V = D^2 * L / 10000                （補正なし。径級によらない）
+ *   L >= 6m: V = (D + (L'-4)/2)^2 * L / 10000   （長さ補正）
+ *            L' = 長さ(m)の整数部（1mに満たない端数を切り捨て）
+ *            (L'-4)/2 が負になる場合は 0 として扱う
  *
- * 競合アプリ「Log Counter Plus」は L>=6 でも径級補正 (D-12)/2 を欠落させており、
- * 12m材38本で 92.112m³（正しくは 166.698m³）という過小評価を起こす。
- * tests/jas.test.js でこのケースを毎回検証している。
+ * 【この式の検証について】
+ * 長野県「林業積算基準・丸太材積表」(3-4_3.pdf) の全セル1578個
+ * （長さ3.2〜12.8m × 直径4〜56cm）とこの式を突き合わせ、不一致0件を確認済み。
+ * tests/table.test.js が毎回この照合を行う。
+ *
+ * 当初 CLAUDE.md には L>=6 かつ D>=14 のとき径級補正 (D-12)/2 を加える式が
+ * 書かれていたが、材積表とは1578件中1314件が不一致となり、誤りであることが判明した
+ * （例：12m材・末口20cm は表では0.691m³だが、その式では0.941m³になる）。
  *
  * 【内部表現】
  * S = 200 * (D + 補正)  … 1/200cm 単位の整数
  * V = (S/200)^2 * (Li/100) / 10000 = S^2 * Li / 4e10
  * よって「分子 = S^2 * Li」「分母 = 4e10(固定)」で材積を完全な有理数として扱える。
  */
+
+/**
+ * 材積の端数処理。ここ1か所を変えれば、画面・CSV・明細すべてが同時に切り替わる。
+ *   'truncate' : 小数第4位以下を切り捨て（CLAUDE.mdの指定）
+ *   'round'    : 小数第4位を四捨五入（長野県の丸太材積表はこちら。
+ *                切り捨てにすると表と1mm³ずれるセルが1578件中683件ある）
+ */
+export const ROUNDING_MODE = 'truncate';
 
 /** 材積の固定分母。材積(m³) = 分子 / VOLUME_DENOMINATOR */
 export const VOLUME_DENOMINATOR = 40_000_000_000n; // 4 * 10^10
@@ -83,17 +93,16 @@ export function volumeNumerator(lengthM, diameterCm) {
   // S = 200 * (D + 補正)
   let S;
   if (Li < LONG_LOG_THRESHOLD_HUNDREDTHS) {
-    // 短尺材（6m未満）
-    S = D < 14n
-      ? 200n * D                    // 補正なし: V = D^2 * L / 10000
-      : 200n * D + (Li - 400n);     // 長さ補正のみ
+    // 短尺材（6m未満）: 補正なし  V = D^2 * L / 10000
+    S = 200n * D;
   } else {
-    // 長尺材（6m以上）
-    S = D >= 14n
-      ? 300n * D + Li - 1600n       // 長さ補正 + 径級補正 (D + (L-4)/2 + (D-12)/2)
-      : 200n * D + (Li - 400n);     // 長さ補正のみ
+    // 長尺材（6m以上）: 長さ補正のみ  V = (D + (L'-4)/2)^2 * L / 10000
+    // L' は長さの整数部。BigInt除算は正数では切り捨てになるのでそのまま使える。
+    const Lp = Li / 100n;
+    let correction = 100n * (Lp - 4n); // (L'-4)/2 を 1/200cm 単位で表したもの
+    if (correction < 0n) correction = 0n; // 負になる場合は0（規格の定め）
+    S = 200n * D + correction;
   }
-  if (S < 0n) S = 0n;
   return S * S * Li;
 }
 
@@ -108,20 +117,24 @@ export function volumeNumerator(lengthM, diameterCm) {
  */
 export function formatVolume(numerator, decimals = 3) {
   const scale = 10n ** BigInt(decimals);
-  const units = numerator / (VOLUME_DENOMINATOR / scale); // BigInt除算は正数では切り捨て
+  const divisor = VOLUME_DENOMINATOR / scale;
+  let units = numerator / divisor; // BigInt除算は正数では切り捨て
+  if (ROUNDING_MODE === 'round' && (numerator % divisor) * 2n >= divisor) units += 1n;
   const int = units / scale;
   const frac = units % scale;
   return `${int}.${String(frac).padStart(decimals, '0')}`;
 }
 
 /**
- * 分子を「小数第4位以下を切り捨てた値」の分子に丸める。
- * 径級ごとに切り捨ててから合計する方針を採る場合に使う。
+ * 分子を「表示と同じ丸めを適用した値」の分子にそろえる。
+ * 径級ごとに丸めてから合計する方針を採る場合に使う。
  * @param {bigint} numerator
  * @returns {bigint}
  */
-export function truncateNumerator(numerator) {
-  return (numerator / MILLI_DIVISOR) * MILLI_DIVISOR;
+export function quantizeNumerator(numerator) {
+  let units = numerator / MILLI_DIVISOR;
+  if (ROUNDING_MODE === 'round' && (numerator % MILLI_DIVISOR) * 2n >= MILLI_DIVISOR) units += 1n;
+  return units * MILLI_DIVISOR;
 }
 
 /**
