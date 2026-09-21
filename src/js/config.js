@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'TERRA 検収',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v1',
+  cacheVersion: 'terra-kennsyuu-v2',
 
   /** Lemon Squeezy（年額サブスクリプション） */
   lemonSqueezy: {

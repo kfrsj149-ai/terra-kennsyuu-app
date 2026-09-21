@@ -19,11 +19,36 @@ npm run icons   # アイコンPNGを作り直すとき
 
 ## 2. 公開（Vercel）
 
-このリポジトリをVercelに接続するだけで公開できます（フレームワークは「Other」＝静的サイト）。
+このリポジトリはビルド不要の静的サイトです。`vercel.json` に設定を書いてあるので、
+Vercelの画面で細かい指定をする必要はありません。
 
-公開後は、そのURLをスマホのブラウザで開き、
-**Chrome の「ホーム画面に追加」／Safari の「共有」→「ホーム画面に追加」** を押せばインストール完了です。
-アプリストアの審査は不要で、URLを共有するだけで配布できます。
+### 手順
+
+1. https://vercel.com にGitHubアカウントでログインする
+2. 「Add New...」→「Project」を押す
+3. `terra-kennsyuu-app` を選んで「Import」を押す
+4. 設定画面はそのままでよい（Framework Preset が「Other」になっていることだけ確認）
+5. 「Deploy」を押す。1分ほどで `https://terra-kennsyuu-app.vercel.app` のようなURLが発行される
+
+以後、GitHubにpushするたびに自動で再公開されます。
+
+### スマホへのインストール
+
+発行されたURLをスマホのブラウザで開き、
+**Chrome: メニュー →「ホーム画面に追加」／Safari: 共有 →「ホーム画面に追加」**
+を押せば完了です。アプリストアの審査は不要で、URLを送るだけで配布できます。
+
+### アプリを更新したとき
+
+`sw.js` の `VERSION` を上げてからpushしてください。上げ忘れると、
+利用者の端末に古い画面がキャッシュされたまま残ります。
+
+### 注意（オフライン動作を壊さないために）
+
+Vercelの `cleanUrls` は**有効にしないでください**。`/index.html` が別URLへリダイレクトされ、
+リダイレクト経由の応答はキャッシュから配信できないため、圏外でアプリが真っ白になります。
+実際に再現して確認済みです。現在は `vercel.json` で無効にしたうえ、
+Service Worker側でもリダイレクトされた応答を作り直して二重に防いでいます。
 
 ## 3. 公開前に設定するもの
 
@@ -35,6 +60,9 @@ npm run icons   # アイコンPNGを作り直すとき
 | `lemonSqueezy.portalUrl` | 支払い・プラン管理ページのURL |
 | `googleDrive.clientId` | Google CloudのOAuthクライアントID（未設定ならバックアップ機能は自動で無効表示） |
 | `cacheVersion` / `sw.js` の `VERSION` | アプリを更新したら必ず上げる（古いキャッシュが残らないように） |
+
+`lemonSqueezy.checkoutUrl` と `googleDrive.clientId` は未設定のままでもアプリは動きます
+（サブスクは14日間の試用期間で動作し、バックアップ機能は「未設定」と表示されます）。
 
 配色を変えたいときは `src/css/tokens.css` の `:root` だけを書き換えれば全画面に反映されます。
 文言を変えたいときは `src/js/locales/<言語>.js` を書き換えます。

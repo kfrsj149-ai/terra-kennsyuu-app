@@ -9,8 +9,28 @@
  *   - ナビゲーション要求は必ず index.html を返す（URLのクエリを問わない）
  *   - cache.match に ignoreSearch: true を付ける
  * の2点で確実に回避している。
+ *
+ * 【リダイレクトされた応答について】
+ * 配信側の設定（Vercelの cleanUrls など）で /index.html が別URLへリダイレクトされると、
+ * その応答をそのままキャッシュしてもナビゲーションには使えず、圏外で真っ白になる。
+ * 実際に再現して確認済みのため、キャッシュに入れる前に必ず素の応答へ作り直している。
  */
-const VERSION = 'terra-kennsyuu-v1';
+
+/**
+ * リダイレクト経由で得た応答を、キャッシュから配信できる素の応答に作り直す。
+ * @param {Response} response
+ * @returns {Promise<Response>}
+ */
+async function toCacheable(response) {
+  if (!response.redirected) return response;
+  const body = await response.arrayBuffer();
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+const VERSION = 'terra-kennsyuu-v2';
 const CACHE = `${VERSION}`;
 
 const SHELL = [
@@ -43,8 +63,15 @@ const SHELL = [
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    // 1つでも失敗すると全体が失敗するため、個別に追加して取りこぼしを防ぐ
-    await Promise.all(SHELL.map((url) => cache.add(url).catch(() => {})));
+    // 1つでも失敗すると全体が失敗するため、個別に取得して取りこぼしを防ぐ
+    await Promise.all(SHELL.map(async (url) => {
+      try {
+        const res = await fetch(url, { cache: 'reload' });
+        if (res.ok) await cache.put(url, await toCacheable(res));
+      } catch {
+        /* 1件くらい取れなくてもアプリは動く */
+      }
+    }));
     await self.skipWaiting();
   })());
 });
@@ -72,7 +99,7 @@ self.addEventListener('fetch', (event) => {
       try {
         const fresh = await fetch(request);
         const cache = await caches.open(CACHE);
-        cache.put('./index.html', fresh.clone());
+        cache.put('./index.html', await toCacheable(fresh.clone())).catch(() => {});
         return fresh;
       } catch {
         const cache = await caches.open(CACHE);
@@ -88,8 +115,10 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(request, { ignoreSearch: true });
-    const network = fetch(request).then((res) => {
-      if (res && res.ok && res.type === 'basic') cache.put(request, res.clone()).catch(() => {});
+    const network = fetch(request).then(async (res) => {
+      if (res && res.ok && res.type === 'basic') {
+        cache.put(request, await toCacheable(res.clone())).catch(() => {});
+      }
       return res;
     }).catch(() => null);
     return cached ?? (await network) ?? Response.error();

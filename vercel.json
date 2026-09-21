@@ -1,5 +1,9 @@
 {
-  "cleanUrls": true,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "echo 'ビルド不要（素のHTML/CSS/JSのため）'",
+  "installCommand": "echo '依存パッケージなし'",
+  "outputDirectory": ".",
+  "trailingSlash": false,
   "headers": [
     {
       "source": "/sw.js",
@@ -10,11 +14,19 @@
     },
     {
       "source": "/manifest.webmanifest",
-      "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
+      "headers": [{ "key": "Content-Type", "value": "application/manifest+json; charset=utf-8" }]
+    },
+    {
+      "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     },
     {
       "source": "/src/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/icons/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }]
     }
   ]
 }
