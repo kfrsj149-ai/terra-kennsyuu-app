@@ -26,6 +26,66 @@
 
 
 Claude · MD
+## 統合進捗管理ルール（必須・全セッション共通）
+
+### 作業開始時
+セッション開始時、以下のファイルを読み込んでから作業に着手すること。
+- ~/Google ドライブ/TERRA_進捗管理/decisions_log.md（過去の教訓と矛盾しないか確認）
+- ~/Google ドライブ/TERRA_進捗管理/tech_stack_playbook.md（技術選定判断ルール）
+- ~/Google ドライブ/TERRA_進捗管理/projects/<このプロジェクト名>.md（自分自身の現状）
+
+### 作業終了時・大きな変更の完了時
+以下を必ず更新すること。
+
+【更新対象1】自プロジェクトのステータスファイル
+~/Google ドライブ/TERRA_進捗管理/projects/<このプロジェクト名>.md
+- ファイル冒頭の「最終更新」「状態」を更新
+- 「進捗」セクションの実装済み/未実装/残タスク/ブロッカーを実態に合わせて書き換える
+- 既存の設計情報（基本情報・仕様等のセクション）は、変更がない限り消さずそのまま残す
+- 完成度目安(%)は可能な範囲で数値化する
+
+【更新対象2】decisions_log.md への追記（該当する場合のみ）
+~/Google ドライブ/TERRA_進捗管理/decisions_log.md
+以下に該当する判断・変更があった場合、末尾に追記する（既存の記述は絶対に消さない）。
+- 設計変更（特に現場テストの結果によるもの）
+- 他プロジェクトにも影響しうる技術判断（オフライン実装方式、UI原則、決済方式等）
+
+フォーマット：
+```
+### YYYY-MM-DD [プロジェクト名]
+- 変更内容：
+- 理由・現場での問題点：
+- 他プロジェクトへの示唆：
+```
+
+### 新規プロダクトに着手する場合
+- 必ず decisions_log.md と tech_stack_playbook.md を読み、矛盾する設計をしていないか確認する
+- 新しいアイデア段階のものは ~/Google ドライブ/TERRA_進捗管理/idea_inbox.md に記入する（実装着手済みのものは対象外）
+
+### このプロジェクトでの補足（2026-09-22 実地確認）
+- **このリポジトリに対応する管理ファイルは `projects/log-truck-volume-app.md`**
+  （`terra-kennsyuu-app.md` は存在しない。リポジトリ名と管理ファイル名が違うので注意）
+- Claude Code on the web（クラウド実行）のセッションでは、ローカルの
+  `~/Google ドライブ/` フォルダは存在しない。**Google ドライブ コネクタ経由なら
+  読み書きできることを確認済み**。以下のIDで直接たどれる。
+
+  | ファイル | Drive ファイルID |
+  | --- | --- |
+  | TERRA_進捗管理（フォルダ） | `1T6WKr0wK1Bxu74PbFeYiie4gcAe0OPJr` |
+  | _MASTER_STATUS.md | `16t5I7ncVXFwhDLpHBwvl73DH1705LRWx` |
+  | decisions_log.md | `1B58AdtpFMd9LtWFetW1wHOyMHTkR6Xbr` |
+  | tech_stack_playbook.md | `1UVAwe0-Hd4TZ80SSkx7rZpihfaQZeSbx` |
+  | idea_inbox.md | `1y-3WTlnYZAxU0ZIfno0XwXkYoEuV30lX` |
+  | projects（フォルダ） | `1bAaFEHgSYwJDCK7pwlIN66KNzXtXBvE4` |
+  | projects/log-truck-volume-app.md | `1XMBMsOUym51jgIop8czQpmUw0dvdDy6K` |
+
+- 読めなかった場合は黙って飛ばさず、その旨を必ず利用者に伝える
+- 管理ファイルを更新する際は、**本CLAUDE.mdの記述を正とする**。
+  管理ファイル側には方針転換前（Androidネイティブ／Google Play買い切り）の記述や、
+  後に誤りと判明したJAS計算式の記述が残っている場合がある
+
+---
+
 TERRA検収PWA（terra-kennsyuu-app）プロジェクト設定
 このファイルはClaude Codeがこのリポジトリで作業する際に常に参照する設定です。 新しいセッションや会話が変わっても、ここに書かれた内容は自動的に踏まえて作業してください。
 
