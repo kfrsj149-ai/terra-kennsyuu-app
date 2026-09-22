@@ -28,23 +28,42 @@
 Claude · MD
 ## 統合進捗管理ルール（必須・全セッション共通）
 
-### 作業開始時
-セッション開始時、以下のファイルを読み込んでから作業に着手すること。
+### 環境の確認（作業開始時に必ず実行）
+以下のパスが存在するか確認すること。
+~/Google ドライブ/TERRA_進捗管理/
+
+- 存在する場合 → 「ローカルモード」。以下の手順をそのまま実行する
+- 存在しない場合（クラウド環境等） → 「クラウドモード」。
+  代わりにリポジトリ直下の STATUS_LOCAL.md に同じ内容を書き込む。
+  このファイルは.gitignoreに含めず、通常通りコミット・プッシュする対象とする。
+  さらに、セッションの最後にチャット上で以下を明示すること：
+  「進捗をSTATUS_LOCAL.mdに記録しました。Google Driveへの反映は
+   別途チャット(claude.ai)側での同期作業が必要です」
+
+### 作業開始時（ローカルモードのみ）
+以下のファイルを読み込んでから作業に着手すること。
 - ~/Google ドライブ/TERRA_進捗管理/decisions_log.md（過去の教訓と矛盾しないか確認）
 - ~/Google ドライブ/TERRA_進捗管理/tech_stack_playbook.md（技術選定判断ルール）
 - ~/Google ドライブ/TERRA_進捗管理/projects/<このプロジェクト名>.md（自分自身の現状）
+
+※クラウドモードでこれらの内容が必要な場合は、直近でチャット(claude.ai)から
+共有された内容、またはリポジトリ内の既存メモを参照する。
 
 ### 作業終了時・大きな変更の完了時
 以下を必ず更新すること。
 
 【更新対象1】自プロジェクトのステータスファイル
-~/Google ドライブ/TERRA_進捗管理/projects/<このプロジェクト名>.md
+- ローカルモード: ~/Google ドライブ/TERRA_進捗管理/projects/<このプロジェクト名>.md
+- クラウドモード: ./STATUS_LOCAL.md（リポジトリ直下）
+  ※フォーマットはGoogle Drive版のprojects/<プロジェクト名>.mdと同一とする
+
+更新内容：
 - ファイル冒頭の「最終更新」「状態」を更新
 - 「進捗」セクションの実装済み/未実装/残タスク/ブロッカーを実態に合わせて書き換える
 - 既存の設計情報（基本情報・仕様等のセクション）は、変更がない限り消さずそのまま残す
 - 完成度目安(%)は可能な範囲で数値化する
 
-【更新対象2】decisions_log.md への追記（該当する場合のみ）
+【更新対象2】decisions_log.md への追記（該当する場合のみ、ローカルモードのみ）
 ~/Google ドライブ/TERRA_進捗管理/decisions_log.md
 以下に該当する判断・変更があった場合、末尾に追記する（既存の記述は絶対に消さない）。
 - 設計変更（特に現場テストの結果によるもの）
@@ -58,16 +77,20 @@ Claude · MD
 - 他プロジェクトへの示唆：
 ```
 
+※クラウドモードで該当する判断があった場合は、STATUS_LOCAL.mdの末尾に
+「## decisions_log転記用」セクションを設け、同じフォーマットで記載する。
+
 ### 新規プロダクトに着手する場合
 - 必ず decisions_log.md と tech_stack_playbook.md を読み、矛盾する設計をしていないか確認する
 - 新しいアイデア段階のものは ~/Google ドライブ/TERRA_進捗管理/idea_inbox.md に記入する（実装着手済みのものは対象外）
+- クラウドモードでファイルが読めない場合は、チャット(claude.ai)側に直近の内容を確認する
 
 ### このプロジェクトでの補足（2026-09-22 実地確認）
-- **このリポジトリに対応する管理ファイルは `projects/log-truck-volume-app.md`**
+- **このリポジトリに対応する管理ファイル名は `log-truck-volume-app.md`**
   （`terra-kennsyuu-app.md` は存在しない。リポジトリ名と管理ファイル名が違うので注意）
-- Claude Code on the web（クラウド実行）のセッションでは、ローカルの
-  `~/Google ドライブ/` フォルダは存在しない。**Google ドライブ コネクタ経由なら
-  読み書きできることを確認済み**。以下のIDで直接たどれる。
+- Claude Code on the web はクラウドモードで動く。上のルールどおり STATUS_LOCAL.md を更新すること
+- 参考：Google ドライブ コネクタが使える場合は下記IDで直接たどれる。
+  ただし**上のクラウドモードの手順を優先**し、Driveへの書き込みは利用者の指示があるときだけ行う。
 
   | ファイル | Drive ファイルID |
   | --- | --- |
@@ -76,13 +99,11 @@ Claude · MD
   | decisions_log.md | `1B58AdtpFMd9LtWFetW1wHOyMHTkR6Xbr` |
   | tech_stack_playbook.md | `1UVAwe0-Hd4TZ80SSkx7rZpihfaQZeSbx` |
   | idea_inbox.md | `1y-3WTlnYZAxU0ZIfno0XwXkYoEuV30lX` |
-  | projects（フォルダ） | `1bAaFEHgSYwJDCK7pwlIN66KNzXtXBvE4` |
   | projects/log-truck-volume-app.md | `1XMBMsOUym51jgIop8czQpmUw0dvdDy6K` |
 
-- 読めなかった場合は黙って飛ばさず、その旨を必ず利用者に伝える
 - 管理ファイルを更新する際は、**本CLAUDE.mdの記述を正とする**。
-  管理ファイル側には方針転換前（Androidネイティブ／Google Play買い切り）の記述や、
-  後に誤りと判明したJAS計算式の記述が残っている場合がある
+  Drive側には方針転換前（Androidネイティブ／Google Play買い切り）の記述や、
+  後に誤りと判明したJAS計算式の記述が残っている
 
 ---
 
