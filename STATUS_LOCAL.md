@@ -1,7 +1,7 @@
 ---
 最終更新: 2026-09-22
 プロジェクト名: 丸太検尺(材積計算)アプリ / LOG-RA
-状態: 実装完了・公開待ち（PR #1 が未マージのためブロック中）
+状態: 実装完了・mainへマージ済み。Vercelへのインポート待ち
 ---
 
 > このファイルはクラウドモード（Claude Code on the web）で作成した進捗記録です。
@@ -92,9 +92,11 @@
 ## 進捗
 - **完成度目安: 約85%**（実装は完了。公開作業と現場テストが残り）
 - 2026-09-22 時点の実地確認:
-  - `origin/main` の中身は `CLAUDE.md` のみ。作業ブランチ
-    `claude/vibrant-ritchie-y483m0` に **11コミットが未反映**
-  - Vercel側に `terra` を含むプロジェクトは**未作成**（Vercelコネクタで確認）
+  - **PR #1 はマージ済み**。`origin/main` にアプリ一式が入り、未反映コミットは0件
+    （マージコミット a685e87）
+  - Vercel側に `terra-kennsyuu-app` プロジェクトは**未作成**。
+    チーム `menzei-pwa` には field-pwa / menzei-keiyu-pwa / office-pwa /
+    phase0-prototype の4件のみ（Vercelコネクタで確認）
   - 自動テスト19件はすべて合格
 - 実装済み:
   - JAS材積計算エンジン（BigInt整数演算、公的材積表1578セルと全件一致）
@@ -122,12 +124,16 @@
   5. 現場での実地テスト（炎天下の視認性、手袋での操作性、配色調整）
   6. 価格決定とプライバシーポリシーの整備
 - ブロッカー:
-  - **PR #1 が未マージ**。mainには `CLAUDE.md` しかないため、この状態でVercelに
-    接続してもアプリは公開されない（Vercelは既定でmainを本番ブランチとして見る）
-  - 解除方法: https://github.com/kfrsj149-ai/terra-kennsyuu-app/pull/1 で
-    「Merge pull request」→ その後 https://vercel.com/new からインポート
-  - Vercelの一覧に出ない場合は、GitHubアプリのリポジトリ許可が
-    「一部のみ」になっている可能性がある（Adjust GitHub App Permissions から追加）
+  - ~~PR #1 が未マージ~~ → **2026-09-22 解消**
+  - **Vercelへのインポートが未完了**。利用者が手作業で行う必要がある。
+    https://vercel.com/new を開き `terra-kennsyuu-app` を Import → そのまま Deploy
+    （`vercel.json` に設定済みのため設定変更は不要）
+  - 一覧に出ない場合は、GitHubアプリのリポジトリ許可が「一部のみ」になっている
+    可能性がある（Adjust GitHub App Permissions から `terra-kennsyuu-app` を追加）
+  - VercelのMCPコネクタからは**チーム `menzei-pwa` への書き込みができない**
+    （プロジェクト一覧の取得はできるが、作成は 403 forbidden。
+    `You must re-authenticate to this scope` と返る）。
+    Claude側から自動でデプロイしたい場合は、このスコープへの再認証が必要
 
 ## ローンチ後の実績
 - 利用者数: -
