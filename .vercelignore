@@ -1,0 +1,4 @@
+# 公開する必要のないファイル
+tests/
+scripts/
+.gitignore

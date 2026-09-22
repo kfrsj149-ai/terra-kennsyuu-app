@@ -1,0 +1,55 @@
+/*
+ * 配色トークン（暫定色）
+ * ----------------------------------------------------------
+ * 実地テスト後の配色調整は「このファイルの :root だけ」を書き換えれば全画面に反映される。
+ * ダークモードは採用しない（炎天下での視認性を優先し、常に明るい背景＋濃い文字）。
+ */
+:root {
+  /* 基本色 */
+  --c-bg: #f4f6f3;
+  --c-surface: #ffffff;
+  --c-text: #14210f;
+  --c-text-weak: #52604d;
+  --c-border: #c3cdbd;
+
+  /* ブランド（TERRA=森の緑） */
+  --c-brand: #1f6b2d;
+  --c-brand-dark: #14501f;
+  --c-brand-ink: #ffffff;
+
+  /* 操作系（高コントラスト・高彩度） */
+  --c-tap: #ffd400;        /* 径級カード（未入力） */
+  --c-tap-active: #ff8a00; /* 径級カード（入力あり） */
+  --c-tap-ink: #1a1400;
+  --c-glow: #ffffff;       /* タップ時の発光色 */
+
+  --c-primary: #1f6b2d;    /* 計測開始・はい */
+  --c-primary-ink: #ffffff;
+  --c-danger: #c62828;     /* 取消・取り消し線 */
+  --c-danger-ink: #ffffff;
+  --c-neutral: #dfe4db;    /* 戻る */
+  --c-neutral-ink: #1b2417;
+  --c-accent: #0b5fa5;     /* データ出力 */
+  --c-accent-ink: #ffffff;
+  --c-warn-bg: #fff3cd;
+  --c-warn-ink: #5c4600;
+
+  /* 寸法 */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --gap: 8px;
+  --tap-min: 56px;          /* 手袋着用でも押せる最小タップ高 */
+  --dash-max-h: 38vh;       /* 上部ダッシュボードの上限（画面の2/3以下を厳守） */
+
+  /* 文字（下部の径級ボタンより上部を大きくしない） */
+  --fs-dash-label: 0.75rem;
+  --fs-dash-value: 1.5rem;
+  --fs-history: 1.05rem;
+  /* 入力履歴の区切り文字。ここ1か所で全体の見え方が変わる */
+  --hist-sep: ", ";
+  --grid-cols: 2;          /* 径級ボタンの列数 */
+  --fs-card-d: 2.2rem;
+  --fs-card-sub: 1rem;
+  --fs-action: 1.25rem;
+}

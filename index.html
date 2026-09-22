@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#1f6b2d">
+<meta name="description" content="TERRA 丸太検収 - JAS材積を正確に計算するオフライン対応の検収アプリ">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TERRA検収">
+<title>TERRA 検収</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./src/css/app.css">
+</head>
+<body data-side="left">
+
+<header id="app-bar">
+  <button class="bar-btn" id="menu-btn" data-i18n-aria="menu.title" aria-label="設定">☰</button>
+  <h1 data-i18n="app.name">TERRA 検収</h1>
+  <span id="net-badge" data-online="true" title="通信状態">📶</span>
+</header>
+
+<div id="sub-banner" class="banner"></div>
+
+<main>
+  <!-- ========== 画面1：セットアップ ========== -->
+  <section id="screen-setup" class="screen is-active">
+    <div class="scroll">
+      <h2 class="dlg-title" data-i18n="setup.title">検収の準備</h2>
+
+      <!-- よく使う設定ショートカット（最上部） -->
+      <div class="field">
+        <label data-i18n="setup.presets">よく使う設定</label>
+        <div class="preset-bar" id="preset-bar"></div>
+      </div>
+
+      <div class="field">
+        <label for="in-species" data-i18n="setup.species">樹種</label>
+        <input type="text" id="in-species" autocomplete="off" data-i18n-placeholder="setup.speciesPlaceholder">
+      </div>
+
+      <div class="field">
+        <label for="in-length" data-i18n="setup.length">規格長さ（m）</label>
+        <input type="text" id="in-length" inputmode="decimal" autocomplete="off" placeholder="4">
+      </div>
+
+      <!-- 径級は2cm刻み等の制約があるため▲▼ピッカーで選ぶ（自由入力させない） -->
+      <div class="field">
+        <label data-i18n="setup.range">納入規格範囲（径級 cm）</label>
+        <div class="picker">
+          <div class="picker-group">
+            <span data-i18n="setup.rangeMin">最小</span>
+            <div class="picker-row">
+              <button type="button" class="picker-btn" data-dia="min" data-dir="-1">▼</button>
+              <div class="picker-value" id="val-min">14</div>
+              <button type="button" class="picker-btn" data-dia="min" data-dir="1">▲</button>
+            </div>
+          </div>
+          <div class="picker-group">
+            <span data-i18n="setup.rangeMax">最大</span>
+            <div class="picker-row">
+              <button type="button" class="picker-btn" data-dia="max" data-dir="-1">▼</button>
+              <div class="picker-value" id="val-max">30</div>
+              <button type="button" class="picker-btn" data-dia="max" data-dir="1">▲</button>
+            </div>
+          </div>
+        </div>
+        <div class="picker-count" id="range-count"></div>
+      </div>
+
+      <div class="field">
+        <label for="in-truck" data-i18n="setup.truck">トラック車番</label>
+        <select id="in-truck"></select>
+      </div>
+      <div class="field">
+        <label for="in-site" data-i18n="setup.site">現場名</label>
+        <select id="in-site"></select>
+      </div>
+      <div class="field">
+        <label for="in-destination" data-i18n="setup.destination">納入先</label>
+        <select id="in-destination"></select>
+      </div>
+      <div class="field">
+        <label for="in-own" data-i18n="setup.own">自社名</label>
+        <select id="in-own"></select>
+      </div>
+      <div class="field">
+        <label for="in-note" data-i18n="setup.note">備考</label>
+        <textarea id="in-note"></textarea>
+      </div>
+
+      <button type="button" class="btn btn-sm" id="save-preset-btn" data-i18n="setup.savePreset">この設定をよく使う設定に保存</button>
+    </div>
+    <div class="sticky-foot">
+      <button type="button" class="btn btn-primary" id="start-btn" data-i18n="setup.start">計測開始</button>
+    </div>
+  </section>
+
+  <!-- ========== 画面3：計測入力 ========== -->
+  <section id="screen-measure" class="screen">
+    <!-- 上部ダッシュボード：画面高の2/3以下。車番・現場・出荷・日付は一切表示しない -->
+    <div id="dashboard">
+      <div id="meta-line"></div>
+      <div id="totals">
+        <div class="total-box">
+          <div class="label" data-i18n="measure.count">合計本数</div>
+          <div class="value"><span id="total-count">0</span><span class="unit" data-i18n="measure.unitCount">本</span></div>
+        </div>
+        <div class="total-box">
+          <div class="label" data-i18n="measure.volume">合計材積</div>
+          <div class="value"><span id="total-volume">0.000</span><span class="unit">m³</span></div>
+        </div>
+      </div>
+      <div id="history" aria-live="polite">
+        <div id="history-empty" data-i18n="measure.historyEmpty">まだ入力がありません</div>
+      </div>
+    </div>
+
+    <!-- 径級グリッド：範囲内の径級のみ動的表示 -->
+    <div id="grid-wrap"><div id="grid"></div></div>
+
+    <div id="action-bar">
+      <div class="slot">
+        <button type="button" class="btn btn-danger" id="undo-btn" data-i18n="measure.undo">直前取消</button>
+        <div class="hint" data-i18n="measure.undoHint">長押しで径級ごとの取消もできます</div>
+      </div>
+      <button type="button" class="btn" id="voice-btn" data-i18n-aria="measure.voice" aria-label="音声入力">🎤</button>
+      <div class="slot">
+        <button type="button" class="btn btn-accent" id="export-btn" data-i18n="measure.export">データ出力</button>
+        <div class="hint">&nbsp;</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ========== 画面0：ハンバーガーメニュー ========== -->
+<div id="drawer-scrim"></div>
+<aside id="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <h2 data-i18n="menu.title">設定・事前登録</h2>
+    <button class="bar-btn" id="drawer-close" data-i18n-aria="common.close" aria-label="閉じる">✕</button>
+  </div>
+  <div class="drawer-body scroll">
+    <div class="menu-section">
+      <h3 data-i18n="menu.language">表示言語</h3>
+      <select id="sel-language"></select>
+    </div>
+
+    <div class="menu-section">
+      <h3 data-i18n="menu.buttonSide">ボタン配置（片手持ち）</h3>
+      <div class="seg" id="seg-side">
+        <button type="button" data-side="left" data-i18n="menu.left">左</button>
+        <button type="button" data-side="right" data-i18n="menu.right">右</button>
+      </div>
+    </div>
+
+    <div class="menu-section" data-list="company">
+      <h3 data-i18n="menu.companies">会社名</h3>
+      <div class="chip-list"></div>
+      <div class="inline-add">
+        <input type="text" autocomplete="off">
+        <button type="button" data-i18n="common.add">追加</button>
+      </div>
+    </div>
+    <div class="menu-section" data-list="truck">
+      <h3 data-i18n="menu.trucks">トラック車番</h3>
+      <div class="chip-list"></div>
+      <div class="inline-add">
+        <input type="text" autocomplete="off">
+        <button type="button" data-i18n="common.add">追加</button>
+      </div>
+    </div>
+    <div class="menu-section" data-list="site">
+      <h3 data-i18n="menu.sites">現場名</h3>
+      <div class="chip-list"></div>
+      <div class="inline-add">
+        <input type="text" autocomplete="off">
+        <button type="button" data-i18n="common.add">追加</button>
+      </div>
+    </div>
+    <div class="menu-section" data-list="destination">
+      <h3 data-i18n="menu.destinations">納入先</h3>
+      <div class="chip-list"></div>
+      <div class="inline-add">
+        <input type="text" autocomplete="off">
+        <button type="button" data-i18n="common.add">追加</button>
+      </div>
+    </div>
+
+    <div class="menu-section">
+      <h3 data-i18n="menu.presets">よく使う設定</h3>
+      <div class="chip-list" id="preset-manage"></div>
+    </div>
+
+    <div class="menu-section">
+      <h3 data-i18n="menu.history">伝票履歴</h3>
+      <button type="button" class="btn btn-sm" id="open-history" data-i18n="history.title">伝票履歴</button>
+    </div>
+
+    <div class="menu-section">
+      <h3 data-i18n="menu.subscription">サブスクリプション</h3>
+      <div class="note" id="sub-status"></div>
+      <div class="inline-add" style="margin-top:8px">
+        <input type="text" id="in-license" data-i18n-placeholder="license.key" autocomplete="off">
+        <button type="button" id="activate-btn" data-i18n="license.activate">有効化</button>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">
+        <a class="btn btn-sm" id="buy-link" style="flex:1; text-align:center; line-height:48px; text-decoration:none" target="_blank" rel="noopener" data-i18n="license.buy">年額サブスクを申し込む</a>
+        <a class="btn btn-sm" id="portal-link" style="flex:1; text-align:center; line-height:48px; text-decoration:none" target="_blank" rel="noopener" data-i18n="license.portal">支払い・プラン管理</a>
+      </div>
+    </div>
+
+    <div class="menu-section">
+      <h3 data-i18n="backup.title">Googleドライブ自動バックアップ</h3>
+      <div class="note" id="backup-status"></div>
+      <div style="margin-top:8px; display:flex; gap:6px">
+        <button type="button" class="btn btn-sm" id="drive-connect" data-i18n="backup.connect">Googleドライブに接続</button>
+        <button type="button" class="btn btn-sm" id="drive-now" data-i18n="backup.now">今すぐバックアップ</button>
+      </div>
+    </div>
+
+    <div class="menu-section">
+      <h3 data-i18n="measure.voice">音声入力</h3>
+      <label class="switch">
+        <input type="checkbox" id="voice-consent">
+        <span data-i18n="menu.voiceConsent">音声データの提供に同意する</span>
+      </label>
+      <p class="note" data-i18n="menu.voiceConsentHint"></p>
+    </div>
+  </div>
+</aside>
+
+<!-- ========== 画面2：開始確認 ========== -->
+<dialog id="dlg-start">
+  <div class="dlg-body">
+    <p class="dlg-question" id="start-question"></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-primary" id="start-yes" data-i18n="common.yes">はい</button>
+    <button type="button" class="btn" id="start-no" data-i18n="common.back">戻る</button>
+  </div>
+</dialog>
+
+<!-- ========== 画面4：出力確認 ========== -->
+<dialog id="dlg-output">
+  <div class="dlg-body">
+    <div class="dlg-title" data-i18n="output.title">出力内容の確認</div>
+    <!-- 伝票番号は転記時に真っ先に必要なので最上部に置く -->
+    <div class="field">
+      <label for="out-ticket-no" data-i18n="output.ticketNo">伝票番号</label>
+      <input type="text" id="out-ticket-no" inputmode="numeric" autocomplete="off">
+    </div>
+    <table class="summary-table" id="output-summary"></table>
+    <!-- 手書き伝票への転記元になる明細表 -->
+    <table class="detail-table" id="output-detail"></table>
+    <div class="field">
+      <label for="out-note" data-i18n="output.note">備考</label>
+      <textarea id="out-note"></textarea>
+    </div>
+  </div>
+  <!-- 確認文はスクロールの外。表を読んでいる途中でも必ず目に入る -->
+  <p class="dlg-question dlg-confirm" data-i18n="output.confirm">本当によろしいですか？</p>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-primary" id="output-yes" data-i18n="common.yes">はい</button>
+    <button type="button" class="btn" id="output-no" data-i18n="common.back">戻る</button>
+  </div>
+</dialog>
+
+<!-- 本数の直接入力（本数の数字を長押し） -->
+<dialog id="dlg-count">
+  <div class="dlg-body">
+    <div class="dlg-title" id="count-title"></div>
+    <input type="number" id="count-input" inputmode="numeric" min="0" max="9999" step="1">
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-primary" id="count-ok" data-i18n="common.confirm">確定</button>
+    <button type="button" class="btn" id="count-cancel" data-i18n="common.back">戻る</button>
+  </div>
+</dialog>
+
+<!-- 径級ごとの取消 -->
+<dialog id="dlg-cancel-pick">
+  <div class="dlg-body">
+    <div class="dlg-title" data-i18n="measure.pickCancel">取消する径級を選んでください</div>
+    <div class="cancel-pick" id="cancel-pick-list"></div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn" id="cancel-pick-close" data-i18n="common.back">戻る</button>
+  </div>
+</dialog>
+
+<!-- 伝票履歴 -->
+<dialog id="dlg-history">
+  <div class="dlg-body">
+    <div class="dlg-title" data-i18n="history.title">伝票履歴</div>
+    <div id="ticket-list"></div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn" id="history-close" data-i18n="common.close">閉じる</button>
+  </div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="./src/js/app.js"></script>
+</body>
+</html>

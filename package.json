@@ -1,0 +1,15 @@
+{
+  "name": "terra-kennsyuu-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TERRA 丸太検収PWA - オフラインファーストのJAS材積検収アプリ",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "test": "node --test tests/*.test.js",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
