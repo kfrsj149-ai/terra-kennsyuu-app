@@ -6,7 +6,16 @@ export const CONFIG = {
   appName: 'TERRA 検収',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v2',
+  cacheVersion: 'terra-kennsyuu-v3',
+
+  /**
+   * 音声データを収集するか（将来のオフライン音声認識モデル訓練用）。
+   * CLAUDE.mdのロードマップどおり、初版では収集しないため false。
+   * false の間は、収集していないものについて同意を求めないよう
+   * メニューの同意チェックボックス自体を表示しない。
+   * true にする前に、必ず privacy.html に収集内容と利用目的を明記すること。
+   */
+  voiceDataCollection: false,
 
   /** Lemon Squeezy（年額サブスクリプション） */
   lemonSqueezy: {

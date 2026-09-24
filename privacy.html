@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6b2d">
+<title>プライバシーポリシー｜TERRA 検収</title>
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./src/css/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--c-bg);
+    color: var(--c-text);
+    font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    line-height: 1.8;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header {
+    background: var(--c-brand);
+    color: var(--c-brand-ink);
+    padding: 12px 16px;
+    padding-top: calc(12px + env(safe-area-inset-top));
+  }
+  header h1 { margin: 0; font-size: 1.1rem; }
+  main { max-width: 42rem; margin: 0 auto; padding: 16px 16px 48px; }
+  h2 {
+    font-size: 1.05rem;
+    color: var(--c-brand-dark);
+    border-bottom: 2px solid var(--c-border);
+    padding-bottom: 4px;
+    margin: 28px 0 10px;
+  }
+  p, li { font-size: .95rem; }
+  ul { padding-left: 1.2em; }
+  .lead { background: var(--c-surface); border-radius: var(--r-md); padding: 12px 14px; }
+  .todo {
+    background: var(--c-warn-bg);
+    color: var(--c-warn-ink);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+    font-weight: 700;
+  }
+  .back {
+    display: inline-block;
+    margin-top: 24px;
+    padding: 12px 20px;
+    background: var(--c-brand);
+    color: var(--c-brand-ink);
+    border-radius: var(--r-md);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  footer { margin-top: 32px; font-size: .8rem; color: var(--c-text-weak); }
+</style>
+</head>
+<body>
+<header><h1>プライバシーポリシー｜TERRA 検収</h1></header>
+<main>
+
+<p class="lead">
+  TERRA 検収（以下「本アプリ」）は、丸太検収の記録を端末内で完結して扱うことを基本方針としています。
+  本ポリシーは、本アプリが取り扱う情報と、その取り扱い方法を説明するものです。
+</p>
+
+<p class="todo">
+  ※このページは雛形です。公開前に「事業者情報」と「お問い合わせ窓口」を記入し、
+  実際の運用に合わせて内容をご確認ください。
+</p>
+
+<h2>1. 端末内に保存される情報</h2>
+<p>次の情報は、お使いの端末のブラウザ内（IndexedDB）にのみ保存されます。開発者が自動的に取得することはありません。</p>
+<ul>
+  <li>検収の記録（日付、伝票番号、樹種、規格長さ、納入規格範囲、径級ごとの本数と材積、備考）</li>
+  <li>事前登録した会社名、トラック車番、現場名、納入先</li>
+  <li>「よく使う設定」の内容</li>
+  <li>表示言語、ボタン配置などの設定</li>
+</ul>
+<p>
+  これらは端末内に保存されるため、ブラウザの保存データを消去したり端末を初期化したりすると失われます。
+  重要な記録は、データ出力機能でCSVとして保存・共有してください。
+</p>
+
+<h2>2. 外部に送信される情報</h2>
+<p>次の場合に限り、情報が端末の外に出ます。いずれも利用者の操作または明示的な設定が必要です。</p>
+<ul>
+  <li>
+    <strong>データ出力（CSV共有）</strong>：利用者が「データ出力」を実行し、共有先を選んだときに、
+    その共有先（LINE、メール、クラウドストレージ等）へ検収データが送られます。送信先は利用者が選びます。
+  </li>
+  <li>
+    <strong>Googleドライブへのバックアップ</strong>：利用者がGoogleドライブとの接続を明示的に許可した場合に限り、
+    端末内の検収データがご自身のGoogleドライブへアップロードされます。
+    開発者がその内容を閲覧することはできません。接続はいつでも解除できます。
+  </li>
+  <li>
+    <strong>サブスクリプションの確認</strong>：ライセンスキーの有効性を確認するため、
+    決済事業者（Lemon Squeezy）へライセンスキーを送信します。検収データは送信しません。
+  </li>
+</ul>
+
+<h2>3. 音声入力について（重要）</h2>
+<p>
+  本アプリの音声入力は、ブラウザに標準搭載された音声認識機能（Web Speech API）を利用しています。
+  <strong>この機能を使うと、お使いのブラウザやOSの提供元（Google等）のサーバーへ音声が送信され、
+  そこで文字に変換されます。</strong>これはブラウザ側の仕組みであり、本アプリが制御できる範囲ではありません。
+  音声入力が通信できる場所でしか動作しないのはこのためです。
+</p>
+<p>
+  音声を送信したくない場合は、<strong>音声入力を使わずにボタンでの入力をご利用ください。</strong>
+  ボタン入力だけを使う限り、音声が送信されることはありません。
+</p>
+<p>
+  <strong>本アプリ自身は、音声データを録音・保存・収集していません。</strong>
+  将来、認識精度を改善する目的で音声データを収集する機能を追加する場合は、
+  収集する内容と利用目的をこのページに明記し、利用者から改めて明確な同意をいただいたうえで行います。
+  同意しない場合でも、本アプリの機能に制限はありません。
+</p>
+
+<h2>4. 利用状況の分析について</h2>
+<p>
+  本アプリは、アクセス解析ツールや広告配信のための仕組みを一切組み込んでいません。
+  利用者の操作履歴を開発者が取得することはありません。
+</p>
+
+<h2>5. 第三者への提供</h2>
+<p>
+  開発者が利用者の検収データを第三者へ提供することはありません。
+  法令に基づく開示請求があった場合を除きます。
+</p>
+
+<h2>6. 未成年・技能実習生の利用について</h2>
+<p>
+  本アプリは業務用のツールです。日本語以外の言語でも表示できるよう対応していますが、
+  内容にご不明な点がある場合は、雇用主または下記の窓口へお問い合わせください。
+  意味が分からないまま同意を求められることがないよう、設定画面では
+  収集していない情報について同意を求めない方針としています。
+</p>
+
+<h2>7. 本ポリシーの変更</h2>
+<p>
+  内容を変更する場合は、このページを更新します。
+  利用者に重大な影響がある変更を行う場合は、アプリ内でお知らせします。
+</p>
+
+<h2>8. 事業者情報・お問い合わせ</h2>
+<p class="todo">
+  事業者名：（記入してください）<br>
+  代表者名：（記入してください）<br>
+  所在地：（記入してください）<br>
+  お問い合わせ窓口：（メールアドレス等を記入してください）
+</p>
+
+<a class="back" href="./">アプリに戻る</a>
+
+<footer>制定日：2026年9月24日</footer>
+</main>
+</body>
+</html>

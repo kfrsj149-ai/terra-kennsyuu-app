@@ -224,11 +224,22 @@
 
     <div class="menu-section">
       <h3 data-i18n="measure.voice">音声入力</h3>
-      <label class="switch">
-        <input type="checkbox" id="voice-consent">
-        <span data-i18n="menu.voiceConsent">音声データの提供に同意する</span>
-      </label>
-      <p class="note" data-i18n="menu.voiceConsentHint"></p>
+      <p class="note" data-i18n="menu.voiceNotice"></p>
+      <!-- 音声データを実際に収集するようになるまでは、同意を求めない（config.jsで制御） -->
+      <div id="voice-consent-section" hidden>
+        <label class="switch">
+          <input type="checkbox" id="voice-consent">
+          <span data-i18n="menu.voiceConsent">音声データの提供に同意する</span>
+        </label>
+        <p class="note" data-i18n="menu.voiceConsentHint"></p>
+      </div>
+    </div>
+
+    <div class="menu-section">
+      <h3 data-i18n="menu.privacy">プライバシーポリシー</h3>
+      <a class="btn btn-sm" href="./privacy.html" target="_blank" rel="noopener"
+         style="display:block; text-align:center; line-height:48px; text-decoration:none"
+         data-i18n="menu.privacyOpen">プライバシーポリシーを読む</a>
     </div>
   </div>
 </aside>
