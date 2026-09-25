@@ -79,6 +79,8 @@ async function applySettings() {
   applyTranslations();
   $('#sel-language').value = state.settings.locale;
   $$('#seg-side button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.side === state.settings.side)));
+  // 音声データを収集していない間は、同意を求める欄自体を出さない
+  $('#voice-consent-section').hidden = !CONFIG.voiceDataCollection;
   $('#voice-consent').checked = state.settings.voiceConsent;
   renderSetupStatics();
   if (state.draft) renderMeasure();
