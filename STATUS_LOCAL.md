@@ -1,7 +1,7 @@
 ---
-最終更新: 2026-09-22
+最終更新: 2026-09-25
 プロジェクト名: 丸太検尺(材積計算)アプリ / LOG-RA
-状態: 実装完了・mainへマージ済み。Vercelへのインポート待ち
+状態: **本番公開済み**（https://terra-kennsyuu-app.vercel.app/）。実機テストと事業者情報の記入が残り
 ---
 
 > このファイルはクラウドモード（Claude Code on the web）で作成した進捗記録です。
@@ -91,12 +91,14 @@
 
 ## 進捗
 - **完成度目安: 約85%**（実装は完了。公開作業と現場テストが残り）
-- 2026-09-22 時点の実地確認:
-  - **PR #1 はマージ済み**。`origin/main` にアプリ一式が入り、未反映コミットは0件
-    （マージコミット a685e87）
-  - Vercel側に `terra-kennsyuu-app` プロジェクトは**未作成**。
-    チーム `menzei-pwa` には field-pwa / menzei-keiyu-pwa / office-pwa /
-    phase0-prototype の4件のみ（Vercelコネクタで確認）
+- 2026-09-25 時点の実地確認:
+  - **Vercelへ本番公開済み**: https://terra-kennsyuu-app.vercel.app/
+    （プロジェクト `terra-kennsyuu-app` / チーム `menzei-pwa`）
+  - GitHub連携による自動デプロイが動作することを確認。PR作成時にプレビュー
+    デプロイが自動生成され、ビルドは Ready（成功）
+  - **PR #1 / PR #2 ともにマージ済み**（最新 main は 60f72eb）。未反映コミットは0件
+  - main には privacy.html が入り、Service Worker は v3、
+    `voiceDataCollection: false` が反映済み
   - 自動テスト19件はすべて合格
 - 実装済み:
   - JAS材積計算エンジン（BigInt整数演算、公的材積表1578セルと全件一致）
@@ -127,15 +129,19 @@
   6. 価格決定と、プライバシーポリシーへの事業者情報の記入
 - ブロッカー:
   - ~~PR #1 が未マージ~~ → **2026-09-22 解消**
-  - **Vercelへのインポートが未完了**。利用者が手作業で行う必要がある。
-    https://vercel.com/new を開き `terra-kennsyuu-app` を Import → そのまま Deploy
-    （`vercel.json` に設定済みのため設定変更は不要）
-  - 一覧に出ない場合は、GitHubアプリのリポジトリ許可が「一部のみ」になっている
-    可能性がある（Adjust GitHub App Permissions から `terra-kennsyuu-app` を追加）
-  - VercelのMCPコネクタからは**チーム `menzei-pwa` への書き込みができない**
-    （プロジェクト一覧の取得はできるが、作成は 403 forbidden。
-    `You must re-authenticate to this scope` と返る）。
-    Claude側から自動でデプロイしたい場合は、このスコープへの再認証が必要
+  - ~~Vercelへのインポートが未完了~~ → **2026-09-25 解消（本番公開済み）**
+  - **公開サイトの動作確認が未実施**。以下を実機で確認する必要がある
+    （Claude側からは確認できないため、利用者が行う）
+    1. 12m材・径級6〜72cmの38本で合計材積が 92.112 になること
+    2. 機内モードでの起動（真っ白にならないこと）
+    3. データ出力からLINE等へ共有できること
+    4. ホーム画面に追加して全画面起動すること
+    5. アプリを閉じて開き直しても計測を再開できること
+  - **VercelのMCPコネクタからチーム `menzei-pwa` の内容を読めない**
+    （プロジェクト一覧の取得はできるが、デプロイ情報の取得もページの取得も
+    403 forbidden。`You must re-authenticate to this scope` と返る）。
+    Claude側から公開サイトを直接検証したい場合は、このスコープへの再認証が必要。
+    なおこのコンテナからは `vercel.app` への直接アクセスも遮断されている
 
 ## ローンチ後の実績
 - 利用者数: -
