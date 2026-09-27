@@ -3,7 +3,6 @@
   "buildCommand": "echo 'ビルド不要（素のHTML/CSS/JSのため）'",
   "installCommand": "echo '依存パッケージなし'",
   "outputDirectory": ".",
-  "trailingSlash": false,
   "headers": [
     {
       "source": "/sw.js",
@@ -18,6 +17,10 @@
     },
     {
       "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+    },
+    {
+      "source": "/legal/(.*)",
       "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     },
     {

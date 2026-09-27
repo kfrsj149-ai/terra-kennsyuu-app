@@ -21,6 +21,21 @@
  * @param {Response} response
  * @returns {Promise<Response>}
  */
+/**
+ * ディレクトリ形式のURL（/legal/terms/）を、実体のファイル（/legal/terms/index.html）に対応づける。
+ * 末尾のスラッシュの有無で取りこぼさないようにするためのもの。
+ * @param {Request} request
+ * @returns {string}
+ */
+function indexOf(request) {
+  const url = new URL(request.url);
+  url.search = '';
+  url.hash = '';
+  if (url.pathname.endsWith('/')) return `${url.pathname}index.html`;
+  if (!url.pathname.split('/').pop().includes('.')) return `${url.pathname}/index.html`;
+  return url.pathname;
+}
+
 async function toCacheable(response) {
   if (!response.redirected) return response;
   const body = await response.arrayBuffer();
@@ -30,14 +45,19 @@ async function toCacheable(response) {
     headers: response.headers,
   });
 }
-const VERSION = 'terra-kennsyuu-v3';
+const VERSION = 'terra-kennsyuu-v4';
 const CACHE = `${VERSION}`;
 
 const SHELL = [
   './',
   './index.html',
-  './privacy.html',
   './manifest.webmanifest',
+  './legal/legal.css',
+  './legal/index.html',
+  './legal/tokushoho/index.html',
+  './legal/terms/index.html',
+  './legal/privacy/index.html',
+  './legal/refund/index.html',
   './src/css/app.css',
   './src/css/tokens.css',
   './src/js/app.js',
@@ -94,17 +114,24 @@ self.addEventListener('fetch', (event) => {
   // 外部API（Lemon Squeezy / Google）はキャッシュせず、常にネットワークへ
   if (url.origin !== self.location.origin) return;
 
-  // 画面遷移はクエリパラメータに関係なく必ずアプリ本体を返す
+  /*
+   * 画面遷移。圏外のときは
+   *   1. そのURL自体がキャッシュにあればそれを返す（規約やポリシーの各ページ）
+   *   2. 無ければアプリ本体を返す（クエリパラメータの有無を問わない）
+   * の順で探す。1を入れないと、圏外で /legal/privacy/ を開いたときに
+   * ポリシーではなくアプリ画面が表示されてしまう（実機ブラウザで再現確認済み）。
+   */
   if (request.mode === 'navigate') {
     event.respondWith((async () => {
+      const cache = await caches.open(CACHE);
       try {
         const fresh = await fetch(request);
-        const cache = await caches.open(CACHE);
-        cache.put('./index.html', await toCacheable(fresh.clone())).catch(() => {});
+        cache.put(request, await toCacheable(fresh.clone())).catch(() => {});
         return fresh;
       } catch {
-        const cache = await caches.open(CACHE);
-        return (await cache.match('./index.html', { ignoreSearch: true }))
+        return (await cache.match(request, { ignoreSearch: true }))
+          ?? (await cache.match(indexOf(request), { ignoreSearch: true }))
+          ?? (await cache.match('./index.html', { ignoreSearch: true }))
           ?? (await cache.match('./', { ignoreSearch: true }))
           ?? Response.error();
       }
