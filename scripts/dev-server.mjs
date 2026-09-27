@@ -26,10 +26,15 @@ createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   let path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
   if (path === '/' || path === '\\') path = '/index.html';
-  const file = join(ROOT, path);
+  let file = join(ROOT, path);
 
   try {
-    const info = await stat(file);
+    let info = await stat(file);
+    // ディレクトリなら中の index.html を返す（Vercelと同じ挙動にするため）
+    if (info.isDirectory()) {
+      file = join(file, 'index.html');
+      info = await stat(file);
+    }
     if (info.isDirectory()) throw new Error('dir');
     const body = await readFile(file);
     res.writeHead(200, {

@@ -1,0 +1,73 @@
+/* 法務ページ共通スタイル。配色はアプリ本体と同じ tokens.css を使う */
+@import '../src/css/tokens.css';
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  line-height: 1.85;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+header {
+  background: var(--c-brand);
+  color: var(--c-brand-ink);
+  padding: 12px 16px;
+  padding-top: calc(12px + env(safe-area-inset-top));
+}
+header .brand { font-size: .78rem; opacity: .85; }
+header h1 { margin: 2px 0 0; font-size: 1.1rem; }
+main { max-width: 44rem; margin: 0 auto; padding: 16px 16px 48px; }
+h2 {
+  font-size: 1.02rem;
+  color: var(--c-brand-dark);
+  border-bottom: 2px solid var(--c-border);
+  padding-bottom: 4px;
+  margin: 28px 0 10px;
+}
+h3 { font-size: .95rem; margin: 18px 0 6px; }
+p, li, td, th { font-size: .94rem; }
+ul, ol { padding-left: 1.3em; }
+.lead { background: var(--c-surface); border-radius: var(--r-md); padding: 12px 14px; }
+.todo {
+  background: var(--c-warn-bg);
+  color: var(--c-warn-ink);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  font-weight: 700;
+}
+table.spec { width: 100%; border-collapse: collapse; margin: 12px 0; background: var(--c-surface); }
+table.spec th, table.spec td {
+  border: 1px solid var(--c-border);
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+}
+table.spec th { width: 34%; background: var(--c-bg); font-weight: 700; }
+.nav-list { list-style: none; padding: 0; }
+.nav-list li { margin-bottom: 10px; }
+.nav-list a {
+  display: block;
+  background: var(--c-surface);
+  border: 2px solid var(--c-border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  text-decoration: none;
+  color: var(--c-text);
+  font-weight: 700;
+}
+.nav-list a span { display: block; font-weight: 400; font-size: .82rem; color: var(--c-text-weak); margin-top: 2px; }
+.back {
+  display: inline-block;
+  margin-top: 28px;
+  padding: 12px 20px;
+  background: var(--c-brand);
+  color: var(--c-brand-ink);
+  border-radius: var(--r-md);
+  text-decoration: none;
+  font-weight: 700;
+}
+.sub-nav { margin-top: 20px; font-size: .88rem; }
+.sub-nav a { color: var(--c-brand-dark); }
+footer { margin-top: 32px; font-size: .8rem; color: var(--c-text-weak); }
