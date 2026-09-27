@@ -1,5 +1,5 @@
 ---
-最終更新: 2026-09-27
+最終更新: 2026-09-28
 プロジェクト名: 丸太検尺(材積計算)アプリ / LOG-RA
 状態: **本番公開済み**（https://terra-kennsyuu-app.vercel.app/）。実機テストと事業者情報の記入が残り
 ---
@@ -96,9 +96,9 @@
     （プロジェクト `terra-kennsyuu-app` / チーム `menzei-pwa`）
   - GitHub連携による自動デプロイが動作することを確認。PR作成時にプレビュー
     デプロイが自動生成され、ビルドは Ready（成功）
-  - **PR #1 / PR #2 ともにマージ済み**（最新 main は 60f72eb）。未反映コミットは0件
-  - main には privacy.html が入り、Service Worker は v3、
-    `voiceDataCollection: false` が反映済み
+  - **PR #1 / #2 / #3 すべてマージ済み**（最新 main は d62de87）。未反映コミットは0件
+  - main には法務ページ一式（/legal/ 配下5ファイル）が入り、Service Worker は v4、
+    `voiceDataCollection: false` が反映済み。旧 privacy.html は削除済み
   - 自動テスト19件はすべて合格
 - 実装済み:
   - JAS材積計算エンジン（BigInt整数演算、公的材積表1578セルと全件一致）
@@ -116,7 +116,7 @@
   - 法務4点セット＋一覧ページ（/legal/ 配下。圏外でも閲覧可）
     特定商取引法に基づく表記／利用規約／プライバシーポリシー／返金方針
     事業者情報は Logging Scorer と同一（TERRA TX、support@terra-tx-jp.com、
-    盛岡地方裁判所）で記入済み
+    盛岡地方裁判所）で記入済み。2026-09-27 に本番公開済み
 - 未実装・作業中:
   - **特商法表記の【】部分（販売価格・契約期間）の確定**（legal/tokushoho/index.html）
   - Lemon Squeezyの商品URL・顧客ポータルURLの設定（src/js/config.js）
