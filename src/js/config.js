@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'TERRA 検収',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v3',
+  cacheVersion: 'terra-kennsyuu-v5',
 
   /**
    * 音声データを収集するか（将来のオフライン音声認識モデル訓練用）。
@@ -17,15 +17,27 @@ export const CONFIG = {
    */
   voiceDataCollection: false,
 
-  /** Lemon Squeezy（年額サブスクリプション） */
-  lemonSqueezy: {
-    /** ライセンス検証APIのエンドポイント（Lemon Squeezy標準） */
-    validateUrl: 'https://api.lemonsqueezy.com/v1/licenses/validate',
-    activateUrl: 'https://api.lemonsqueezy.com/v1/licenses/activate',
-    /** 購入ページURL（ストアの商品URLに差し替える） */
-    checkoutUrl: '',
-    /** 顧客ポータル（支払い・プラン管理）URL */
-    portalUrl: 'https://app.lemonsqueezy.com/my-orders',
+  /**
+   * Stripe（年額サブスクリプション）
+   * 決済プラットフォームは国内向けTERRAアプリ共通でStripeに統一している。
+   * テスト用のURLと本番用のURLは別物なので、本番公開時に差し替えること。
+   */
+  stripe: {
+    /** 購入ページ（Stripe Payment Link）。テスト用リンクは test_ を含む */
+    checkoutUrl: 'https://buy.stripe.com/test_5kQ00jaRO8yg88a08ofjG00',
+    /** 表示用の価格。特商法表記・アプリ内表示と必ず一致させる */
+    priceLabel: '年額 9,800円（税込）',
+  },
+
+  /**
+   * サブスク確認用のサーバーレス関数（同一オリジン）。
+   * Stripeのシークレットキーはブラウザに置けないため、ここだけサーバーを通す。
+   * 計測・材積計算・保存はすべて端末内で完結し、圏外でも動く。
+   */
+  api: {
+    activate: './api/activate',
+    verify: './api/verify',
+    portal: './api/portal',
   },
 
   /** サブスク確認まわりの猶予設定 */

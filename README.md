@@ -56,13 +56,39 @@ Service Worker側でもリダイレクトされた応答を作り直して二重
 
 | 項目 | 説明 |
 | --- | --- |
-| `lemonSqueezy.checkoutUrl` | Lemon Squeezyの商品（年額サブスク）の購入ページURL |
-| `lemonSqueezy.portalUrl` | 支払い・プラン管理ページのURL |
+| `stripe.checkoutUrl` | Stripeの決済リンク（Payment Link）のURL。**いまはテスト用**（`test_` を含む）なので、本番公開前に本番のリンクへ差し替える |
+| `stripe.priceLabel` | アプリ内に表示する価格。特商法表記と必ず一致させる |
 | `googleDrive.clientId` | Google CloudのOAuthクライアントID（未設定ならバックアップ機能は自動で無効表示） |
 | `cacheVersion` / `sw.js` の `VERSION` | アプリを更新したら必ず上げる（古いキャッシュが残らないように） |
 
-`lemonSqueezy.checkoutUrl` と `googleDrive.clientId` は未設定のままでもアプリは動きます
-（サブスクは14日間の試用期間で動作し、バックアップ機能は「未設定」と表示されます）。
+`googleDrive.clientId` は未設定のままでもアプリは動きます（「未設定」と表示されます）。
+
+### Vercelの環境変数（サブスク確認に必須）
+
+Vercelのプロジェクト設定 → Settings → Environment Variables に、次の2つを登録します。
+
+| 名前 | 値 |
+| --- | --- |
+| `STRIPE_SECRET_KEY` | Stripeダッシュボードのシークレットキー（`sk_test_...` / 本番は `sk_live_...`）。**絶対にGitにコミットしない** |
+| `LICENSE_SECRET` | ライセンスコードの署名に使う自前のランダム文字列（32文字以上を推奨）。一度決めたら変更しない（変更すると既存のコードが全部無効になる） |
+| `ALLOW_EMAIL_ACTIVATION` | 任意。`false` にすると、メールアドレスでの復旧を止められる |
+
+未登録のままだと、購入しても有効化できません（試用期間中はアプリ自体は動きます）。
+
+### Stripe側で用意するもの
+
+1. 商品と価格（年額 9,800円 / JPY / 税込）
+2. 決済リンク（Payment Link）。完了後の遷移先を
+   `https://<アプリのURL>/?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+   にしておくと、決済が終わったら自動でアプリに戻って有効化されます
+3. カスタマーポータル（設定 → 請求 → カスタマーポータル）を一度保存する。
+   「支払い・プラン管理」ボタンと、特商法表記に書いた解約手続きがこれに当たります
+
+### 有効化のしくみ
+
+- 決済完了 → 自動でアプリに戻り、その端末で使えるようになる
+- 機種変更・再インストール → メニューの入力欄に**ライセンスコード**か**購入時のメールアドレス**を入れる
+- アプリが保存するのは署名付きのライセンスコードだけ。カード情報は一切扱いません
 
 配色を変えたいときは `src/css/tokens.css` の `:root` だけを書き換えれば全画面に反映されます。
 文言を変えたいときは `src/js/locales/<言語>.js` を書き換えます。
@@ -111,11 +137,16 @@ src/js/i18n.js          多言語（日本語・ベトナム語・タガログ�
 src/js/csv.js           CSV生成・Web Share API共有
 src/js/voice.js         音声入力（Web Speech API・オンライン時のみ）
 src/js/feedback.js      発光／振動／操作音／画面消灯防止
-src/js/subscription.js  年額サブスク判定（Lemon Squeezy）
+src/js/subscription.js  年額サブスク判定（Stripe。圏外のときは猶予期間で判断）
 src/js/backup.js        Googleドライブ自動バックアップ
 tests/jas.test.js       材積計算のテスト
 tests/table.test.js     公的な丸太材積表との全セル照合
 tests/csv.test.js       集計・CSV出力のテスト
+tests/license.test.js   ライセンスコードの署名検証・Stripe応答の読み取り
+api/_lib.js             Stripe呼び出しとライセンスコードの署名（共通処理）
+api/activate.js         有効化（決済完了の戻り／コード／メールアドレス）
+api/verify.js           有効期限の再確認
+api/portal.js           Stripeカスタマーポータルを開くURLの発行
 ```
 
 ## 6. オフライン時の動き

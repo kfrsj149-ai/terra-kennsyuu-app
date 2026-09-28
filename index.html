@@ -203,13 +203,23 @@
     <div class="menu-section">
       <h3 data-i18n="menu.subscription">サブスクリプション</h3>
       <div class="note" id="sub-status"></div>
-      <div class="inline-add" style="margin-top:8px">
-        <input type="text" id="in-license" data-i18n-placeholder="license.key" autocomplete="off">
-        <button type="button" id="activate-btn" data-i18n="license.activate">有効化</button>
-      </div>
       <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">
         <a class="btn btn-sm" id="buy-link" style="flex:1; text-align:center; line-height:48px; text-decoration:none" target="_blank" rel="noopener" data-i18n="license.buy">年額サブスクを申し込む</a>
-        <a class="btn btn-sm" id="portal-link" style="flex:1; text-align:center; line-height:48px; text-decoration:none" target="_blank" rel="noopener" data-i18n="license.portal">支払い・プラン管理</a>
+        <button type="button" class="btn btn-sm" id="portal-link" style="flex:1" data-i18n="license.portal">支払い・プラン管理</button>
+      </div>
+      <p class="note" id="price-note"></p>
+      <!-- 決済後は自動で有効化されるので、ここは機種変更・再インストール時の復旧用 -->
+      <div class="inline-add" style="margin-top:8px">
+        <input type="text" id="in-license" data-i18n-placeholder="license.key" autocomplete="off" spellcheck="false">
+        <button type="button" id="activate-btn" data-i18n="license.activate">有効化</button>
+      </div>
+      <p class="note" data-i18n="license.keyHint"></p>
+      <div id="license-code-box" hidden style="margin-top:8px">
+        <p class="note" data-i18n="license.codeHint"></p>
+        <div class="inline-add">
+          <input type="text" id="out-license" readonly spellcheck="false">
+          <button type="button" id="copy-license" data-i18n="license.copy">コピー</button>
+        </div>
       </div>
     </div>
 

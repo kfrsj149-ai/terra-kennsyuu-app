@@ -22,9 +22,37 @@ const TYPES = {
   '.png': 'image/png',
 };
 
+/**
+ * /api/* を Vercel のサーバーレス関数と同じように動かす。
+ * 事前にシークレットを渡しておくこと：
+ *   STRIPE_SECRET_KEY=sk_test_... LICENSE_SECRET=適当な長い文字列 npm run dev
+ */
+async function serveApi(req, res, name) {
+  const mod = await import(new URL(`../api/${name}.js`, import.meta.url)).catch(() => null);
+  if (!mod?.default) {
+    res.writeHead(404, { 'Content-Type': TYPES['.json'] }).end('{"ok":false,"error":"not_found"}');
+    return;
+  }
+  // Vercel の res（Express風）に合わせた最小の橋渡し
+  res.status = (code) => { res.statusCode = code; return res; };
+  res.send = (body) => res.end(body);
+  await mod.default(req, res);
+}
+
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   let path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
+
+  const api = path.match(/^\/api\/([a-z0-9-]+)$/i);
+  if (api) {
+    try {
+      await serveApi(req, res, api[1]);
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': TYPES['.json'] });
+      res.end(JSON.stringify({ ok: false, error: 'server_error', message: String(err) }));
+    }
+    return;
+  }
   if (path === '/' || path === '\\') path = '/index.html';
   let file = join(ROOT, path);
 
