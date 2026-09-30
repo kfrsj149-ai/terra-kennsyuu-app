@@ -362,9 +362,16 @@ function buildGrid() {
 /**
  * 表示する径級が少ないときはカードを大きく、多いときは一定高＋スクロール。
  */
-/** 手袋をしたままでも確実に押せる高さの下限。これを割るならスクロールを受け入れる */
+/** 手袋をしたままでも余裕をもって押せる高さ。スクロールするならこれ以上を保つ */
 const MIN_CARD_H = 56;
-const GRID_GAP = 6;
+/**
+ * 「全部を1画面に出す」ためなら、ここまでは詰めてよい高さ。
+ * 指の腹はおよそ45px。48pxあれば手袋でも押せる。
+ * 現場の判断として、少し小さくなることより、目的の径級を探して
+ * スクロールすることのほうが確実にストレスになる。
+ */
+const FIT_MIN_CARD_H = 48;
+const GRID_GAP = 5;
 
 /**
  * 径級ボタンの大きさを決める。
@@ -390,7 +397,7 @@ function autoSizeCards() {
   const fit = Math.floor((avail - GRID_GAP * (rows - 1)) / rows);
   // 上限はカード幅（＝正方形）まで。それ以上伸ばしても押しやすくならず間延びする
   const cardWidth = Math.floor((grid.clientWidth - GRID_GAP * (cols - 1)) / cols);
-  const fits = fit >= MIN_CARD_H;
+  const fits = fit >= FIT_MIN_CARD_H;
 
   document.documentElement.style.setProperty('--card-w', `${cardWidth}px`);
 
@@ -408,6 +415,7 @@ function autoSizeCards() {
      * 手袋で押すと切れたカードを押してしまう。
      */
     const visibleRows = Math.max(1, Math.floor((avail + GRID_GAP) / (MIN_CARD_H + GRID_GAP)));
+    // ここに来るのは、詰めても収まらなかったとき。行の高さはゆとりのある方に戻す
     h = Math.floor((avail - GRID_GAP * (visibleRows - 1)) / visibleRows);
   }
   document.documentElement.style.setProperty('--card-h', `${h}px`);

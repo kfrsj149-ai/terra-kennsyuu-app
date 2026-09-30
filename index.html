@@ -109,14 +109,15 @@
         <span id="meta-text"></span>
         <span id="meta-net" data-online="true">📶</span>
       </div>
+      <!-- 合計はラベルと数字を同じ行に置く。2段にすると、その分だけ径級ボタンが小さくなる -->
       <div id="totals">
         <div class="total-box">
-          <div class="label" data-i18n="measure.count">合計本数</div>
-          <div class="value"><span id="total-count">0</span><span class="unit" data-i18n="measure.unitCount">本</span></div>
+          <span class="label" data-i18n="measure.count">合計本数</span>
+          <span class="value"><span id="total-count">0</span><span class="unit" data-i18n="measure.unitCount">本</span></span>
         </div>
         <div class="total-box is-main">
-          <div class="label" data-i18n="measure.volume">合計材積</div>
-          <div class="value"><span id="total-volume">0.000</span><span class="unit">m³</span></div>
+          <span class="label" data-i18n="measure.volume">合計材積</span>
+          <span class="value"><span id="total-volume">0.000</span><span class="unit">m³</span></span>
         </div>
       </div>
       <div id="history" aria-live="polite">
@@ -128,15 +129,14 @@
     <div id="grid-wrap"><div id="grid"></div></div>
 
     <div id="action-bar">
-      <div class="slot">
-        <button type="button" class="btn btn-danger" id="undo-btn" data-i18n="measure.undo">直前取消</button>
-        <div class="hint" data-i18n="measure.undoHint">長押しで径級ごとの取消もできます</div>
-      </div>
+      <button type="button" class="btn btn-danger" id="undo-btn">
+        <span class="main" data-i18n="measure.undo">直前取消</span>
+        <span class="hint" data-i18n="measure.undoHint">長押しで径級ごとに取消</span>
+      </button>
       <button type="button" class="btn" id="voice-btn" data-i18n-aria="measure.voice" aria-label="音声入力">🎤</button>
-      <div class="slot">
-        <button type="button" class="btn btn-accent" id="export-btn" data-i18n="measure.export">データ出力</button>
-        <div class="hint">&nbsp;</div>
-      </div>
+      <button type="button" class="btn btn-accent" id="export-btn">
+        <span class="main" data-i18n="measure.export">データ出力</span>
+      </button>
     </div>
   </section>
 </main>

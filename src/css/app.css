@@ -164,7 +164,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   flex-direction: column;
   background: var(--c-surface);
   border-bottom: 2px solid var(--c-border);
-  padding: 6px 8px;
+  padding: 3px 8px 4px;
 }
 #meta-line {
   flex: 0 0 auto;   /* 履歴が増えても縮まない（潰れると樹種が読めなくなる） */
@@ -186,21 +186,30 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   font-size: 1.35rem;
   line-height: 1;
   min-width: 40px;
-  min-height: 36px;
+  min-height: 30px;
   border-radius: var(--r-sm);
   color: var(--c-brand);
 }
 .meta-btn:active { background: var(--c-neutral); }
 #meta-net { flex: 0 0 auto; font-size: 1rem; }
 #meta-net[data-online='false'] { filter: grayscale(1); opacity: .8; }
-#totals { flex: 0 0 auto; display: flex; gap: var(--gap); margin: 4px 0 6px; }
+#totals { flex: 0 0 auto; display: flex; gap: var(--gap); margin: 3px 0 4px; }
+/*
+ * ラベルと数字を同じ行に並べる。2段組みにすると合計だけで56px使い、
+ * その分そのまま径級ボタンが小さくなる（8行なら1行あたり7pxの差になる）。
+ */
 .total-box {
   flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
   background: var(--c-bg);
   border-radius: var(--r-md);
-  padding: 4px 8px;
+  padding: 2px 8px;
 }
-.total-box .label { font-size: calc(var(--fs-dash-label) * var(--ui-scale)); color: var(--c-text-weak); }
+.total-box .label { font-size: calc(var(--fs-dash-label) * var(--ui-scale)); color: var(--c-text-weak); white-space: nowrap; }
 .total-box .value { font-size: calc(var(--fs-dash-value) * var(--ui-scale)); font-weight: 800; line-height: 1.1; }
 .total-box .unit { font-size: calc(.8rem * var(--ui-scale)); font-weight: 600; margin-left: 2px; }
 /* 工場の伝票に書き写すのは材積。本数より一段大きく出す */
@@ -215,7 +224,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  height: calc(1.7em + 6px);
+  height: calc(1.55em + 4px);
   overflow: hidden;
   white-space: nowrap;
   font-size: calc(var(--fs-history) * var(--ui-scale));
@@ -249,7 +258,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--gap);
+  padding: 5px 6px;
   overscroll-behavior: contain;
   /* 半端に切れたカードを押してしまわないよう、行の頭で止める */
   scroll-snap-type: y proximity;
@@ -261,7 +270,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 #grid {
   display: grid;
   grid-template-columns: repeat(var(--grid-cols), 1fr);
-  gap: 6px;
+  gap: 5px;
   min-height: 100%;
   /*
    * 収まるときは下（親指側）に寄せる。収まらないときは上詰めにする。
@@ -295,18 +304,19 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 }
 .dia-card[data-has-count='true'] { background: var(--c-tap-active); }
 /*
- * 数字の大きさはカードの寸法から決める。高さだけで決めると、径級数が少なくて
- * カードが大きくなったときに「1本」が2行に折り返してしまうため、幅からの上限も掛ける。
+ * 数字の大きさはカードの寸法から決める。径級が多くてカードが横長になったときは
+ * 高さが効き、少なくて正方形に近づくと幅の上限が効く。
+ * 幅の上限がないと、カードが大きくなったときに「1本」が2行に折り返してしまう。
  * 本数が3桁になるカードは、その分だけ一段小さくする。
  */
 .dia-card {
   font-size: clamp(
     1.05rem,
-    calc(min(var(--card-h, 72px) * .40, var(--card-w, 160px) * .26) * var(--ui-scale)),
+    calc(min(var(--card-h, 72px) * .55, var(--card-w, 160px) * .26) * var(--ui-scale)),
     3.2rem
   );
 }
-.dia-card[data-wide='true'] { font-size: clamp(.95rem, calc(min(var(--card-h, 72px) * .40, var(--card-w, 160px) * .26) * var(--ui-scale) * .74), 2.4rem); }
+.dia-card[data-wide='true'] { font-size: clamp(.95rem, calc(min(var(--card-h, 72px) * .55, var(--card-w, 160px) * .26) * var(--ui-scale) * .74), 2.4rem); }
 .dia-card .d,
 .dia-card .n { font-size: 1em; white-space: nowrap; }
 .dia-card .d { font-weight: 900; line-height: 1.05; }
@@ -339,25 +349,31 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 #action-bar {
   flex: 0 0 auto;
   display: flex;
-  gap: var(--gap);
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  gap: 6px;
+  padding: 5px 6px calc(5px + env(safe-area-inset-bottom));
   background: var(--c-bg);
   border-top: 2px solid var(--c-border);
 }
-#action-bar .slot { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-#action-bar .slot .hint {
-  font-size: calc(.7rem * var(--ui-scale));
-  text-align: center;
-  color: var(--c-text-weak);
-  /* 2行に折り返すと、その分だけ径級ボタンが小さくなる。必ず1行に収める */
+#action-bar > .btn { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 0; }
+/*
+ * 「長押しで径級ごとに取消」はボタンの外に置くと、それだけで1行分の高さを食う。
+ * ボタンの中に入れれば、フールプルーフの説明を残したまま高さを径級ボタンに回せる。
+ */
+#action-bar .btn .hint {
+  font-size: calc(.66rem * var(--ui-scale));
+  font-weight: 600;
+  line-height: 1.1;
+  opacity: .85;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
 }
 /* ボタン配置の左右切替（body[data-side] 1か所で全体反映） */
 body[data-side='right'] #action-bar { flex-direction: row-reverse; }
 /* 音声入力は圏外では使えない補助機能。一等地は取消とデータ出力に譲る */
-#voice-btn { flex: 0 0 56px; font-size: 1.3rem; }
+/* #action-bar > .btn の flex:1 に負けないよう、同じ強さで指定する */
+#action-bar > #voice-btn { flex: 0 0 56px; font-size: 1.3rem; }
 #voice-btn[disabled] { opacity: .35; }
 #voice-btn.is-listening { animation: pulse .9s infinite alternate; }
 @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.5); } }
@@ -526,6 +542,7 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
   font-size: clamp(1rem, calc(var(--fs-action) * var(--ui-scale)), 1.45rem);
   white-space: nowrap;
 }
+#action-bar .btn .main { line-height: 1.15; }
 
 /* 表示サイズの3択（標準／大／特大） */
 .seg { display: flex; gap: 6px; }
