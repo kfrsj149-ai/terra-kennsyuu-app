@@ -45,7 +45,7 @@ async function toCacheable(response) {
     headers: response.headers,
   });
 }
-const VERSION = 'terra-kennsyuu-v4';
+const VERSION = 'terra-kennsyuu-v5';
 const CACHE = `${VERSION}`;
 
 const SHELL = [
@@ -111,8 +111,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  // 外部API（Lemon Squeezy / Google）はキャッシュせず、常にネットワークへ
+  // 外部API（Google ドライブ等）はキャッシュせず、常にネットワークへ
   if (url.origin !== self.location.origin) return;
+
+  // サブスク確認用のサーバーレス関数もキャッシュしない。
+  // 古い「有効」の返事を返してしまうと、解約後も使えてしまう。
+  if (url.pathname.startsWith('/api/')) return;
 
   /*
    * 画面遷移。圏外のときは

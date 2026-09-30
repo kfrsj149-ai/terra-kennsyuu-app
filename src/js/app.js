@@ -219,8 +219,8 @@ function renderSetupStatics() {
       sel.appendChild(opt);
     }
   }
-  $('#buy-link').href = CONFIG.lemonSqueezy.checkoutUrl || CONFIG.lemonSqueezy.portalUrl;
-  $('#portal-link').href = CONFIG.lemonSqueezy.portalUrl;
+  $('#buy-link').href = CONFIG.stripe.checkoutUrl;
+  $('#price-note').textContent = CONFIG.stripe.priceLabel;
   renderRange();
 }
 
@@ -659,19 +659,38 @@ async function openHistory() {
 /* ==================================================================
  * サブスクリプション表示
  * ================================================================== */
+/**
+ * Stripeの決済が終わってアプリに戻ってきたときの自動有効化。
+ * Payment Link の戻り先を ?checkout=success&session_id=... にしてあるので、
+ * 利用者はコードを入力しなくても、そのまま使えるようになる。
+ * 処理後はURLを元に戻す（履歴に session_id を残さない）。
+ */
+async function handleCheckoutReturn() {
+  const params = new URLSearchParams(location.search);
+  const sessionId = params.get('session_id');
+  if (!sessionId) return;
+  toast(t('license.checking'));
+  const res = await subscription.activateFromCheckout(sessionId);
+  toast(res.ok ? t('license.activated') : t('license.invalid'), 6000);
+  if (!res.ok) feedbackError();
+  history.replaceState(null, '', location.pathname);
+}
+
 async function renderSubscription() {
   const result = await subscription.evaluate();
   const el = $('#sub-status');
   const banner = $('#sub-banner');
   const dateOf = (ms) => (ms ? new Date(ms).toLocaleDateString() : '-');
+  // 解約済み（期間満了で止まる）ことを隠さずに伝える
+  const validText = (r) => t(r.state.cancelAtPeriodEnd ? 'license.canceled' : 'license.valid', { date: dateOf(r.state.expiresAt) });
 
   let text;
   switch (result.reason) {
     case 'active':
-      text = t('license.valid', { date: dateOf(result.state.expiresAt) });
+      text = validText(result);
       break;
     case 'grace':
-      text = `${t('license.valid', { date: dateOf(result.state.expiresAt) })} / ${t('license.offlineNote', { days: result.graceDaysLeft })}`;
+      text = `${validText(result)} / ${t('license.offlineNote', { days: result.graceDaysLeft })}`;
       break;
     case 'trial':
       text = t('license.trial', { days: result.trialDaysLeft });
@@ -687,6 +706,12 @@ async function renderSubscription() {
   const warn = !result.allowed || result.reason === 'trial';
   banner.classList.toggle('is-show', warn);
   banner.textContent = warn ? text : '';
+
+  // 他の端末に移すためのライセンスコード。購入済みのときだけ出す
+  const code = result.state.code;
+  $('#license-code-box').hidden = !code;
+  $('#out-license').value = code ?? '';
+  $('#portal-link').disabled = !code;
   return result;
 }
 
@@ -857,12 +882,39 @@ function wireEvents() {
   $('#history-close').addEventListener('click', () => $('#dlg-history').close());
 
   $('#activate-btn').addEventListener('click', async () => {
-    const key = $('#in-license').value.trim();
-    if (!key) return;
-    const res = await subscription.activate(key);
-    toast(res.ok ? t('license.valid', { date: '' }) : t('license.invalid'));
-    $('#in-license').value = '';
+    const input = $('#in-license').value.trim();
+    if (!input) return;
+    toast(t('license.checking'));
+    const res = await subscription.activate(input);
+    if (res.ok) {
+      toast(t('license.activated'));
+      $('#in-license').value = '';
+    } else {
+      feedbackError();
+      toast(res.error === 'offline' ? t('license.needOnline') : t('license.invalid'), 5000);
+    }
     renderSubscription();
+  });
+
+  // 支払方法の変更・解約はStripeのカスタマーポータルで行う
+  $('#portal-link').addEventListener('click', async () => {
+    toast(t('license.checking'));
+    const url = await subscription.portalUrl();
+    if (url) window.open(url, '_blank', 'noopener');
+    else { feedbackError(); toast(t('license.needOnline'), 5000); }
+  });
+
+  $('#copy-license').addEventListener('click', async () => {
+    const code = $('#out-license').value;
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      toast(t('license.copied'));
+    } catch {
+      // クリップボードが使えない環境では選択状態にして手動コピーしてもらう
+      $('#out-license').select();
+      toast(t('license.copyManual'), 5000);
+    }
   });
 
   $('#drive-connect').addEventListener('click', async () => {
@@ -937,6 +989,7 @@ async function boot() {
     renderRange();
   }
 
+  await handleCheckoutReturn();
   await renderSubscription();
   subscription.revalidate().then(() => renderSubscription());
 
