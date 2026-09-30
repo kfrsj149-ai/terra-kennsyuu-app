@@ -934,24 +934,15 @@ function wireEvents() {
   });
   $('#start-no').addEventListener('click', () => $('#dlg-start').close());
 
-  // 直前取消（長押しで径級ごとの取消）
-  const undoBtn = $('#undo-btn');
-  let undoTimer = null;
-  let undoLong = false;
-  undoBtn.addEventListener('pointerdown', () => {
-    undoLong = false;
-    undoTimer = setTimeout(() => { undoLong = true; openCancelPick(); }, 700);
-  });
-  const clearUndo = () => { clearTimeout(undoTimer); undoTimer = null; };
-  undoBtn.addEventListener('pointerup', () => {
-    const wasLong = undoLong;
-    clearUndo();
-    if (!wasLong) undoLast();
-  });
-  undoBtn.addEventListener('pointerleave', clearUndo);
-  undoBtn.addEventListener('pointercancel', clearUndo);
-
-  $('#cancel-pick-close').addEventListener('click', () => $('#dlg-cancel-pick').close());
+  /*
+   * 直前取消は「押したら最後の1本が消える」だけにする。
+   * 以前は長押しで径級を選んで取り消す一覧を出していたが、
+   *   - 径級カードの長押し（-1）とやることが同じで重複していた
+   *   - 0.7秒と短く、揺れる車内や手袋だと意図せず出てしまう
+   *   - 計測中に画面いっぱいのダイアログが出るのがいちばん危ない
+   * ため 2026-10-01 に廃止した（現場判断）。
+   */
+  $('#undo-btn').addEventListener('click', undoLast);
 
   // 本数の直接入力
   const applyCount = () => {
@@ -1055,31 +1046,6 @@ function wireEvents() {
 
   window.addEventListener('resize', () => { if (state.screen === 'measure') autoSizeCards(); });
   watchGridSize();
-}
-
-function openCancelPick() {
-  const counts = new Map();
-  for (const e of state.draft?.entries ?? []) {
-    if (!e.cancelled) counts.set(e.d, (counts.get(e.d) ?? 0) + 1);
-  }
-  const box = $('#cancel-pick-list');
-  box.innerHTML = '';
-  if (counts.size === 0) {
-    feedbackError();
-    toast(t('measure.nothingToCancel'));
-    return;
-  }
-  for (const d of [...counts.keys()].sort((a, b) => a - b)) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.innerHTML = `${d}cm<br><small>${counts.get(d)}${t('measure.unitCount')}</small>`;
-    btn.addEventListener('click', () => {
-      cancelOne(d);
-      $('#dlg-cancel-pick').close();
-    });
-    box.appendChild(btn);
-  }
-  $('#dlg-cancel-pick').showModal();
 }
 
 /* ==================================================================

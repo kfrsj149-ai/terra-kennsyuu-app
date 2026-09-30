@@ -355,20 +355,7 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   border-top: 2px solid var(--c-border);
 }
 #action-bar > .btn { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 0; }
-/*
- * 「長押しで径級ごとに取消」はボタンの外に置くと、それだけで1行分の高さを食う。
- * ボタンの中に入れれば、フールプルーフの説明を残したまま高さを径級ボタンに回せる。
- */
-#action-bar .btn .hint {
-  font-size: calc(.66rem * var(--ui-scale));
-  font-weight: 600;
-  line-height: 1.1;
-  opacity: .85;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-}
+
 /* ボタン配置の左右切替（body[data-side] 1か所で全体反映） */
 body[data-side='right'] #action-bar { flex-direction: row-reverse; }
 /* 音声入力は圏外では使えない補助機能。一等地は取消とデータ出力に譲る */
@@ -491,16 +478,6 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
   user-select: text;
 }
 
-.cancel-pick { display: flex; flex-wrap: wrap; gap: 8px; }
-.cancel-pick button {
-  min-width: 84px;
-  min-height: 64px;
-  border-radius: var(--r-md);
-  background: var(--c-tap-active);
-  color: var(--c-tap-ink);
-  font-weight: 800;
-  font-size: 1.1rem;
-}
 
 .ticket { border: 1px solid var(--c-border); border-radius: var(--r-md); padding: 10px; margin-bottom: 8px; }
 .ticket .head { display: flex; justify-content: space-between; font-weight: 800; }

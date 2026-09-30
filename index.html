@@ -131,7 +131,6 @@
     <div id="action-bar">
       <button type="button" class="btn btn-danger" id="undo-btn">
         <span class="main" data-i18n="measure.undo">直前取消</span>
-        <span class="hint" data-i18n="measure.undoHint">長押しで径級ごとに取消</span>
       </button>
       <button type="button" class="btn" id="voice-btn" data-i18n-aria="measure.voice" aria-label="音声入力">🎤</button>
       <button type="button" class="btn btn-accent" id="export-btn">
@@ -325,16 +324,6 @@
 </dialog>
 
 <!-- 径級ごとの取消 -->
-<dialog id="dlg-cancel-pick">
-  <div class="dlg-body">
-    <div class="dlg-title" data-i18n="measure.pickCancel">取消する径級を選んでください</div>
-    <div class="cancel-pick" id="cancel-pick-list"></div>
-  </div>
-  <div class="dlg-foot">
-    <button type="button" class="btn" id="cancel-pick-close" data-i18n="common.back">戻る</button>
-  </div>
-</dialog>
-
 <!-- 伝票履歴 -->
 <dialog id="dlg-history">
   <div class="dlg-body">
