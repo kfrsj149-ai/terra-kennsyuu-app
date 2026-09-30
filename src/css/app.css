@@ -49,6 +49,15 @@ h1, h2, h3 { margin: 0; }
 #net-badge { font-size: 1.1rem; }
 #net-badge[data-online='false'] { filter: grayscale(1); opacity: .8; }
 
+/*
+ * 計測中はアプリバーとバナーを隠し、その約100pxを径級ボタンに回す。
+ * マウントに付けたまま親指で押すとき、スクロールが最大のストレスになるため、
+ * 1画面に収まる行数を1行でも増やすことを優先する。
+ * 隠したアプリバーの機能（メニュー・通信状態）は #meta-line が引き継ぐ。
+ */
+body[data-screen='measure'] #app-bar,
+body[data-screen='measure'] #sub-banner { display: none; }
+
 /* ---------------- 画面共通 ---------------- */
 main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .screen { flex: 1 1 auto; min-height: 0; display: none; flex-direction: column; }
@@ -159,13 +168,31 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 }
 #meta-line {
   flex: 0 0 auto;   /* 履歴が増えても縮まない（潰れると樹種が読めなくなる） */
-  font-size: .8rem;
-  color: var(--c-text-weak);
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#meta-text {
+  flex: 1;
+  font-size: calc(.85rem * var(--ui-scale));
+  color: var(--c-text);
+  font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.meta-btn {
+  flex: 0 0 auto;
+  font-size: 1.35rem;
+  line-height: 1;
+  min-width: 40px;
+  min-height: 36px;
+  border-radius: var(--r-sm);
+  color: var(--c-brand);
+}
+.meta-btn:active { background: var(--c-neutral); }
+#meta-net { flex: 0 0 auto; font-size: 1rem; }
+#meta-net[data-online='false'] { filter: grayscale(1); opacity: .8; }
 #totals { flex: 0 0 auto; display: flex; gap: var(--gap); margin: 4px 0 6px; }
 .total-box {
   flex: 1;
@@ -173,9 +200,11 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   border-radius: var(--r-md);
   padding: 4px 8px;
 }
-.total-box .label { font-size: var(--fs-dash-label); color: var(--c-text-weak); }
-.total-box .value { font-size: var(--fs-dash-value); font-weight: 800; line-height: 1.1; }
-.total-box .unit { font-size: .8rem; font-weight: 600; margin-left: 2px; }
+.total-box .label { font-size: calc(var(--fs-dash-label) * var(--ui-scale)); color: var(--c-text-weak); }
+.total-box .value { font-size: calc(var(--fs-dash-value) * var(--ui-scale)); font-weight: 800; line-height: 1.1; }
+.total-box .unit { font-size: calc(.8rem * var(--ui-scale)); font-weight: 600; margin-left: 2px; }
+/* 工場の伝票に書き写すのは材積。本数より一段大きく出す */
+.total-box.is-main .value { font-size: calc(var(--fs-dash-value) * 1.18 * var(--ui-scale)); }
 
 /*
  * 入力履歴は「1行だけ」。国有林の研修などで数百本入力しても画面を埋めない。
@@ -189,9 +218,9 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   height: calc(1.7em + 6px);
   overflow: hidden;
   white-space: nowrap;
-  font-size: var(--fs-history);
+  font-size: calc(var(--fs-history) * var(--ui-scale));
   border-top: 1px dashed var(--c-border);
-  padding-top: 4px;
+  padding: 4px 2px 0 0;   /* 最新の1本が右端で切れないよう、わずかに余白を残す */
 }
 /* 左へ流れ出た古い入力が途中で切れて見えないよう、左端をぼかす */
 #history:not(.is-empty) {
@@ -201,6 +230,8 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 #history.is-empty { justify-content: flex-start; }
 /* 数字と区切りをひとかたまりで折り返す（行頭に区切り文字が落ちるのを防ぐ） */
 .hist-item { flex: 0 0 auto; font-weight: 700; }
+/* いま入れた1本がどれか、目を凝らさなくても分かるようにする */
+.hist-item:last-child { font-weight: 900; color: var(--c-brand-dark); }
 /* 区切り文字。inline-block にすることで、取消の取り消し線が区切りまで伸びない */
 .hist-item:not(:last-child)::after {
   content: var(--hist-sep);
@@ -214,15 +245,34 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 #history-empty { color: var(--c-text-weak); }
 
 /* 径級グリッド */
-#grid-wrap { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--gap); }
+#grid-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--gap);
+  overscroll-behavior: contain;
+  /* 半端に切れたカードを押してしまわないよう、行の頭で止める */
+  scroll-snap-type: y proximity;
+}
+/* 収まりきらないときだけ、上下に「まだ続きがある」影を出す */
+#grid-wrap.is-scrollable {
+  box-shadow: inset 0 9px 9px -9px rgba(0,0,0,.45), inset 0 -9px 9px -9px rgba(0,0,0,.45);
+}
 #grid {
   display: grid;
   grid-template-columns: repeat(var(--grid-cols), 1fr);
   gap: 6px;
-  /* 径級数が少ないときは下（親指側）に寄せる。多くて収まらないときは上詰めに戻る */
   min-height: 100%;
-  align-content: safe end;
+  /*
+   * 収まるときは下（親指側）に寄せる。収まらないときは上詰めにする。
+   * CSSの safe end はブラウザによって一番上の行が画面外に押し出されて
+   * 触れなくなることがあったため、JSが測って is-fits を付け外しする。
+   */
+  align-content: start;
 }
+#grid.is-fits { align-content: end; }
+/* 径級数が奇数のとき、最後の1枚は余白を使い切って横いっぱいに広げる */
+#grid.is-fits > .dia-card:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .dia-card {
   display: flex;
   flex-direction: row;
@@ -236,22 +286,40 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   border-radius: var(--r-md);
   background: var(--c-tap);
   color: var(--c-tap-ink);
-  border: 2px solid rgba(0,0,0,.15);
+  /* 炎天下では面の色だけでは境目が飛ぶ。輪郭を濃くしてカードを1枚ずつ切り分ける */
+  border: 3px solid rgba(0,0,0,.38);
   text-align: left;
   position: relative;
   overflow: hidden;
+  scroll-snap-align: start;
 }
 .dia-card[data-has-count='true'] { background: var(--c-tap-active); }
-.dia-card .d { font-size: var(--fs-card-d); font-weight: 900; line-height: 1.05; }
+/*
+ * 数字の大きさはカードの寸法から決める。高さだけで決めると、径級数が少なくて
+ * カードが大きくなったときに「1本」が2行に折り返してしまうため、幅からの上限も掛ける。
+ * 本数が3桁になるカードは、その分だけ一段小さくする。
+ */
+.dia-card {
+  font-size: clamp(
+    1.05rem,
+    calc(min(var(--card-h, 72px) * .40, var(--card-w, 160px) * .26) * var(--ui-scale)),
+    3.2rem
+  );
+}
+.dia-card[data-wide='true'] { font-size: clamp(.95rem, calc(min(var(--card-h, 72px) * .40, var(--card-w, 160px) * .26) * var(--ui-scale) * .74), 2.4rem); }
+.dia-card .d,
+.dia-card .n { font-size: 1em; white-space: nowrap; }
+.dia-card .d { font-weight: 900; line-height: 1.05; }
 .dia-card .d small { font-size: .45em; font-weight: 700; }
 /* 本数側は長押しで直接入力できる。点線の下線でそれと分かるようにする */
 .dia-card .n {
-  font-size: var(--fs-card-d);
   font-weight: 900;
   line-height: 1.05;
   padding: 2px 2px 0;
   border-bottom: 3px dotted rgba(0, 0, 0, .3);
 }
+/* まだ1本も入れていない径級は本数を薄くし、入れた径級だけが目に飛び込むようにする */
+.dia-card[data-has-count='false'] .n { opacity: .34; }
 .dia-card .n small { font-size: .45em; font-weight: 700; margin-left: 1px; }
 .dia-card.is-hit::after {
   content: '';
@@ -277,10 +345,19 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   border-top: 2px solid var(--c-border);
 }
 #action-bar .slot { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-#action-bar .slot .hint { font-size: .7rem; text-align: center; color: var(--c-text-weak); }
+#action-bar .slot .hint {
+  font-size: calc(.7rem * var(--ui-scale));
+  text-align: center;
+  color: var(--c-text-weak);
+  /* 2行に折り返すと、その分だけ径級ボタンが小さくなる。必ず1行に収める */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* ボタン配置の左右切替（body[data-side] 1か所で全体反映） */
 body[data-side='right'] #action-bar { flex-direction: row-reverse; }
-#voice-btn { flex: 0 0 72px; }
+/* 音声入力は圏外では使えない補助機能。一等地は取消とデータ出力に譲る */
+#voice-btn { flex: 0 0 56px; font-size: 1.3rem; }
 #voice-btn[disabled] { opacity: .35; }
 #voice-btn.is-listening { animation: pulse .9s infinite alternate; }
 @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.5); } }
@@ -363,10 +440,14 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 /* 「はい」は必ず左、「戻る」は右（仕様） */
 /* 手書き伝票への転記元になる明細表。数字を読み違えないことを最優先にする */
 .detail-table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-variant-numeric: tabular-nums; }
-.detail-table th, .detail-table td { padding: 5px 4px; border-bottom: 1px solid var(--c-border); text-align: right; font-size: .95rem; }
-.detail-table thead th { font-size: .78rem; color: var(--c-text-weak); position: sticky; top: 0; background: var(--c-surface); }
-.detail-table td:first-child, .detail-table th:first-child { text-align: left; font-weight: 800; font-size: 1.05rem; }
-.detail-table td.n { font-weight: 800; font-size: 1.05rem; }
+/*
+ * 出力確認の明細は、工場の手書き伝票へ書き写す元になる画面。
+ * 老眼で読み違えると伝票そのものが間違うので、表示サイズ設定をここにも効かせる。
+ */
+.detail-table th, .detail-table td { padding: 5px 4px; border-bottom: 1px solid var(--c-border); text-align: right; font-size: calc(.95rem * var(--ui-scale)); }
+.detail-table thead th { font-size: .78rem; white-space: nowrap; color: var(--c-text-weak); position: sticky; top: 0; background: var(--c-surface); }
+.detail-table td:first-child, .detail-table th:first-child { text-align: left; font-weight: 800; font-size: calc(1.05rem * var(--ui-scale)); }
+.detail-table td.n { font-weight: 800; font-size: calc(1.05rem * var(--ui-scale)); }
 .detail-table td.v { font-weight: 800; }
 .detail-table td.per { color: var(--c-text-weak); }
 .detail-table tfoot td {
@@ -378,6 +459,8 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 }
 .summary-table { width: 100%; border-collapse: collapse; margin: 8px 0; }
 .summary-table th, .summary-table td { border-bottom: 1px solid var(--c-border); padding: 6px 4px; text-align: left; font-size: .95rem; }
+/* 日付や納入規格範囲が折り返すと、書き写す明細表が下へ押し出される */
+.summary-table td:last-child { white-space: nowrap; }
 .summary-table td:last-child, .summary-table th:last-child { text-align: right; }
 
 #count-input {
@@ -434,3 +517,31 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
   display: none;
 }
 .banner.is-show { display: block; }
+
+/*
+ * 操作ボタンの文字も表示サイズ設定に連動させるが、上限を設ける。
+ * 「データ出力」が2行に折り返すとボタンが縦に伸び、その分だけ径級ボタンが小さくなる。
+ */
+#action-bar .btn {
+  font-size: clamp(1rem, calc(var(--fs-action) * var(--ui-scale)), 1.45rem);
+  white-space: nowrap;
+}
+
+/* 表示サイズの3択（標準／大／特大） */
+.seg { display: flex; gap: 6px; }
+.seg button {
+  flex: 1;
+  min-height: var(--tap-min);
+  border-radius: var(--r-md);
+  background: var(--c-neutral);
+  color: var(--c-neutral-ink);
+  font-weight: 700;
+  border: 2px solid transparent;
+}
+.seg button[aria-pressed='true'] {
+  background: var(--c-brand);
+  color: var(--c-brand-ink);
+  border-color: var(--c-brand-dark);
+}
+.seg button:nth-child(2) { font-size: 1.15rem; }
+.seg button:nth-child(3) { font-size: 1.35rem; }

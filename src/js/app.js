@@ -99,6 +99,7 @@ async function loadSettings() {
   state.settings = {
     locale: saved?.locale ?? detectLocale(),
     side: saved?.side ?? 'left',
+    size: saved?.size ?? 'm',          // 文字とボタンの大きさ（m / l / xl）
     voiceConsent: saved?.voiceConsent ?? false,
   };
   await applySettings();
@@ -107,9 +108,13 @@ async function loadSettings() {
 async function applySettings() {
   setLocale(state.settings.locale);
   document.body.dataset.side = state.settings.side;
+  document.body.dataset.size = state.settings.size;
   applyTranslations();
   $('#sel-language').value = state.settings.locale;
   $$('#seg-side button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.side === state.settings.side)));
+  $$('#size-seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.size === state.settings.size)));
+  // 文字が大きくなるとカードに入る行数が変わるので、必ず測り直す
+  if (state.screen === 'measure') autoSizeCards();
   // 音声データを収集していない間は、同意を求める欄自体を出さない
   $('#voice-consent-section').hidden = !CONFIG.voiceDataCollection;
   $('#voice-consent').checked = state.settings.voiceConsent;
@@ -357,20 +362,69 @@ function buildGrid() {
 /**
  * 表示する径級が少ないときはカードを大きく、多いときは一定高＋スクロール。
  */
+/** 手袋をしたままでも確実に押せる高さの下限。これを割るならスクロールを受け入れる */
+const MIN_CARD_H = 56;
+const GRID_GAP = 6;
+
+/**
+ * 径級ボタンの大きさを決める。
+ *
+ * 最優先は「1画面に収める」こと。マウントに付けたまま手袋で使う道具なので、
+ * 目的の径級を探してスクロールするのが最大のストレスになる。
+ * そのため、収まる限りは高さを削ってでも全部を表示し、
+ * 収まりきらない広範囲（7〜60cm全域など）のときだけスクロールを許す。
+ */
 function autoSizeCards() {
   const wrap = $('#grid-wrap');
   const grid = $('#grid');
   const n = state.diameters.length;
   if (n === 0) return;
+
   const cols = Number(getComputedStyle(document.documentElement).getPropertyValue('--grid-cols')) || 2;
   const rows = Math.ceil(n / cols);
-  const avail = wrap.clientHeight - 16;
-  const gap = 6;
-  const ideal = Math.floor((avail - gap * (rows - 1)) / rows);
+  // clientHeight から自前の padding を引く（子要素の実測に頼ると初回描画でずれる）
+  const pad = parseFloat(getComputedStyle(wrap).paddingTop) || 0;
+  const avail = wrap.clientHeight - pad * 2;
+  if (avail <= 0) return;
+
+  const fit = Math.floor((avail - GRID_GAP * (rows - 1)) / rows);
   // 上限はカード幅（＝正方形）まで。それ以上伸ばしても押しやすくならず間延びする
-  const cardWidth = grid.firstElementChild?.getBoundingClientRect().width ?? 160;
-  const h = Math.max(72, Math.min(Math.round(cardWidth), ideal));
+  const cardWidth = Math.floor((grid.clientWidth - GRID_GAP * (cols - 1)) / cols);
+  const fits = fit >= MIN_CARD_H;
+
+  document.documentElement.style.setProperty('--card-w', `${cardWidth}px`);
+
+  let h;
+  if (fits) {
+    // 正方形より縦長まで許す。径級が4つなどのとき、上に大きな余白が残るより、
+    // タップ目標が大きいほうが現場では確実に押せる。
+    // 文字の大きさは別途カード幅から頭打ちになるので、間延びはしない
+    h = Math.min(Math.round(cardWidth * 1.6), fit);
+  } else {
+    /*
+     * どうしても収まらない広範囲（7〜60cm全域など）。
+     * このときは「画面にちょうど何行か入り切る高さ」にそろえる。
+     * 中途半端な高さにすると上下の行が必ず半分だけ見える状態になり、
+     * 手袋で押すと切れたカードを押してしまう。
+     */
+    const visibleRows = Math.max(1, Math.floor((avail + GRID_GAP) / (MIN_CARD_H + GRID_GAP)));
+    h = Math.floor((avail - GRID_GAP * (visibleRows - 1)) / visibleRows);
+  }
   document.documentElement.style.setProperty('--card-h', `${h}px`);
+
+  grid.classList.toggle('is-fits', fits);
+  // 収まらなかったときだけ、上下に「まだ続きがある」影を出す
+  wrap.classList.toggle('is-scrollable', !fits);
+}
+
+/**
+ * 画面の高さは、バナーの出入り・キーボード・画面回転・アドレスバーの伸縮で動く。
+ * その都度測り直さないと、9径級でも最後の1枚が画面外に落ちる（実測で確認した）。
+ */
+function watchGridSize() {
+  const wrap = $('#grid-wrap');
+  if (!wrap || typeof ResizeObserver === 'undefined') return;
+  new ResizeObserver(() => { if (state.screen === 'measure') autoSizeCards(); }).observe(wrap);
 }
 
 /**
@@ -511,7 +565,7 @@ function renderMeasure() {
   const draft = state.draft;
   if (!draft) return;
 
-  $('#meta-line').textContent = `${draft.species} / ${formatLength(toHundredths(draft.lengthM))}m / ${draft.minD}-${draft.maxD}cm`;
+  $('#meta-text').textContent = `${draft.species} / ${formatLength(toHundredths(draft.lengthM))}m / ${draft.minD}-${draft.maxD}cm`;
 
   // 径級ごとの本数と小計材積（リアルタイム、小数第4位切り捨て）
   const counts = new Map();
@@ -523,6 +577,7 @@ function renderMeasure() {
     const d = Number(card.dataset.d);
     const n = counts.get(d) ?? 0;
     card.dataset.hasCount = String(n > 0);
+    card.dataset.wide = String(n >= 100);   // 3桁は文字を一段小さくして折り返しを防ぐ
     card.querySelector('[data-role="n"]').innerHTML = `${n}<small>${t('measure.unitCount')}</small>`;
   }
 
@@ -787,6 +842,11 @@ function closeDrawer() {
  * ================================================================== */
 function wireEvents() {
   $('#menu-btn').addEventListener('click', openDrawer);
+  $('#menu-btn-2').addEventListener('click', openDrawer);
+
+  $$('#size-seg button').forEach((b) => {
+    b.addEventListener('click', () => saveSettings({ size: b.dataset.size }));
+  });
   $('#drawer-close').addEventListener('click', closeDrawer);
   $('#drawer-scrim').addEventListener('click', closeDrawer);
 
@@ -961,7 +1021,9 @@ function wireEvents() {
 
   // 通信状態の表示更新
   const updateNet = () => {
-    $('#net-badge').dataset.online = String(navigator.onLine);
+    const online = String(navigator.onLine);
+    $('#net-badge').dataset.online = online;
+    $('#meta-net').dataset.online = online;   // 計測中はアプリバーを隠しているため
     updateVoiceButton();
   };
   window.addEventListener('online', () => {
@@ -984,6 +1046,7 @@ function wireEvents() {
   });
 
   window.addEventListener('resize', () => { if (state.screen === 'measure') autoSizeCards(); });
+  watchGridSize();
 }
 
 function openCancelPick() {

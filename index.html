@@ -103,13 +103,18 @@
   <section id="screen-measure" class="screen">
     <!-- 上部ダッシュボード：画面高の2/3以下。車番・現場・出荷・日付は一切表示しない -->
     <div id="dashboard">
-      <div id="meta-line"></div>
+      <!-- 計測中はアプリバーを隠して画面を稼ぐので、その分の操作をここに持たせる -->
+      <div id="meta-line">
+        <button type="button" class="meta-btn" id="menu-btn-2" data-i18n-aria="menu.title" aria-label="設定">☰</button>
+        <span id="meta-text"></span>
+        <span id="meta-net" data-online="true">📶</span>
+      </div>
       <div id="totals">
         <div class="total-box">
           <div class="label" data-i18n="measure.count">合計本数</div>
           <div class="value"><span id="total-count">0</span><span class="unit" data-i18n="measure.unitCount">本</span></div>
         </div>
-        <div class="total-box">
+        <div class="total-box is-main">
           <div class="label" data-i18n="measure.volume">合計材積</div>
           <div class="value"><span id="total-volume">0.000</span><span class="unit">m³</span></div>
         </div>
@@ -193,6 +198,16 @@
     <div class="menu-section">
       <h3 data-i18n="menu.presets">よく使う設定</h3>
       <div class="chip-list" id="preset-manage"></div>
+    </div>
+
+    <div class="menu-section">
+      <h3 data-i18n="size.title">文字とボタンの大きさ</h3>
+      <div class="seg" id="size-seg">
+        <button type="button" data-size="m" data-i18n="size.m">標準</button>
+        <button type="button" data-size="l" data-i18n="size.l">大</button>
+        <button type="button" data-size="xl" data-i18n="size.xl">特大</button>
+      </div>
+      <p class="note" data-i18n="size.hint"></p>
     </div>
 
     <div class="menu-section">
