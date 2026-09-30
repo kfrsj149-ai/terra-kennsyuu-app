@@ -70,6 +70,7 @@ const SHELL = [
   './src/js/voice.js',
   './src/js/subscription.js',
   './src/js/backup.js',
+  './src/js/updater.js',
   './src/js/locales/ja.js',
   './src/js/locales/vi.js',
   './src/js/locales/tl.js',

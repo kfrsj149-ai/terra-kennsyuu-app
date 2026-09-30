@@ -14,6 +14,7 @@ import { feedbackAdd, feedbackUndo, feedbackError, beep, vibrate, requestWakeLoc
 import { VoiceInput, isVoiceSupported, isVoiceAvailable } from './voice.js';
 import * as subscription from './subscription.js';
 import * as backup from './backup.js';
+import * as updater from './updater.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -55,9 +56,39 @@ function uid() {
 
 function showScreen(name) {
   state.screen = name;
+  document.body.dataset.screen = name;
   $$('.screen').forEach((el) => el.classList.toggle('is-active', el.id === `screen-${name}`));
   if (name === 'measure') requestWakeLock();
   else releaseWakeLock();
+  // 計測が終わって戻ってきたら、保留していたアプリ更新をここで反映する
+  if (name !== 'measure' && updater.hasPending()) updater.applyPending();
+}
+
+/**
+ * アプリの更新確認。
+ * 計測中は絶対にリロードしない（入力中の画面が飛ぶため）。
+ * その場合は「計測が終わったら反映します」と伝えるだけにして、
+ * showScreen で計測画面を離れた瞬間に反映する。
+ */
+async function checkForUpdate() {
+  const res = await updater.check({
+    canReload: () => state.screen !== 'measure',
+    onPending: (info) => toast(t('update.pending', { v: info.short }), 6000),
+  });
+  if (res?.pendingReload) renderVersion();
+  return res;
+}
+
+/** メニューに、いま動いている版を表示する（山で反映を確認するため） */
+async function renderVersion() {
+  const el = $('#version-note');
+  if (!el) return;
+  const v = await updater.info();
+  if (!v.short) { el.textContent = t('update.unknown'); return; }
+  const parts = [`${t('update.version')}: ${v.short}`];
+  if (v.message) parts.push(v.message);
+  if (v.pending) parts.push(t('update.pending', { v: v.pending }));
+  el.textContent = parts.join(' / ');
 }
 
 /* ==================================================================
@@ -933,9 +964,24 @@ function wireEvents() {
     $('#net-badge').dataset.online = String(navigator.onLine);
     updateVoiceButton();
   };
-  window.addEventListener('online', () => { updateNet(); subscription.revalidate().then(renderSubscription); });
+  window.addEventListener('online', () => {
+    updateNet();
+    subscription.revalidate().then(renderSubscription);
+    checkForUpdate();
+  });
   window.addEventListener('offline', updateNet);
   updateNet();
+
+  // アプリを開き直した／他アプリから戻ってきたときに最新かどうか確かめる。
+  // 山でスマホだけで直すとき、これがあると「開き直すだけ」で反映される。
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
+
+  $('#update-btn').addEventListener('click', async () => {
+    toast(t('update.checking'));
+    await updater.forceReload();
+  });
 
   window.addEventListener('resize', () => { if (state.screen === 'measure') autoSizeCards(); });
 }
@@ -990,6 +1036,7 @@ async function boot() {
   }
 
   await handleCheckoutReturn();
+  checkForUpdate().then(renderVersion);
   await renderSubscription();
   subscription.revalidate().then(() => renderSubscription());
 
