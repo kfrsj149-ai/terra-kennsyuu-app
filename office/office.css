@@ -153,3 +153,45 @@ dialog form { display: flex; flex-direction: column; max-height: calc(100vh - 24
 /* 列の多い表は、スマホでは潰さず横にスクロールさせる */
 table.wide { min-width: 860px; }
 table.wide td:nth-child(2) { white-space: nowrap; }
+
+/* ---------------- 画面が狭いとき（スマホ・タブレット縦） ---------------- */
+.ticket-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.ticket-card .tc-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ticket-card .tc-route { margin: 4px 0; }
+.ticket-card .tc-lots { padding: 6px 0; border-top: 1px dashed var(--c-border); border-bottom: 1px dashed var(--c-border); }
+.ticket-card .lot-line { white-space: normal; }
+.ticket-card .tc-nums { display: flex; gap: 24px; margin: 8px 0; }
+.ticket-card .tc-nums div { display: flex; flex-direction: column; }
+.ticket-card .tc-nums b { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.ticket-card .tc-nums span, .ticket-card .tc-diff span { font-size: .75rem; }
+.ticket-card .tc-factory { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
+.ticket-card .tc-factory label { width: auto; }
+.ticket-card .tc-factory .factory-input { width: 8rem; margin-top: 4px; }
+.ticket-card .tc-diff { padding-bottom: 8px; display: flex; flex-direction: column; }
+
+@media (max-width: 860px) {
+  /* タブは1行で横にスクロールする（2行に折り返すと画面を取る） */
+  #tabs { flex-wrap: nowrap; overflow-x: auto; width: 100%; scrollbar-width: none; }
+  #tabs::-webkit-scrollbar { display: none; }
+  #tabs button { flex: 0 0 auto; }
+  .toolbar { align-items: stretch; }
+  .toolbar .grow { display: none; }
+  .toolbar .btn, .toolbar label, .toolbar input { flex: 1 1 auto; }
+  .summary .big { gap: 16px; }
+}
+
+/* 指で押す端末では、小さいボタンも押しやすい高さにする（手袋・タブレットの立ち作業を想定） */
+@media (pointer: coarse) {
+  .btn.sm { min-height: 44px; padding: 0 14px; }
+  .btn { min-height: 48px; }
+  #tabs button { min-height: 46px; }
+  input, select, textarea { min-height: 44px; }
+  .factory-input { min-height: 44px; }
+  .checks label { min-height: 44px; }
+}
+input[type="checkbox"], input[type="radio"] { min-height: 0 !important; }
+
+.consent { border: 2px solid var(--c-border); border-radius: var(--r-md); padding: 10px 12px; background: var(--c-bg); }
+.consent-check { font-weight: 800; }
+.consent-check input { width: 22px; height: 22px; margin: 0; }
+.consent ul { margin: 6px 0 0; padding-left: 1.2em; }

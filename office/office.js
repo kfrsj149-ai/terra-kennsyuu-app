@@ -9,7 +9,7 @@
  */
 import { formatVolume, formatLength, toHundredths } from '../src/js/jas.js';
 import {
-  windowStatus, noticeState, blocksUnloading, findSiteByName, nameKey, normalizeName, parseM3, dateKey, csvCell,
+  windowStatus, noticeState, blocksUnloading, findSiteByName, nameKey, normalizeName, parseM3, dateKey, csvCell, CONSENT_VERSION,
 } from '../src/js/office-rules.js';
 
 const STORE_KEY = 'terra-office';
@@ -70,6 +70,10 @@ const setView = (tab, ...kids) => {
   $('#view').replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false));
 };
 
+/** 画面が狭い（スマホ・タブレット縦）か。狭いときは、列の多い表をカード表示にする */
+const NARROW = '(max-width: 860px)';
+const narrow = () => window.matchMedia(NARROW).matches;
+
 const fmtVol = (num) => formatVolume(BigInt(num ?? 0));
 const pad2 = (n) => String(n).padStart(2, '0');
 const fmtDay = (ds) => { const d = new Date(`${ds}T00:00`); return `${d.getMonth() + 1}/${d.getDate()}(${WEEK[d.getDay()]})`; };
@@ -126,6 +130,7 @@ function explain(e) {
     case 'too_large': return '大きすぎて受け付けられません。';
     case 'bad_email': return `メールアドレスが、購入時に登録されたものと違います（あと${e.info.triesLeft}回でロックされます）。`;
     case 'no_email': return '購入時のメールアドレスを確認できませんでした。サポートへご連絡ください。';
+    case 'consent_required': return 'データの取り扱いへの同意が必要です。';
     case 'rate_limited': return '短い時間にたくさん送られたため、少し待ってからやり直してください。';
     case 'limit_reached': return '保存できる便の数の上限に達しました。古い便を削除してください。';
     case 'in_use': return '枠かお知らせで使っている写真は消せません。';
@@ -397,7 +402,8 @@ function drawTickets() {
       h('span', { class: 'muted' }, ` · ${l.count}本 ${fmtVol(l.volNum)}m³`));
   });
 
-  const rows = tickets.map((t) => {
+  /** 1便ぶんの操作部品（表でもカードでも同じものを使う） */
+  const partsOf = (t) => {
     const { ours, factory } = ticketVolumes(t);
     const input = h('input', {
       class: 'factory-input', type: 'text', inputmode: 'decimal', placeholder: '—', value: factory != null ? formatVolume(factory) : '',
@@ -411,6 +417,16 @@ function drawTickets() {
       }),
     });
     const d = factory != null ? factory - ours : null;
+    const diff = d == null ? null : h('span', { class: d >= 0n ? 'diff-plus' : 'diff-minus' }, `${d >= 0n ? '+' : '−'}${formatVolume(d < 0n ? -d : d)}`);
+    const del = h('button', { type: 'button', class: 'btn sm danger', onclick: async () => {
+      if (!(await confirmDialog(`${fmtDay(t.dateStr)} No.${t.ticketNo}（${t.truck || '車番なし'}）を削除します。元に戻せません。`, '削除する'))) return;
+      await guard(async () => { await api('ticket.delete', { id: t.id }); state.quotas = null; await renderTickets(); toast('削除しました'); });
+    } }, '削除');
+    return { ours, input, diff, del };
+  };
+
+  const rows = narrow() ? [] : tickets.map((t) => {
+    const { ours, input, diff, del } = partsOf(t);
     return h('tr', {},
       h('td', {}, fmtDay(t.dateStr), h('br'), h('span', { class: 'muted' }, `No.${t.ticketNo}`)),
       h('td', {}, t.truck || '—'),
@@ -419,12 +435,25 @@ function drawTickets() {
       h('td', { class: 'num' }, t.totalCount),
       h('td', { class: 'num' }, h('b', {}, formatVolume(ours))),
       h('td', { class: 'num' }, input),
-      h('td', { class: 'num' }, d == null ? '' : h('span', { class: d >= 0n ? 'diff-plus' : 'diff-minus' }, `${d >= 0n ? '+' : '−'}${formatVolume(d < 0n ? -d : d)}`)),
-      h('td', {}, h('button', { type: 'button', class: 'btn sm danger', onclick: async () => {
-        if (!(await confirmDialog(`${fmtDay(t.dateStr)} No.${t.ticketNo}（${t.truck || '車番なし'}）を削除します。元に戻せません。`, '削除する'))) return;
-        await guard(async () => { await api('ticket.delete', { id: t.id }); state.quotas = null; await renderTickets(); toast('削除しました'); });
-      } }, '削除')));
+      h('td', { class: 'num' }, diff),
+      h('td', {}, del));
   });
+
+  /** スマホ・タブレット縦用。1便を1枚のカードにする */
+  const cards = narrow() ? tickets.map((t) => {
+    const { ours, input, diff, del } = partsOf(t);
+    return h('div', { class: 'card ticket-card' },
+      h('div', { class: 'tc-head' },
+        h('div', {}, h('b', {}, fmtDay(t.dateStr)), h('span', { class: 'muted' }, `　No.${t.ticketNo}`)),
+        del),
+      h('div', { class: 'tc-route' }, h('b', {}, t.truck || '車番なし'), ' → ', t.destination || '納入先なし', t.ownCompany ? h('span', { class: 'muted' }, `（${t.ownCompany}）`) : null),
+      h('div', { class: 'tc-lots' }, lotsCell(t)),
+      t.note ? h('div', { class: 'muted' }, `備考：${t.note}`) : null,
+      h('div', { class: 'tc-nums' },
+        h('div', {}, h('span', { class: 'muted' }, '本数'), h('b', {}, t.totalCount)),
+        h('div', {}, h('span', { class: 'muted' }, '現場の材積'), h('b', {}, `${formatVolume(ours)} m³`))),
+      h('div', { class: 'tc-factory' }, h('label', {}, '工場の検収 m³', input), diff ? h('div', { class: 'tc-diff' }, h('span', { class: 'muted' }, '差'), diff) : null));
+  }) : [];
 
   setView('tickets', 
     h('h2', {}, '現場から届いた便'),
@@ -434,11 +463,13 @@ function drawTickets() {
       h('span', { class: 'grow' }),
       h('button', { type: 'button', class: 'btn', disabled: !tickets.length, onclick: () => download(`terra-bin-${state.filter.from}_${state.filter.to}.csv`, csvOfTickets(tickets)) }, 'Excel用CSVをダウンロード')),
     tickets.length ? [summary,
-      h('div', { class: 'table-wrap' }, h('table', { class: 'wide' },
-        h('thead', {}, h('tr', {}, ['日付', '車番', '納入先', '積み荷'].map((x) => h('th', {}, x)),
-          h('th', { class: 'num' }, '本数'), h('th', { class: 'num' }, '現場の材積 m³'), h('th', { class: 'num' }, '工場の検収 m³'), h('th', { class: 'num' }, '差'), h('th', {}))),
-        h('tbody', {}, rows),
-        h('tfoot', {}, h('tr', {}, h('td', { colspan: 4 }, '合計'), h('td', { class: 'num' }, totalCount.toLocaleString()), h('td', { class: 'num' }, formatVolume(totalOurs)), h('td', {}), h('td', {}), h('td', {}))))),
+      narrow()
+        ? h('div', { class: 'ticket-cards' }, cards)
+        : h('div', { class: 'table-wrap' }, h('table', { class: 'wide' },
+          h('thead', {}, h('tr', {}, ['日付', '車番', '納入先', '積み荷'].map((x) => h('th', {}, x)),
+            h('th', { class: 'num' }, '本数'), h('th', { class: 'num' }, '現場の材積 m³'), h('th', { class: 'num' }, '工場の検収 m³'), h('th', { class: 'num' }, '差'), h('th', {}))),
+          h('tbody', {}, rows),
+          h('tfoot', {}, h('tr', {}, h('td', { colspan: 4 }, '合計'), h('td', { class: 'num' }, totalCount.toLocaleString()), h('td', { class: 'num' }, formatVolume(totalOurs)), h('td', {}), h('td', {}), h('td', {}))))),
       state.hasMore ? h('p', {}, h('button', { type: 'button', class: 'btn', onclick: () => guard(async () => { await loadTickets({ append: true }); drawTickets(); }) }, 'さらに読み込む')) : null,
       h('p', { class: 'hint' }, '「工場の検収 m³」には、FAXや戻りの伝票に書かれた工場の値を入れます（入れると納入枠の消化は工場の値で数えます）。'),
     ] : h('div', { class: 'empty' },
@@ -660,24 +691,31 @@ async function renderSites(force = false) {
   const unlinked = state.unlinked.length ? h('div', { class: 'card', style: 'margin-bottom:16px' },
     h('h3', { style: 'margin-top:0' }, `台帳にまだ無い現場名（${state.unlinked.length}件）`),
     h('p', { class: 'hint' }, '現場の端末が自由に入力した名前です。同じ現場なら「別名」として既存の現場につなぐと、集計が1つにまとまります。'),
-    h('div', { class: 'table-wrap' }, h('table', {},
-      h('thead', {}, h('tr', {}, h('th', {}, '入力された名前'), h('th', { class: 'num' }, '回数'), h('th', {}, '最後'), h('th', {}, '対応'))),
-      h('tbody', {}, state.unlinked.map((u) => {
-        const sel = h('select', { style: 'width:auto' }, h('option', { value: '' }, '既存の現場の別名にする…'), open.map((s) => h('option', { value: s.id }, s.name)));
-        return h('tr', {},
-          h('td', {}, u.name), h('td', { class: 'num' }, u.count), h('td', {}, fmtDay(u.lastDate)),
-          h('td', {}, h('div', { class: 'row' },
-            h('button', { type: 'button', class: 'btn sm', onclick: () => siteDialog(null, { name: u.name }) }, '新しい現場にする'),
-            sel,
-            h('button', { type: 'button', class: 'btn sm', onclick: () => {
-              const target = state.sites.find((s) => s.id === sel.value);
-              if (!target) { toast('つなぐ現場を選んでください', true); return; }
-              guard(async () => {
-                await api('site.put', { site: { ...target, aliases: [...target.aliases, u.name] } });
-                await renderSites(true); toast(`「${u.name}」を「${target.name}」の別名にしました`);
-              });
-            } }, 'つなぐ'))));
-      }))))) : null;
+    (() => {
+      /** 名寄せの操作（新しい現場にする／既存の別名にする）。表でもカードでも同じ部品 */
+      const actionsOf = (u) => {
+        const sel = h('select', { style: 'width:auto;max-width:100%' }, h('option', { value: '' }, '既存の現場の別名にする…'), open.map((s) => h('option', { value: s.id }, s.name)));
+        return h('div', { class: 'row' },
+          h('button', { type: 'button', class: 'btn sm', onclick: () => siteDialog(null, { name: u.name }) }, '新しい現場にする'),
+          sel,
+          h('button', { type: 'button', class: 'btn sm', onclick: () => {
+            const target = state.sites.find((s) => s.id === sel.value);
+            if (!target) { toast('つなぐ現場を選んでください', true); return; }
+            guard(async () => {
+              await api('site.put', { site: { ...target, aliases: [...target.aliases, u.name] } });
+              await renderSites(true); toast(`「${u.name}」を「${target.name}」の別名にしました`);
+            });
+          } }, 'つなぐ'));
+      };
+      return narrow()
+        ? h('div', { class: 'stack' }, state.unlinked.map((u) => h('div', { class: 'card' },
+          h('div', {}, h('b', {}, u.name), h('span', { class: 'muted' }, `　${u.count}回・最後 ${fmtDay(u.lastDate)}`)),
+          actionsOf(u))))
+        : h('div', { class: 'table-wrap' }, h('table', {},
+          h('thead', {}, h('tr', {}, h('th', {}, '入力された名前'), h('th', { class: 'num' }, '回数'), h('th', {}, '最後'), h('th', {}, '対応'))),
+          h('tbody', {}, state.unlinked.map((u) => h('tr', {},
+            h('td', {}, u.name), h('td', { class: 'num' }, u.count), h('td', {}, fmtDay(u.lastDate)), h('td', {}, actionsOf(u)))))));
+    })()) : null;
 
   const siteRow = (s) => h('tr', {},
     h('td', {}, h('b', {}, s.name), s.closed ? h('span', { class: 'tag gray' }, '完了') : null, h('div', { class: 'muted' }, `ID ${spaced(s.id)}`)),
@@ -685,9 +723,19 @@ async function renderSites(force = false) {
     h('td', {}, [s.attrs.rinban && `林班 ${s.attrs.rinban}`, s.attrs.address, s.attrs.note].filter(Boolean).join(' / ') || '—'),
     h('td', {}, h('button', { type: 'button', class: 'btn sm', onclick: () => siteDialog(s) }, '修正')));
 
-  const table = (list) => h('div', { class: 'table-wrap' }, h('table', {},
-    h('thead', {}, h('tr', {}, ['現場名', '別名', '林班・住所・備考', ''].map((x) => h('th', {}, x)))),
-    h('tbody', {}, list.map(siteRow))));
+  const siteCard = (s) => h('div', { class: 'card' },
+    h('div', { class: 'row' }, h('b', { class: 'grow' }, s.name, s.closed ? h('span', { class: 'tag gray' }, '完了') : null),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => siteDialog(s) }, '修正')),
+    h('div', { class: 'muted' }, `ID ${spaced(s.id)}`),
+    s.aliases.length ? h('div', {}, `別名：${s.aliases.join('、')}`) : null,
+    [s.attrs.rinban && `林班 ${s.attrs.rinban}`, s.attrs.address, s.attrs.note].filter(Boolean).length
+      ? h('div', { class: 'muted' }, [s.attrs.rinban && `林班 ${s.attrs.rinban}`, s.attrs.address, s.attrs.note].filter(Boolean).join(' / ')) : null);
+
+  const table = (list) => (narrow()
+    ? h('div', { class: 'cards' }, list.map(siteCard))
+    : h('div', { class: 'table-wrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, ['現場名', '別名', '林班・住所・備考', ''].map((x) => h('th', {}, x)))),
+      h('tbody', {}, list.map(siteRow)))));
 
   setView('sites', 
     h('h2', {}, '現場の台帳'),
@@ -844,9 +892,32 @@ function showLogin(message = '') {
   if (state.code) $('#in-code').value = state.code;
 }
 
-function showApp() {
+/**
+ * 同意文の版が変わっていたら、同意し直してもらう（同意するまで、現場からの便は受け取れない）。
+ * 同意しない場合はログアウトする。
+ */
+async function ensureConsent() {
+  const st = await api('office.status');
+  if (st.consentOk) return true;
+  return new Promise((resolve) => {
+    const dlg = dialog('データの取り扱いへの同意', [
+      h('p', {}, 'データの取り扱いの内容が更新されました。内容を確認し、同意してください。'),
+      h('ul', { class: 'hint' },
+        h('li', {}, '事務所に共有された検収データ（生データ）を、運営者（TERRA TX）が閲覧できます。'),
+        h('li', {}, '研究・販売などに利用する場合は、会社名・車番・現場名・納入先・備考などを除いて匿名化したうえで利用します。'),
+        h('li', {}, '詳しくは利用規約（第5条）とプライバシーポリシーをご覧ください。')),
+    ], {
+      ok: '同意する', cancel: '同意しない（ログアウト）',
+      onOk: async () => { await api('office.consent', { consent: CONSENT_VERSION }); resolve(true); },
+    });
+    dlg.addEventListener('close', () => resolve(false));
+  });
+}
+
+async function showApp() {
   $('#login').hidden = true;
   $('#app').hidden = false;
+  if (!(await guard(ensureConsent))) { logout('データの取り扱いに同意いただけない場合は、事務所の画面はご利用になれません。'); return; }
   return openTab(state.tab);
 }
 
@@ -870,7 +941,7 @@ function wireLogin() {
     $('#login-error').textContent = '';
     try {
       const code = $('#in-setup-code').value.trim();
-      const r = await api('office.setup', { code, email: $('#in-setup-email').value }, { as: 'none' });
+      const r = await api('office.setup', { code, email: $('#in-setup-email').value, consent: $('#in-consent').checked ? CONSENT_VERSION : '' }, { as: 'none' });
       state.token = r.token; state.code = code; saveLogin();
       await showApp();
       showOfficeCode(r.officeCode, '事務所の準備ができました');
@@ -895,6 +966,12 @@ function wireLogin() {
 
 async function boot() {
   wireLogin();
+  // 画面の幅が変わった（タブレットの縦横・ウィンドウの拡大縮小）ら、表とカードを切り替える
+  window.matchMedia(NARROW).addEventListener('change', () => {
+    if (!state.token) return;
+    if (state.tab === 'tickets' && state.tickets.length) drawTickets();
+    else if (state.tab === 'sites' && state.sites) guard(() => renderSites(false));
+  });
   loadLogin();
   // スマホ用のログインリンク（#t=…）。札はサーバーに送られない部分（#以降）に入れてある
   const m = /^#t=([\w.-]+)$/.exec(location.hash);

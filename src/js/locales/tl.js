@@ -172,4 +172,8 @@ export default {
   'office.canUnload': 'Maaari nang magbaba ngayon',
   'office.cannotUnload': 'Labas sa oras ngayon',
   'office.nextOpen': 'Susunod: {when}',
+  'office.consentTitle': 'Pagsang-ayon sa paghawak ng data',
+  'office.consentBody': 'Kapag ibinahagi ang data sa opisina, ang na-export na data ng inspeksyon (petsa, plate number, pinagdalhan, sityo, uri ng puno, bilang, volume, tala, atbp.) ay ise-save sa server ng app at ipapakita sa screen ng opisina ng parehong kumpanya.\nMaaaring tingnan ng operator (TERRA TX) ang mga orihinal na data na ito para sa operasyon, pagpapabuti ng serbisyo at pananaliksik.\nKapag gagamitin para sa pananaliksik o pagbebenta, gagawin itong anonymous at aalisin ang pangalan ng kumpanya, plate number, pangalan ng sityo, atbp.\nTingnan ang Mga Tuntunin at Patakaran sa Privacy para sa detalye.',
+  'office.consentAgree': 'Sumang-ayon at i-on',
+  'office.consentRequired': 'Hindi pa sumasang-ayon ang opisina sa pinakabagong bersyon, kaya naka-pause ang pagpapadala',
 };

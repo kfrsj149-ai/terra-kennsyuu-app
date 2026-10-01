@@ -45,7 +45,7 @@ async function toCacheable(response) {
     headers: response.headers,
   });
 }
-const VERSION = 'terra-kennsyuu-v12';
+const VERSION = 'terra-kennsyuu-v13';
 const CACHE = `${VERSION}`;
 
 const SHELL = [
@@ -123,7 +123,7 @@ self.addEventListener('fetch', (event) => {
 
   // 事務所端末の画面はオンライン専用で、キャッシュしない。
   // 圏外のとき現場アプリの画面が代わりに出ると、事務員が混乱するため。
-  if (url.pathname.startsWith('/office/')) return;
+  if (url.pathname.startsWith('/office/') || url.pathname.startsWith('/ops/')) return;
 
   /*
    * 画面遷移。圏外のときは

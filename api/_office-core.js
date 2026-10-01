@@ -26,7 +26,7 @@ import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypt
 import { verifyToken, signPayload, verifyPayload, stripeGet, describeSubscription } from './_lib.js';
 import {
   ID_ALPHABET, isValidId, normalizeName, validateSiteName, findSiteByName, nameKey,
-  parseM3, parseHm, SITE_NAME_MAX,
+  parseM3, parseHm, SITE_NAME_MAX, CONSENT_VERSION,
 } from '../src/js/office-rules.js';
 
 const HOUR = 3600;
@@ -77,9 +77,9 @@ function safeEqualHex(a, b) {
 
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 const licKey = (payload) => `lic:${sha(String(payload.c ?? payload.s)).slice(0, 32)}`;
-const key = (cid, name) => `co:${cid}:${name}`;
+export const key = (cid, name) => `co:${cid}:${name}`;
 
-const parseJson = (s, fallback = null) => { if (s == null) return fallback; try { return JSON.parse(s); } catch { return fallback; } };
+export const parseJson = (s, fallback = null) => { if (s == null) return fallback; try { return JSON.parse(s); } catch { return fallback; } };
 
 /* ------------------------------------------------------------------
  * 入力の検査（サーバーは画面を信用しない）
@@ -133,6 +133,37 @@ const dayKey = (ds) => Number(ds.replaceAll('-', ''));                 // 202610
  */
 const ticketScore = (ds, ticketNo) => dayKey(ds) * 1_000_000 + Math.min(Number(String(ticketNo).replace(/\D/g, '').slice(0, 6)) || 0, 999_999);
 
+/**
+ * 便を新しい順に読む。工場の検収値は別の場所（factory）に持っていて、ここで合わせる。
+ * 事務所（createOffice）と運営者（_ops-core.js）の両方が、同じ読み方を使う。
+ * @returns {Promise<{tickets:Array, truncated:boolean}>}
+ */
+export async function readTicketsFrom(store, cid, limit, { fromKey = 0, toKey = 99_999_999_999_999, offset = 0 } = {}) {
+  const ids = await store.zrevrangebyscore(key(cid, 'tidx'), toKey, fromKey, offset, limit);
+  const tickets = [];
+  for (let i = 0; i < ids.length; i += MGET_CHUNK) {
+    const part = ids.slice(i, i + MGET_CHUNK);
+    const rows = await store.mget(part.map((id) => key(cid, `t:${id}`)));
+    const factory = await store.hmget(key(cid, 'factory'), part);
+    rows.forEach((r, j) => {
+      const t = parseJson(r);
+      if (!t) return;
+      const f = parseJson(factory[j]);
+      t.factoryNum = f?.num ?? null;
+      t.factoryAt = f?.at ?? null;
+      tickets.push(t);
+    });
+  }
+  return { tickets, truncated: ids.length >= limit };
+}
+
+/** 日付→並び順のキーの範囲（運営者の画面でも使う） */
+export const dayRangeKeys = (from, to) => ({
+  fromKey: from ? dayKey(from) * 1_000_000 : 0,
+  toKey: to ? dayKey(to) * 1_000_000 + 999_999 : 99_999_999_999_999,
+});
+export const isDateString = isRealDate;
+
 /* ==================================================================
  * 本体
  * ================================================================== */
@@ -168,12 +199,14 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   }
 
   /* ---------------- 誰からの要求か ---------------- */
-  async function memberCtx(body) {
+  async function memberCtx(body, { needConsent = false } = {}) {
     const payload = verifyToken(String(body.code ?? '').trim());
     if (!payload) throw fail('invalid_code');
     const cid = await store.get(licKey(payload));
     if (!cid) throw fail('office_not_set_up');
     await ensureSubscription(cid, payload.s);
+    // データを受け取って保存するのは、事務所が現行の同意文に同意しているときだけ
+    if (needConsent && parseJson(await store.get(key(cid, 'consent')))?.version !== CONSENT_VERSION) throw fail('consent_required');
     return { cid };
   }
 
@@ -215,6 +248,8 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const payload = verifyToken(String(body.code ?? '').trim());
     if (!payload) throw fail('invalid_code');
     if (await store.get(licKey(payload))) throw fail('already_setup');
+    // データの取り扱い（運営者による閲覧・匿名化しての研究/販売への利用）への同意が先。同意なしには何も作らない
+    if (body.consent !== CONSENT_VERSION) throw fail('consent_required');
     let active;
     try { active = await isSubscriptionActive(payload.s); } catch { throw fail('subscription_unverified', {}, 503); }
     if (!active) throw fail('subscription_inactive', {}, 402);
@@ -238,7 +273,25 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       throw fail('already_setup');
     }
     await store.set(key(cid, 'sub:' + payload.s), JSON.stringify({ active: true, checkedAt: now() }), 40 * 86400);
+    const consent = { version: CONSENT_VERSION, at: now() };
+    await store.set(key(cid, 'consent'), JSON.stringify(consent));
+    await store.hset('companies', cid, JSON.stringify({ createdAt: now() }));       // 運営者の画面の会社一覧に使う索引
     return { companyId: cid, officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
+  }
+
+  /** 事務所の画面が、いまの同意の状態を知るため */
+  async function status(body) {
+    const { cid } = await officeCtx(body);
+    const consent = parseJson(await store.get(key(cid, 'consent')));
+    return { consentVersion: CONSENT_VERSION, consentOk: consent?.version === CONSENT_VERSION, consentAt: consent?.at ?? null };
+  }
+
+  /** 同意文の版が変わったとき、事務所が改めて同意する */
+  async function consent(body) {
+    const { cid } = await officeCtx(body);
+    if (body.consent !== CONSENT_VERSION) throw fail('consent_required');
+    await store.set(key(cid, 'consent'), JSON.stringify({ version: CONSENT_VERSION, at: now() }));
+    return { consentVersion: CONSENT_VERSION };
   }
 
   /**
@@ -392,30 +445,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   }
 
   /* ---------------- 便（伝票） ---------------- */
-  /**
-   * 便を新しい順に読む。工場の検収値は別の場所（factory）に持っていて、ここで合わせる。
-   * 別に持つのは、現場からの再送（便の書き込み）と、事務所の入力（工場の値）が同時に起きても、
-   * お互いを上書きしないため。
-   * @returns {Promise<{tickets:Array, truncated:boolean}>}
-   */
-  async function readTickets(cid, limit, { fromKey = 0, toKey = 99_999_999_999_999, offset = 0 } = {}) {
-    const ids = await store.zrevrangebyscore(key(cid, 'tidx'), toKey, fromKey, offset, limit);
-    const tickets = [];
-    for (let i = 0; i < ids.length; i += MGET_CHUNK) {
-      const part = ids.slice(i, i + MGET_CHUNK);
-      const rows = await store.mget(part.map((id) => key(cid, `t:${id}`)));
-      const factory = await store.hmget(key(cid, 'factory'), part);
-      rows.forEach((r, j) => {
-        const t = parseJson(r);
-        if (!t) return;
-        const f = parseJson(factory[j]);
-        t.factoryNum = f?.num ?? null;
-        t.factoryAt = f?.at ?? null;
-        tickets.push(t);
-      });
-    }
-    return { tickets, truncated: ids.length >= limit };
-  }
+  const readTickets = (cid, limit, range) => readTicketsFrom(store, cid, limit, range);
   const recentTickets = async (cid, limit, range) => (await readTickets(cid, limit, range)).tickets;
 
   function cleanTicket(input) {
@@ -472,7 +502,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   }
 
   async function ticketPut(body) {
-    const { cid } = await memberCtx(body);
+    const { cid } = await memberCtx(body, { needConsent: true });
     // 1社が短時間に大量に送る・保存先を使い切るのを防ぐ（正常な使い方では届かない上限）
     if (await store.incr(key(cid, 'rate'), 60) > LIM.putsPerMinute) throw fail('rate_limited', {}, 429);
     const ticket = cleanTicket(body.ticket);
@@ -738,7 +768,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
 
   /* ---------------- 振り分け ---------------- */
   const OPS = {
-    'office.setup': setup, 'office.recover': recover, 'office.login': login, 'office.link': link, 'office.resetCode': resetCode,
+    'office.setup': setup, 'office.recover': recover, 'office.status': status, 'office.consent': consent, 'office.login': login, 'office.link': link, 'office.resetCode': resetCode,
     'feed': feed, 'image.get': imageGet,
     'ticket.put': ticketPut, 'ticket.list': ticketList, 'ticket.setFactory': ticketSetFactory, 'ticket.delete': ticketDelete,
     'site.list': siteList, 'site.put': sitePut, 'site.unlinked': siteUnlinked,

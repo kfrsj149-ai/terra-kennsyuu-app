@@ -16,6 +16,7 @@ const lib = await import('../api/_lib.js');
 const { createOffice } = await import('../api/_office-core.js');
 const { memoryStore } = await import('../api/_office-store.js');
 const { formatVolume } = await import('../src/js/jas.js');
+const { CONSENT_VERSION: CONSENT } = await import('../src/js/office-rules.js');
 
 const EMAILS = { cus_A: 'owner-a@example.com', cus_B: 'owner-b@example.com', cus_C: 'owner-c@example.com' };
 
@@ -50,7 +51,7 @@ const codeA = lib.signToken({ s: 'sub_A', c: 'cus_A' });
 const codeB = lib.signToken({ s: 'sub_B', c: 'cus_B' });
 
 async function companyWithOffice(env, code) {
-  const s = await env.ok({ op: 'office.setup', code, email: EMAILS[lib.verifyToken(code).c] });
+  const s = await env.ok({ op: 'office.setup', consent: CONSENT, code, email: EMAILS[lib.verifyToken(code).c] });
   return { token: s.token, officeCode: s.officeCode, cid: s.companyId, code };
 }
 
@@ -79,23 +80,23 @@ test('知らない操作は400、大きすぎる本体は413', async () => {
 
 test('初期設定：事務所コードは一度だけ表示され、二度目の設定はできない', async () => {
   const env = setupEnv();
-  const s = await env.ok({ op: 'office.setup', code: codeA, email: EMAILS.cus_A });
+  const s = await env.ok({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A });
   assert.match(s.officeCode, /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/);
   assert.match(s.companyId, /^[0-9A-HJKMNP-TV-Z]{8}$/);
-  await env.err({ op: 'office.setup', code: codeA, email: EMAILS.cus_A }, 'already_setup');
+  await env.err({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A }, 'already_setup');
 });
 
 test('初期設定：偽のライセンスコード・無効なサブスクは通らない', async () => {
   const env = setupEnv();
-  await env.err({ op: 'office.setup', code: codeA.slice(0, -2) + 'xx', email: EMAILS.cus_A }, 'invalid_code');
-  await env.err({ op: 'office.setup', code: 'でたらめ', email: EMAILS.cus_A }, 'invalid_code');
+  await env.err({ op: 'office.setup', consent: CONSENT, code: codeA.slice(0, -2) + 'xx', email: EMAILS.cus_A }, 'invalid_code');
+  await env.err({ op: 'office.setup', consent: CONSENT, code: 'でたらめ', email: EMAILS.cus_A }, 'invalid_code');
   const dead = lib.signToken({ s: 'sub_dead', c: 'cus_dead' });
-  await env.err({ op: 'office.setup', code: dead, email: 'x@example.com' }, 'subscription_inactive', 402);
+  await env.err({ op: 'office.setup', consent: CONSENT, code: dead, email: 'x@example.com' }, 'subscription_inactive', 402);
 });
 
 test('サーバーには事務所コードの平文を残さない', async () => {
   const env = setupEnv();
-  const s = await env.ok({ op: 'office.setup', code: codeA, email: EMAILS.cus_A });
+  const s = await env.ok({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A });
   const raw = await env.store.get(`co:${s.companyId}:auth`);
   assert.ok(!raw.includes(s.officeCode.replaceAll('-', '')));
   assert.match(raw, /"hash":"[0-9a-f]{64}"/);
@@ -494,26 +495,26 @@ test('入力に混じった制御文字は取り除かれる', async () => {
  * ================================================================ */
 test('【点検A】ライセンスコードだけを知る運転手は、事務所の初期設定を先取りできない', async () => {
   const env = setupEnv();
-  await env.err({ op: 'office.setup', code: codeA }, 'bad_email');                                            // メールなし（違うものとして数える）
-  await env.err({ op: 'office.setup', code: codeA, email: 'driver@example.com' }, 'bad_email');            // 当てずっぽう
+  await env.err({ op: 'office.setup', consent: CONSENT, code: codeA }, 'bad_email');                                            // メールなし（違うものとして数える）
+  await env.err({ op: 'office.setup', consent: CONSENT, code: codeA, email: 'driver@example.com' }, 'bad_email');            // 当てずっぽう
   // 本人（購入時のメール）は、大文字小文字・全角・前後の空白の違いがあっても設定できる
-  const s = await env.ok({ op: 'office.setup', code: codeA, email: '  Owner-A＠Example.com ' });
+  const s = await env.ok({ op: 'office.setup', consent: CONSENT, code: codeA, email: '  Owner-A＠Example.com ' });
   assert.ok(s.officeCode);
 });
 
 test('【点検A】メールアドレスの当てずっぽうは、回数でロックされる', async () => {
   const env = setupEnv();
-  for (let i = 0; i < 7; i += 1) await env.err({ op: 'office.setup', code: codeA, email: `g${i}@example.com` }, 'bad_email');
-  await env.err({ op: 'office.setup', code: codeA, email: 'g8@example.com' }, 'locked', 429);
-  await env.err({ op: 'office.setup', code: codeA, email: EMAILS.cus_A }, 'locked', 429);          // ロック中は本人でも待つ
+  for (let i = 0; i < 7; i += 1) await env.err({ op: 'office.setup', consent: CONSENT, code: codeA, email: `g${i}@example.com` }, 'bad_email');
+  await env.err({ op: 'office.setup', consent: CONSENT, code: codeA, email: 'g8@example.com' }, 'locked', 429);
+  await env.err({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A }, 'locked', 429);          // ロック中は本人でも待つ
   env.clock.t += 16 * 60 * 1000;
-  await env.ok({ op: 'office.setup', code: codeA, email: EMAILS.cus_A });
+  await env.ok({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A });
 });
 
 test('【点検A】購入時のメールが登録されていない契約は、初期設定できない（安全側）', async () => {
   const env = setupEnv();
   const noMail = lib.signToken({ s: 'sub_A', c: 'cus_nomail' });
-  await env.err({ op: 'office.setup', code: noMail, email: 'a@example.com' }, 'no_email');
+  await env.err({ op: 'office.setup', consent: CONSENT, code: noMail, email: 'a@example.com' }, 'no_email');
 });
 
 test('【点検A】事務所コードをなくしても、契約者本人はメールで復旧できる。古い札・コードは無効になる', async () => {
@@ -628,7 +629,7 @@ test('【点検G】Stripeの返事の種類で扱いを分ける（404は無効�
   };
   try {
     const call = async (body) => (await office.handle(body)).payload;
-    const s = await call({ op: 'office.setup', code: codeA, email: EMAILS.cus_A });
+    const s = await call({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A });
     assert.equal(s.ok, true, JSON.stringify(s));
     const expire = () => { clock.t += 2 * 3600_000; };                     // 確認結果のキャッシュ（1時間）を切らす
 
@@ -660,4 +661,35 @@ test('【点検H】工場の検収値は便とは別に保存され、現場か�
   await env.ok({ op: 'ticket.delete', token: co.token, id: 'tk-0001' });
   await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
   assert.equal((await env.ok({ op: 'ticket.list', token: co.token })).tickets[0].factoryNum, null);
+});
+
+/* ================================================================
+ * データの取り扱いへの同意（運営者が生データを閲覧し、研究・販売には匿名化して使う）
+ * ================================================================ */
+test('【同意】同意なしでは、事務所の初期設定ができない（何も作られない）', async () => {
+  const env = setupEnv();
+  const noConsent = { op: 'office.setup', code: codeA, email: EMAILS.cus_A };
+  await env.err(noConsent, 'consent_required');
+  await env.err({ ...noConsent, consent: 'old-version' }, 'consent_required');
+  await env.err({ ...noConsent, consent: true }, 'consent_required');
+  await env.err({ op: 'feed', code: codeA }, 'office_not_set_up');                // 何も作られていない
+  const s = await env.ok({ ...noConsent, consent: CONSENT });
+  const st = await env.ok({ op: 'office.status', token: s.token });
+  assert.equal(st.consentOk, true);
+  assert.ok(st.consentAt > 0);
+});
+
+test('【同意】同意文の版が変わると、事務所が改めて同意するまで、便の受信が止まる（データは残る）', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
+  // サーバー側の同意記録を古い版に書き換えて、版が変わった状況をつくる
+  await env.store.set(`co:${co.cid}:consent`, JSON.stringify({ version: '2025-01-01', at: 1 }));
+  assert.equal((await env.ok({ op: 'office.status', token: co.token })).consentOk, false);
+  await env.err({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-0002', ticketNo: '002' }) }, 'consent_required');
+  assert.equal((await env.ok({ op: 'ticket.list', token: co.token })).tickets.length, 1);        // 既存データは読める
+  await env.ok({ op: 'feed', code: codeA });                                                     // 枠・お知らせの配信は止めない
+  await env.err({ op: 'office.consent', token: co.token, consent: 'wrong' }, 'consent_required');
+  await env.ok({ op: 'office.consent', token: co.token, consent: CONSENT });
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-0002', ticketNo: '002' }) });
 });

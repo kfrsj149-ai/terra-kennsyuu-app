@@ -172,4 +172,8 @@ export default {
   'office.canUnload': 'Boleh memunggah sekarang',
   'office.cannotUnload': 'Di luar waktu sekarang',
   'office.nextOpen': 'Seterusnya {when}',
+  'office.consentTitle': 'Persetujuan pengendalian data',
+  'office.consentBody': 'Apabila data dikongsi dengan pejabat, data pemeriksaan yang dieksport (tarikh, nombor plat, destinasi, tapak, jenis kayu, bilangan, isi padu, catatan, dll.) akan disimpan pada pelayan aplikasi dan dipaparkan pada skrin pejabat syarikat yang sama.\nOperator (TERRA TX) boleh melihat data asal ini untuk operasi, penambahbaikan perkhidmatan dan penyelidikan.\nJika digunakan untuk penyelidikan atau jualan, data akan dianonimkan dengan membuang nama syarikat, nombor plat, nama tapak, dll.\nRujuk Terma Penggunaan dan Dasar Privasi untuk butiran.',
+  'office.consentAgree': 'Setuju dan hidupkan',
+  'office.consentRequired': 'Pejabat belum bersetuju dengan versi terkini, jadi penghantaran dijeda',
 };

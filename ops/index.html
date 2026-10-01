@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#14210f">
+<title>TERRA 運営者</title>
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/src/css/tokens.css">
+<link rel="stylesheet" href="/office/office.css">
+<style>
+  .top.ops { background: #14210f; }
+  .watch { background: var(--c-warn-bg); color: var(--c-warn-ink); font-weight: 700; padding: 8px 16px; font-size: .9rem; }
+  .ok { color: var(--c-primary); font-weight: 800; }
+  .ng { color: var(--c-danger); font-weight: 800; }
+</style>
+</head>
+<body>
+
+<main id="login" hidden>
+  <div class="login-card">
+    <h1>TERRA 運営者コンソール</h1>
+    <p class="lead">運営者だけが使う画面です。<b>閲覧・書き出しはすべて記録されます。</b></p>
+    <form id="login-form" class="stack">
+      <label>運営者の鍵
+        <input id="in-key" type="password" autocomplete="off" spellcheck="false" required>
+      </label>
+      <button type="submit" class="btn primary">ログイン</button>
+    </form>
+    <p id="login-error" class="error" role="alert"></p>
+  </div>
+</main>
+
+<div id="app" hidden>
+  <header class="top ops">
+    <h1>TERRA 運営者</h1>
+    <nav id="tabs" aria-label="メニュー">
+      <button type="button" data-tab="companies">会社</button>
+      <button type="button" data-tab="export">匿名化エクスポート</button>
+      <button type="button" data-tab="audit">閲覧記録</button>
+      <button type="button" data-tab="logout">ログアウト</button>
+    </nav>
+  </header>
+  <div class="watch">閲覧・書き出しはすべて「閲覧記録」に残ります。取り扱いは、利用規約・プライバシーポリシーに明記した範囲に限ってください。</div>
+  <main id="view"></main>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="/ops/ops.js"></script>
+</body>
+</html>

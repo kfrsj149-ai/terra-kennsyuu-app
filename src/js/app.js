@@ -17,7 +17,7 @@ import * as subscription from './subscription.js';
 import * as backup from './backup.js';
 import * as updater from './updater.js';
 import * as officeSync from './office-sync.js';
-import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading } from './office-rules.js';
+import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading, CONSENT_VERSION } from './office-rules.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -115,6 +115,7 @@ async function loadSettings() {
     voiceConsent: saved?.voiceConsent ?? false,
     lots: saved?.lots ?? CONFIG.features.lotsDefault,   // 1台に複数の材を積む機能
     office: saved?.office ?? false,                      // 事務所とデータを共有する（初期はオフ）
+    officeConsent: saved?.officeConsent ?? null,         // 同意した同意文の版（運営者による閲覧・匿名化しての利用）
   };
   await applySettings();
 }
@@ -1145,6 +1146,7 @@ async function renderOfficeStatus() {
   if (st.feedAt) parts.push(t('office.updatedAt', { when: whenText(st.feedAt) }));
   if (st.error === 'office_not_set_up') parts.push(t('office.notSetUp'));
   else if (st.error === 'no_license') parts.push(t('office.needLicense'));
+  else if (st.error === 'consent_required') parts.push(t('office.consentRequired'));
   else if (st.error && st.error !== 'offline') parts.push(t('office.error'));
   el.textContent = parts.join(' / ');
 }
@@ -1207,6 +1209,13 @@ function wireEvents() {
   $('#voice-consent').addEventListener('change', (e) => saveSettings({ voiceConsent: e.target.checked }));
   $('#lots-enabled').addEventListener('change', (e) => saveSettings({ lots: e.target.checked }));
   $('#office-enabled').addEventListener('change', async (e) => {
+    if (e.target.checked && state.settings.officeConsent !== CONSENT_VERSION) {
+      // 初めてオンにするとき（または同意文が更新されたとき）は、内容を見せて同意を取る。同意がなければオンにしない
+      e.target.checked = false;
+      $('#consent-body').textContent = t('office.consentBody');
+      $('#dlg-consent').showModal();
+      return;
+    }
     await saveSettings({ office: e.target.checked });
     if (e.target.checked) {
       state.feed = (await officeSync.getFeed()) ?? state.feed;
@@ -1218,6 +1227,15 @@ function wireEvents() {
     renderOfficeInfo();
     renderOfficeStatus();
   });
+  $('#consent-yes').addEventListener('click', async () => {
+    $('#dlg-consent').close();
+    await saveSettings({ office: true, officeConsent: CONSENT_VERSION });
+    state.feed = (await officeSync.getFeed()) ?? state.feed;
+    await syncOffice({ force: true });
+    renderOfficeInfo();
+    renderOfficeStatus();
+  });
+  $('#consent-no').addEventListener('click', () => $('#dlg-consent').close());
   $('#office-sync-now').addEventListener('click', async () => {
     await syncOffice({ force: true });
     toast(t('office.syncNow'));

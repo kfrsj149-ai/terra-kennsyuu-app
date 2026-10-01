@@ -28,14 +28,17 @@ const TYPES = {
  *   STRIPE_SECRET_KEY=sk_test_... LICENSE_SECRET=適当な長い文字列 npm run dev
  */
 async function serveApi(req, res, name) {
-  // 事務所端末の確認用：OFFICE_DEV=1 のときだけ、メモリ保存・サブスク常時有効で動かす（本番では使わない）
-  if (name === 'office' && process.env.OFFICE_DEV === '1' && !globalThis.__officeDevReady) {
+  // 事務所端末・運営者コンソールの確認用：OFFICE_DEV=1 のときだけ、メモリ保存・サブスク常時有効で動かす（本番では使わない）
+  if ((name === 'office' || name === 'ops') && process.env.OFFICE_DEV === '1' && !globalThis.__officeDevReady) {
     const { createOffice } = await import(new URL('../api/_office-core.js', import.meta.url));
+    const { createOps } = await import(new URL('../api/_ops-core.js', import.meta.url));
     const { memoryStore } = await import(new URL('../api/_office-store.js', import.meta.url));
-    const mod = await import(new URL('../api/office.js', import.meta.url));
-    mod.__setOfficeForTests(createOffice({ store: memoryStore(), isSubscriptionActive: async () => true, getCustomerEmail: async () => 'dev@example.com' }));
+    const store = memoryStore();                       // 事務所と運営者が同じ保存先を見る
+    (await import(new URL('../api/office.js', import.meta.url))).__setOfficeForTests(
+      createOffice({ store, isSubscriptionActive: async () => true, getCustomerEmail: async () => 'dev@example.com' }));
+    (await import(new URL('../api/ops.js', import.meta.url))).__setOpsForTests(createOps({ store }));
     globalThis.__officeDevReady = true;
-    console.log('事務所API: 開発モード（メモリ保存・購入時メールは dev@example.com。再起動で消えます）');
+    console.log('事務所API・運営者API: 開発モード（メモリ保存・購入時メールは dev@example.com。再起動で消えます）');
   }
   const mod = await import(new URL(`../api/${name}.js`, import.meta.url)).catch(() => null);
   if (!mod?.default) {

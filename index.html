@@ -406,6 +406,19 @@
   </div>
 </dialog>
 
+<!-- 事務所とのデータ共有をオンにするときの同意 -->
+<dialog id="dlg-consent">
+  <div class="dlg-body">
+    <div class="dlg-title" data-i18n="office.consentTitle">データの取り扱いへの同意</div>
+    <p id="consent-body" style="white-space:pre-line"></p>
+    <p class="note"><a href="./legal/terms/" target="_blank" rel="noopener" data-i18n="menu.privacy">規約・ポリシー</a></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-primary" id="consent-yes" data-i18n="office.consentAgree">同意して有効にする</button>
+    <button type="button" class="btn" id="consent-no" data-i18n="common.back">戻る</button>
+  </div>
+</dialog>
+
 <!-- 事務所からのお知らせの一覧 -->
 <dialog id="dlg-notices">
   <div class="dlg-body">

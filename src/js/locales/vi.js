@@ -172,4 +172,8 @@ export default {
   'office.canUnload': 'Bây giờ có thể dỡ hàng',
   'office.cannotUnload': 'Hiện ngoài giờ',
   'office.nextOpen': 'Mở lại từ {when}',
+  'office.consentTitle': 'Đồng ý về việc xử lý dữ liệu',
+  'office.consentBody': 'Khi chia sẻ dữ liệu với văn phòng, dữ liệu kiểm tra đã xuất (ngày, biển số xe, nơi giao, hiện trường, loài cây, số cây, thể tích, ghi chú, v.v.) sẽ được lưu trên máy chủ của ứng dụng và hiển thị trên màn hình văn phòng của cùng công ty.\nNhà vận hành (TERRA TX) có thể xem các dữ liệu gốc này để vận hành, cải tiến dịch vụ và nghiên cứu.\nKhi dùng cho nghiên cứu hoặc bán, dữ liệu sẽ được ẩn danh hóa, loại bỏ tên công ty, biển số xe, tên hiện trường, v.v.\nChi tiết xem trong Điều khoản sử dụng và Chính sách quyền riêng tư.',
+  'office.consentAgree': 'Đồng ý và bật',
+  'office.consentRequired': 'Văn phòng chưa đồng ý bản mới nhất nên việc gửi đang tạm dừng',
 };
