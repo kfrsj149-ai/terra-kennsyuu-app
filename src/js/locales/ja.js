@@ -47,6 +47,7 @@ export default {
   'setup.needSpecies': '樹種を入力してください',
   'setup.needLength': '規格長さを正しく入力してください（小数点以下2桁まで）',
   'setup.needRange': '納入規格範囲が正しくありません',
+  'setup.needTruck': 'トラック車番を選んでください（メニューで登録できます）',
   'setup.resume': '前回の計測を再開',
   'start.question': '{species}、{length}m、納入規格 {min}〜{max}cm、開始しますか？',
   'measure.directTitle': '径級 {d}cm の本数を入力',

@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'TERRA 検収',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v8',
+  cacheVersion: 'terra-kennsyuu-v9',
 
   /**
    * 音声データを収集するか（将来のオフライン音声認識モデル訓練用）。

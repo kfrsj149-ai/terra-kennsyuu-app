@@ -47,6 +47,7 @@ export default {
   'setup.needSpecies': 'กรุณากรอกชนิดไม้',
   'setup.needLength': 'กรุณากรอกความยาวให้ถูกต้อง (ทศนิยมไม่เกิน 2 ตำแหน่ง)',
   'setup.needRange': 'ช่วงมาตรฐานไม่ถูกต้อง',
+  'setup.needTruck': 'กรุณาเลือกหมายเลขรถบรรทุก (ลงทะเบียนในเมนู)',
   'setup.resume': 'ทำการวัดครั้งก่อนต่อ',
   'start.question': '{species} ยาว {length} ม. มาตรฐาน {min}〜{max} ซม. เริ่มเลยไหม?',
   'measure.directTitle': 'ป้อนจำนวนสำหรับ {d} ซม.',

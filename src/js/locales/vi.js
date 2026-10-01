@@ -47,6 +47,7 @@ export default {
   'setup.needSpecies': 'Vui lòng nhập loài cây',
   'setup.needLength': 'Vui lòng nhập đúng chiều dài (tối đa 2 chữ số thập phân)',
   'setup.needRange': 'Phạm vi quy cách không hợp lệ',
+  'setup.needTruck': 'Hãy chọn số xe tải (đăng ký ở menu)',
   'setup.resume': 'Tiếp tục lần đo trước',
   'start.question': '{species}, {length}m, quy cách {min}〜{max}cm. Bắt đầu chứ?',
   'measure.directTitle': 'Nhập số cây cho {d}cm',

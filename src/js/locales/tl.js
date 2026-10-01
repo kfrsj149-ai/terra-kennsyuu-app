@@ -47,6 +47,7 @@ export default {
   'setup.needSpecies': 'Ilagay ang uri ng puno',
   'setup.needLength': 'Ilagay nang tama ang haba (hanggang 2 decimal)',
   'setup.needRange': 'Mali ang saklaw ng istandard',
+  'setup.needTruck': 'Pumili ng numero ng trak (irehistro sa menu)',
   'setup.resume': 'Ipagpatuloy ang nakaraang pagsukat',
   'start.question': '{species}, {length}m, istandard {min}〜{max}cm. Sisimulan na ba?',
   'measure.directTitle': 'Ilagay ang bilang para sa {d}cm',

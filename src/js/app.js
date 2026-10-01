@@ -280,6 +280,13 @@ function readSetup() {
   }
   if (Number(lengthM) <= 0) return { error: t('setup.needLength') };
   if (state.setup.minD > state.setup.maxD) return { error: t('setup.needRange') };
+  /*
+   * 車番は必須。
+   * 工場側は「どの会社の、どの車で来た荷か」でこの伝票を探すことになるため、
+   * 車番が入っていない伝票は工場で永久に見つからない。
+   * 後から必須に変えると既に溜まった伝票が壊れるので、先に入れておく。
+   */
+  if (!$('#in-truck').value) return { error: t('setup.needTruck') };
   return {
     species,
     lengthM,

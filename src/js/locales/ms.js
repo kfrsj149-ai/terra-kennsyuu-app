@@ -47,6 +47,7 @@ export default {
   'setup.needSpecies': 'Sila masukkan jenis kayu',
   'setup.needLength': 'Sila masukkan panjang dengan betul (maksimum 2 titik perpuluhan)',
   'setup.needRange': 'Julat piawai tidak sah',
+  'setup.needTruck': 'Sila pilih nombor trak (daftar dalam menu)',
   'setup.resume': 'Sambung pengukuran sebelumnya',
   'start.question': '{species}, {length}m, piawai {min}〜{max}cm. Mula sekarang?',
   'measure.directTitle': 'Masukkan bilangan untuk {d}cm',
