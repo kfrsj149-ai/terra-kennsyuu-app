@@ -660,6 +660,7 @@ function renderLotTabs() {
   const bar = $('#lot-tabs');
   const show = lotsVisible();
   bar.hidden = !show;
+  $('#meta-text').hidden = show;   // タブに樹種と長さが出ているので、1行目はタブに譲る
   if (!show) return;
   const { lots, activeLot } = state.draft;
   const prevScroll = bar.scrollLeft;
@@ -734,6 +735,8 @@ async function openLotDialog(mode) {
   }
   sel.value = lot.site ?? '';
   renderLotRange();
+  // 削除は修正のときだけ。便に材が1つしかないときは消せない
+  $('#lot-delete').hidden = !(mode === 'edit' && state.draft.lots.length > 1);
   $('#dlg-lot').showModal();
 }
 
@@ -1090,6 +1093,14 @@ function wireEvents() {
   });
   $('#lot-ok').addEventListener('click', applyLotDialog);
   $('#lot-cancel').addEventListener('click', () => $('#dlg-lot').close());
+  $('#lot-delete').addEventListener('click', () => {
+    const draft = state.draft;
+    // 入力のある材を消すと、積んだ本数が黙って消える。先に本数を0にしてもらう
+    if (activeCount(curLot()) > 0) { feedbackError(); toast(t('lots.deleteBlocked'), 4000); return; }
+    draft.lots.splice(draft.activeLot, 1);
+    $('#dlg-lot').close();
+    switchLot(Math.min(draft.activeLot, draft.lots.length - 1));
+  });
 
   $('#save-preset-btn').addEventListener('click', async () => {
     const setup = readSetup();

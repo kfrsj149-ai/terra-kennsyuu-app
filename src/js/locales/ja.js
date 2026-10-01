@@ -143,6 +143,8 @@ export default {
   'lots.editTitle': '材の内容を直す',
   'lots.dup': 'その材はすでにあります。そちらに切り替えました',
   'lots.dupEdit': 'すでに同じ材があります。内容を変えてください',
+  'lots.delete': 'この材を削除',
+  'lots.deleteBlocked': '入力のある材は削除できません。先に本数を0にしてください',
   'lots.rangeKept': '入力済みの径級は範囲から外せないため、範囲を広げました',
   'lots.tripTotal': '便の合計',
   'lots.tapEdit': 'もう一度押すと内容を直せます',

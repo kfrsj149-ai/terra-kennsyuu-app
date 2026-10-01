@@ -143,6 +143,8 @@ export default {
   'lots.editTitle': 'Sửa thông tin gỗ',
   'lots.dup': 'Loại gỗ này đã có. Đã chuyển sang loại đó',
   'lots.dupEdit': 'Đã có loại gỗ giống hệt. Hãy đổi thông tin',
+  'lots.delete': 'Xóa loại gỗ này',
+  'lots.deleteBlocked': 'Không thể xóa loại gỗ đã có số liệu. Hãy đưa số cây về 0 trước',
   'lots.rangeKept': 'Không thể bỏ đường kính đã nhập nên phạm vi đã được mở rộng',
   'lots.tripTotal': 'Tổng cả chuyến',
   'lots.tapEdit': 'Bấm lần nữa để sửa',

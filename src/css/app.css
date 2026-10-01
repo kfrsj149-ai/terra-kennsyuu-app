@@ -543,19 +543,19 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 /* ---------------- 便：材（ロット）のタブ ---------------- */
 /* 1台に複数の材を積むときだけ出る。横に流れて、選択中の材が常に見える */
 #lot-tabs {
-  flex: 0 0 auto;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
-  gap: 5px;
+  gap: 4px;
   overflow-x: auto;
   scrollbar-width: none;
-  margin: 2px 0 3px;
 }
 #lot-tabs::-webkit-scrollbar { display: none; }
 #lot-tabs[hidden] { display: none; }
 .lot-tab, .lot-add {
   flex: 0 0 auto;
-  min-height: calc(34px * var(--ui-scale));
-  padding: 0 10px;
+  min-height: calc(30px * var(--ui-scale));
+  padding: 0 8px;
   border: 2px solid var(--c-border);
   border-radius: var(--r-md);
   background: var(--c-surface);
@@ -586,3 +586,5 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 .lot-head small { font-weight: 600; color: var(--c-text-weak); font-size: .8em; }
 #output-detail .detail-table { margin-top: 2px; }
 .summary-table th.sum-head { text-align: left; color: var(--c-brand); font-weight: 900; border-bottom-width: 2px; }
+#lot-delete[hidden] { display: none; }
+#lot-delete { width: 100%; }

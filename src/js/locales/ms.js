@@ -143,6 +143,8 @@ export default {
   'lots.editTitle': 'Ubah butiran kayu',
   'lots.dup': 'Kayu itu sudah ada. Beralih ke kayu tersebut',
   'lots.dupEdit': 'Kayu yang sama sudah ada. Sila ubah butiran',
+  'lots.delete': 'Padam kayu ini',
+  'lots.deleteBlocked': 'Kayu yang ada input tidak boleh dipadam. Jadikan bilangan 0 dahulu',
   'lots.rangeKept': 'Diameter yang telah dimasukkan tidak boleh dikeluarkan, jadi julat diperluas',
   'lots.tripTotal': 'Jumlah satu trip',
   'lots.tapEdit': 'Tekan sekali lagi untuk ubah',

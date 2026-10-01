@@ -107,10 +107,10 @@
       <div id="meta-line">
         <button type="button" class="meta-btn" id="menu-btn-2" data-i18n-aria="menu.title" aria-label="設定">☰</button>
         <span id="meta-text"></span>
+        <!-- 便（複数の材）：材ごとのタブ。メニューでオンにしたときだけ出て、樹種の表示と入れ替わる（行を増やさない） -->
+        <div id="lot-tabs" hidden></div>
         <span id="meta-net" data-online="true">📶</span>
       </div>
-      <!-- 便（複数の材）：材ごとのタブ。メニューでオンにしたときだけ出る -->
-      <div id="lot-tabs" hidden></div>
       <!-- 合計はラベルと数字を同じ行に置く。2段にすると、その分だけ径級ボタンが小さくなる -->
       <div id="totals">
         <div class="total-box">
@@ -370,6 +370,9 @@
       <label for="lot-site" data-i18n="setup.site">現場名</label>
       <select id="lot-site"></select>
     </div>
+  </div>
+  <div class="dlg-body" style="padding-top:0">
+    <button type="button" class="btn btn-sm btn-danger" id="lot-delete" data-i18n="lots.delete">この材を削除</button>
   </div>
   <div class="dlg-foot">
     <button type="button" class="btn btn-primary" id="lot-ok" data-i18n="common.confirm">確定</button>
