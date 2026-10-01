@@ -6,7 +6,16 @@ export const CONFIG = {
   appName: 'TERRA 検収',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v9',
+  cacheVersion: 'terra-kennsyuu-v10',
+
+  /** 機能の初期値（メニューで利用者が切り替えられる） */
+  features: {
+    /**
+     * 1台に複数の材（樹種・長さ・現場がちがうもの）を積む「便」機能。
+     * 現場テスト中の画面を変えないよう、初期はオフ。メニューの「複数の材を積む」でオンにする。
+     */
+    lotsDefault: false,
+  },
 
   /**
    * 音声データを収集するか（将来のオフライン音声認識モデル訓練用）。

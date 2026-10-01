@@ -9,7 +9,8 @@ import {
 } from './jas.js';
 import { t, applyTranslations, setLocale, detectLocale, getLocale, LOCALES } from './i18n.js';
 import * as db from './db.js';
-import { totalsOf, aggregate, buildCsv, shareCsv } from './csv.js';
+import { aggregateTicket, ticketTotals, shareCsv } from './csv.js';
+import { newLot, normalizeTicket, indexOfSameLot, lotLabel, activeCount, clampRangeToEntries } from './lots.js';
 import { feedbackAdd, feedbackUndo, feedbackError, beep, vibrate, requestWakeLock, releaseWakeLock, initWakeLockAutoRenew } from './feedback.js';
 import { VoiceInput, isVoiceSupported, isVoiceAvailable } from './voice.js';
 import * as subscription from './subscription.js';
@@ -27,8 +28,9 @@ const state = {
   screen: 'setup',
   settings: { locale: 'ja', side: 'left', voiceConsent: false },
   setup: { minD: 14, maxD: 30 },
-  /** 計測中の伝票（入力の都度 IndexedDB に保存される） */
+  /** 計測中の伝票＝便（入力の都度 IndexedDB に保存される）。lots[] の中に材ごとの入力が入る */
   draft: null,
+  /** いま入力している材（ロット）の径級一覧 */
   diameters: [],
   voice: null,
 };
@@ -52,6 +54,11 @@ function todayStr(d = new Date()) {
 
 function uid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** 自由入力（樹種・現場名など）をHTMLに埋め込むときのエスケープ */
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function showScreen(name) {
@@ -101,6 +108,7 @@ async function loadSettings() {
     side: saved?.side ?? 'left',
     size: saved?.size ?? 'm',          // 文字とボタンの大きさ（m / l / xl）
     voiceConsent: saved?.voiceConsent ?? false,
+    lots: saved?.lots ?? CONFIG.features.lotsDefault,   // 1台に複数の材を積む機能
   };
   await applySettings();
 }
@@ -118,6 +126,7 @@ async function applySettings() {
   // 音声データを収集していない間は、同意を求める欄自体を出さない
   $('#voice-consent-section').hidden = !CONFIG.voiceDataCollection;
   $('#voice-consent').checked = state.settings.voiceConsent;
+  $('#lots-enabled').checked = state.settings.lots;
   renderSetupStatics();
   if (state.draft) renderMeasure();
 }
@@ -325,22 +334,30 @@ async function persistDraft() {
   await db.kvSet('draft', state.draft);
 }
 
+/** いま入力している材（ロット） */
+const curLot = () => state.draft.lots[state.draft.activeLot];
+
 /* ==================================================================
  * 画面3：計測入力
  * ================================================================== */
 function startMeasure(setup, { resume = false } = {}) {
   if (!resume) {
+    // 便（トラック1台ぶん）。車番・納入先などは便ぜんたいの項目、樹種・長さ・現場・範囲はロットの項目
     state.draft = {
       id: uid(),
       createdAt: Date.now(),
       dateStr: todayStr(),
       ticketNo: null,
-      ...setup,
-      entries: [],
+      truck: setup.truck,
+      destination: setup.destination,
+      ownCompany: setup.ownCompany,
+      note: setup.note,
+      lots: [newLot(setup)],
+      activeLot: 0,
       syncState: 'pending',
     };
   }
-  state.diameters = diameterRange(state.draft.minD, state.draft.maxD);
+  state.diameters = diameterRange(curLot().minD, curLot().maxD);
   showScreen('measure');
   buildGrid();
   renderMeasure();
@@ -485,7 +502,7 @@ function attachCardHandlers(card, d) {
 
 function addOne(d, source = 'tap') {
   if (!state.draft) return;
-  state.draft.entries.push({ id: uid(), ts: Date.now(), d, source, cancelled: false });
+  curLot().entries.push({ id: uid(), ts: Date.now(), d, source, cancelled: false });
   const card = $(`.dia-card[data-d="${d}"]`);
   feedbackAdd(card);
   renderMeasure();
@@ -495,8 +512,9 @@ function addOne(d, source = 'tap') {
 /** 指定径級の最後の有効な入力を取消す（履歴からは消さない） */
 function cancelOne(d) {
   if (!state.draft) return;
-  for (let i = state.draft.entries.length - 1; i >= 0; i--) {
-    const e = state.draft.entries[i];
+  const entries = curLot().entries;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
     if (e.d === d && !e.cancelled) {
       e.cancelled = true;
       e.cancelledAt = Date.now();
@@ -513,7 +531,7 @@ function cancelOne(d) {
 
 /** その径級の現在の本数（取消を除く） */
 function countOf(d) {
-  return state.draft.entries.filter((e) => e.d === d && !e.cancelled).length;
+  return curLot().entries.filter((e) => e.d === d && !e.cancelled).length;
 }
 
 /**
@@ -522,17 +540,17 @@ function countOf(d) {
  * こうすることで履歴・取消の扱いがタップ入力とまったく同じになる。
  */
 function setCount(d, target) {
-  const draft = state.draft;
+  const entries = curLot().entries;
   const current = countOf(d);
   if (target === current) return;
   if (target > current) {
     for (let i = current; i < target; i++) {
-      draft.entries.push({ id: uid(), ts: Date.now(), d, source: 'manual', cancelled: false });
+      entries.push({ id: uid(), ts: Date.now(), d, source: 'manual', cancelled: false });
     }
   } else {
     let remove = current - target;
-    for (let i = draft.entries.length - 1; i >= 0 && remove > 0; i--) {
-      const e = draft.entries[i];
+    for (let i = entries.length - 1; i >= 0 && remove > 0; i--) {
+      const e = entries[i];
       if (e.d === d && !e.cancelled) {
         e.cancelled = true;
         e.cancelledAt = Date.now();
@@ -561,8 +579,9 @@ function openCountDialog(d) {
 /** 直前の1件を取消す */
 function undoLast() {
   if (!state.draft) return;
-  for (let i = state.draft.entries.length - 1; i >= 0; i--) {
-    const e = state.draft.entries[i];
+  const entries = curLot().entries;
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const e = entries[i];
     if (!e.cancelled) {
       e.cancelled = true;
       e.cancelledAt = Date.now();
@@ -579,12 +598,14 @@ function undoLast() {
 function renderMeasure() {
   const draft = state.draft;
   if (!draft) return;
+  const lot = curLot();
 
-  $('#meta-text').textContent = `${draft.species} / ${formatLength(toHundredths(draft.lengthM))}m / ${draft.minD}-${draft.maxD}cm`;
+  $('#meta-text').textContent = `${lot.species} / ${formatLength(toHundredths(lot.lengthM))}m / ${lot.minD}-${lot.maxD}cm`;
+  renderLotTabs();
 
-  // 径級ごとの本数と小計材積（リアルタイム、小数第4位切り捨て）
+  // 径級ごとの本数（リアルタイム）。いま入力している材のぶん
   const counts = new Map();
-  for (const e of draft.entries) {
+  for (const e of lot.entries) {
     if (e.cancelled) continue;
     counts.set(e.d, (counts.get(e.d) ?? 0) + 1);
   }
@@ -596,7 +617,8 @@ function renderMeasure() {
     card.querySelector('[data-role="n"]').innerHTML = `${n}<small>${t('measure.unitCount')}</small>`;
   }
 
-  const { count, volume } = totalsOf(draft.entries, draft.lengthM);
+  // 合計は便ぜんたい（すべての材）。出力確認・CSVと必ず同じ数字になる
+  const { count, volume } = ticketTotals(draft);
   $('#total-count').textContent = String(count);
   $('#total-volume').textContent = formatVolume(volume);
 
@@ -608,7 +630,7 @@ function renderMeasure() {
 function renderHistory() {
   const box = $('#history');
   // 1行しか見せないので、描画するのも直近ぶんだけでよい（数百本入力しても重くならない）
-  const entries = state.draft.entries.slice(-40);
+  const entries = curLot().entries.slice(-40);
   box.innerHTML = '';
   box.classList.toggle('is-empty', entries.length === 0);
   if (entries.length === 0) {
@@ -625,6 +647,137 @@ function renderHistory() {
     item.textContent = String(e.d);
     box.appendChild(item);
   }
+}
+
+/* ==================================================================
+ * 便：1台に複数の材（ロット）を積む
+ * タブで材を切り替える。直前取消・径級カードの操作は、いま選んでいる材にだけ効く。
+ * ================================================================== */
+/** タブを出すか。機能がオンのとき、または既に複数の材を積んでいる便のとき */
+const lotsVisible = () => state.settings.lots || (state.draft?.lots.length ?? 0) > 1;
+
+function renderLotTabs() {
+  const bar = $('#lot-tabs');
+  const show = lotsVisible();
+  bar.hidden = !show;
+  if (!show) return;
+  const { lots, activeLot } = state.draft;
+  const prevScroll = bar.scrollLeft;
+  bar.innerHTML = '';
+  lots.forEach((lot, i) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'lot-tab' + (i === activeLot ? ' is-active' : '');
+    tab.dataset.i = String(i);
+    const label = document.createElement('span');
+    label.textContent = lotLabel(lot, lots, (m) => formatLength(toHundredths(m)));
+    const n = document.createElement('b');
+    n.textContent = String(activeCount(lot));
+    tab.append(label, n);
+    tab.addEventListener('click', () => {
+      if (i === state.draft.activeLot) { openLotDialog('edit'); return; }   // 選択中のタブをもう一度押すと内容を直せる
+      switchLot(i);
+    });
+    bar.appendChild(tab);
+  });
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'lot-add';
+  add.textContent = '＋';
+  add.setAttribute('aria-label', t('lots.addAria'));
+  add.addEventListener('click', () => openLotDialog('add'));
+  bar.appendChild(add);
+  bar.scrollLeft = prevScroll;
+}
+
+function switchLot(i) {
+  state.draft.activeLot = i;
+  state.diameters = diameterRange(curLot().minD, curLot().maxD);
+  buildGrid();
+  renderMeasure();
+  persistDraft();
+  beep('tap');
+  $('#lot-tabs .lot-tab.is-active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+/** 材の追加・修正ダイアログ。範囲のピッカーはセットアップ画面と同じ操作 */
+const lotForm = { mode: 'add', minD: 14, maxD: 30 };
+
+function renderLotRange() {
+  if (lotForm.minD > lotForm.maxD) lotForm.maxD = lotForm.minD;
+  $('#lot-val-min').textContent = lotForm.minD;
+  $('#lot-val-max').textContent = lotForm.maxD;
+}
+
+async function openLotDialog(mode) {
+  const lot = curLot();
+  lotForm.mode = mode;
+  lotForm.minD = lot.minD;
+  lotForm.maxD = lot.maxD;
+  $('#lot-title').textContent = t(mode === 'add' ? 'lots.addTitle' : 'lots.editTitle');
+  // 追加のときは、いま入力している材をそのまま初期値にする（違うところだけ直せばよい）
+  $('#lot-species').value = lot.species;
+  $('#lot-length').value = formatLength(toHundredths(lot.lengthM));
+  const sel = $('#lot-site');
+  sel.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = '';
+  blank.textContent = '-';
+  sel.appendChild(blank);
+  const sites = (await db.listOptions('site')).map((o) => o.value);
+  if (lot.site && !sites.includes(lot.site)) sites.push(lot.site);
+  for (const v of sites) {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    sel.appendChild(opt);
+  }
+  sel.value = lot.site ?? '';
+  renderLotRange();
+  $('#dlg-lot').showModal();
+}
+
+function applyLotDialog() {
+  const species = $('#lot-species').value.trim();
+  if (!species) { feedbackError(); toast(t('setup.needSpecies')); return; }
+  let lengthM;
+  try {
+    lengthM = formatLength(toHundredths($('#lot-length').value.trim()));
+  } catch {
+    feedbackError(); toast(t('setup.needLength')); return;
+  }
+  if (Number(lengthM) <= 0) { feedbackError(); toast(t('setup.needLength')); return; }
+
+  const spec = { species, lengthM, minD: lotForm.minD, maxD: lotForm.maxD, site: $('#lot-site').value };
+  const draft = state.draft;
+  const dup = indexOfSameLot(draft.lots, spec);
+
+  if (lotForm.mode === 'add') {
+    $('#dlg-lot').close();
+    if (dup >= 0) {
+      // 同じ材をもう一つ作ると集計が分かれてしまう。作らずに、あるほうへ移る
+      toast(t('lots.dup'));
+      switchLot(dup);
+      return;
+    }
+    draft.lots.push(newLot(spec));
+    switchLot(draft.lots.length - 1);
+    return;
+  }
+
+  // 修正：他の材と同じ内容にはできない
+  if (dup >= 0 && dup !== draft.activeLot) { feedbackError(); toast(t('lots.dupEdit')); return; }
+  const lot = curLot();
+  // すでに入力のある径級を範囲から外すと、画面に出ない入力が合計にだけ入ってしまう
+  const range = clampRangeToEntries(lot, spec.minD, spec.maxD);
+  if (range.minD !== spec.minD || range.maxD !== spec.maxD) toast(t('lots.rangeKept'), 4000);
+  Object.assign(lot, { species, lengthM, site: spec.site, minD: range.minD, maxD: range.maxD });
+  $('#dlg-lot').close();
+  state.diameters = diameterRange(lot.minD, lot.maxD);
+  buildGrid();
+  renderMeasure();
+  persistDraft();
+  beep('done');
 }
 
 /* ==================================================================
@@ -658,43 +811,60 @@ function setupVoice() {
  * ================================================================== */
 async function openOutputDialog() {
   const draft = state.draft;
-  const { rows, totalCount, totalVolume } = aggregate(draft);
-  if (totalCount === 0) {
+  const agg = aggregateTicket(draft);
+  if (agg.totalCount === 0) {
     feedbackError();
     toast(t('output.empty'));
     return;
   }
-  const table = $('#output-summary');
-  table.innerHTML = `
-    <tr><th>${t('csv.date')}</th><td>${draft.dateStr}</td></tr>
-    <tr><th>${t('setup.species')}</th><td>${draft.species}</td></tr>
-    <tr><th>${t('setup.length')}</th><td>${formatLength(toHundredths(draft.lengthM))} m</td></tr>
-    <tr><th>${t('setup.range')}</th><td>${draft.minD}-${draft.maxD} cm</td></tr>
-    <tr><th>${t('measure.count')}</th><td><b>${totalCount}</b> ${t('measure.unitCount')}</td></tr>
-    <tr><th>${t('measure.volume')}</th><td><b>${formatVolume(totalVolume)}</b> m³</td></tr>`;
+  const lots = agg.lots.filter((l) => l.totalCount > 0);
+  const single = lots.length === 1;
+  const lenOf = (lot) => formatLength(toHundredths(lot.lengthM));
 
-  // 工場の手書き伝票へ書き写すための明細。径級・単材積・本数・小計材積を並べる
-  $('#output-detail').innerHTML = `
-    <thead><tr>
-      <th>${t('csv.diameter')}</th>
-      <th>${t('output.perLog')}</th>
-      <th>${t('csv.count')}</th>
-      <th>${t('csv.subtotal')}</th>
-    </tr></thead>
-    <tbody>${rows.map((r) => `
-      <tr>
-        <td>${r.d}</td>
-        <td class="per">${formatVolume(r.perLog, 4)}</td>
-        <td class="n">${r.count}</td>
-        <td class="v">${formatVolume(r.subtotal)}</td>
-      </tr>`).join('')}
-    </tbody>
-    <tfoot><tr>
-      <td>${t('common.total')}</td>
-      <td></td>
-      <td>${totalCount}</td>
-      <td>${formatVolume(totalVolume)}</td>
-    </tr></tfoot>`;
+  const table = $('#output-summary');
+  if (single) {
+    const lot = lots[0].lot;
+    table.innerHTML = `
+      <tr><th>${t('csv.date')}</th><td>${esc(draft.dateStr)}</td></tr>
+      <tr><th>${t('setup.species')}</th><td>${esc(lot.species)}</td></tr>
+      <tr><th>${t('setup.length')}</th><td>${lenOf(lot)} m</td></tr>
+      <tr><th>${t('setup.range')}</th><td>${lot.minD}-${lot.maxD} cm</td></tr>
+      <tr><th>${t('measure.count')}</th><td><b>${agg.totalCount}</b> ${t('measure.unitCount')}</td></tr>
+      <tr><th>${t('measure.volume')}</th><td><b>${formatVolume(agg.totalVolume)}</b> m³</td></tr>`;
+  } else {
+    // 複数の材を積んだ便：まず便ぜんたいの合計。明細は材ごとに分けて下に並べる
+    table.innerHTML = `
+      <tr><th>${t('csv.date')}</th><td>${esc(draft.dateStr)}</td></tr>
+      <tr><th colspan="2" class="sum-head">${t('lots.tripTotal')}</th></tr>
+      <tr><th>${t('measure.count')}</th><td><b>${agg.totalCount}</b> ${t('measure.unitCount')}</td></tr>
+      <tr><th>${t('measure.volume')}</th><td><b>${formatVolume(agg.totalVolume)}</b> m³</td></tr>`;
+  }
+
+  // 工場の手書き伝票へ書き写すための明細。径級・単材積・本数・小計材積を並べる（材ごと）
+  $('#output-detail').innerHTML = lots.map(({ lot, rows, totalCount, totalVolume }) => `
+    ${single ? '' : `<div class="lot-head">${esc(lot.species)} ${lenOf(lot)}m <small>${lot.minD}-${lot.maxD}cm${lot.site ? ` · ${esc(lot.site)}` : ''}</small></div>`}
+    <table class="detail-table">
+      <thead><tr>
+        <th>${t('csv.diameter')}</th>
+        <th>${t('output.perLog')}</th>
+        <th>${t('csv.count')}</th>
+        <th>${t('csv.subtotal')}</th>
+      </tr></thead>
+      <tbody>${rows.map((r) => `
+        <tr>
+          <td>${r.d}</td>
+          <td class="per">${formatVolume(r.perLog, 4)}</td>
+          <td class="n">${r.count}</td>
+          <td class="v">${formatVolume(r.subtotal)}</td>
+        </tr>`).join('')}
+      </tbody>
+      <tfoot><tr>
+        <td>${t('common.total')}</td>
+        <td></td>
+        <td>${totalCount}</td>
+        <td>${formatVolume(totalVolume)}</td>
+      </tr></tfoot>
+    </table>`).join('');
   $('#out-ticket-no').value = draft.ticketNo ?? await nextTicketNo(draft.dateStr);
   $('#out-note').value = draft.note ?? '';
   $('#dlg-output').showModal();
@@ -735,15 +905,16 @@ async function openHistory() {
   if (tickets.length === 0) {
     box.innerHTML = `<p class="note">${t('history.empty')}</p>`;
   }
-  for (const ticket of tickets) {
-    const { totalCount, totalVolume } = aggregate(ticket);
+  for (const raw of tickets) {
+    const ticket = normalizeTicket(raw);   // 古い形（1伝票＝1材）の伝票もそのまま読める
+    const { totalCount, totalVolume } = aggregateTicket(ticket);
     const el = document.createElement('div');
     el.className = 'ticket';
     const icon = ticket.syncState === 'synced' ? '✅' : '☁️';
     const syncLabel = ticket.syncState === 'synced' ? t('history.synced') : t('history.pending');
     el.innerHTML = `
       <div class="head"><span>${ticket.dateStr} No.${ticket.ticketNo}</span><span>${icon}</span></div>
-      <div class="sub">${ticket.species} / ${formatLength(toHundredths(ticket.lengthM))}m / ${ticket.minD}-${ticket.maxD}cm</div>
+      ${ticket.lots.map((lot) => `<div class="sub">${esc(lot.species)} / ${formatLength(toHundredths(lot.lengthM))}m / ${lot.minD}-${lot.maxD}cm${ticket.lots.length > 1 && lot.site ? ` / ${esc(lot.site)}` : ''}</div>`).join('')}
       <div class="sub">${totalCount} ${t('measure.unitCount')} / ${formatVolume(totalVolume)} m³ · ${syncLabel}</div>`;
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -873,6 +1044,7 @@ function wireEvents() {
     b.addEventListener('click', () => saveSettings({ side: b.dataset.side }));
   });
   $('#voice-consent').addEventListener('change', (e) => saveSettings({ voiceConsent: e.target.checked }));
+  $('#lots-enabled').addEventListener('change', (e) => saveSettings({ lots: e.target.checked }));
 
   // 事前登録リストの追加
   $$('.menu-section[data-list]').forEach((section) => {
@@ -903,6 +1075,21 @@ function wireEvents() {
       beep('tap');
     });
   });
+
+  // 材の追加・修正ダイアログ
+  $$('.lot-picker-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.dia === 'min' ? 'minD' : 'maxD';
+      const next = Number(btn.dataset.dir) > 0 ? nextDiameter(lotForm[key]) : prevDiameter(lotForm[key]);
+      lotForm[key] = normalizeDiameter(Math.max(1, Math.min(200, next)));
+      if (key === 'minD' && lotForm.minD > lotForm.maxD) lotForm.maxD = lotForm.minD;
+      if (key === 'maxD' && lotForm.maxD < lotForm.minD) lotForm.minD = lotForm.maxD;
+      renderLotRange();
+      beep('tap');
+    });
+  });
+  $('#lot-ok').addEventListener('click', applyLotDialog);
+  $('#lot-cancel').addEventListener('click', () => $('#dlg-lot').close());
 
   $('#save-preset-btn').addEventListener('click', async () => {
     const setup = readSetup();
@@ -1069,11 +1256,13 @@ async function boot() {
   backup.initAutoSync();
 
   // 中断した計測があれば復帰する（ページ再読み込み・アプリ終了でも消えない）
-  const draft = await db.kvGet('draft', null);
-  if (draft?.entries?.length >= 0 && draft.species) {
+  const saved = await db.kvGet('draft', null);
+  const draft = saved ? normalizeTicket(saved) : null;   // 便機能より前の下書きも、そのまま続きから読める
+  if (draft?.lots?.length && draft.lots[0].species) {
     state.draft = draft;
-    state.setup.minD = draft.minD;
-    state.setup.maxD = draft.maxD;
+    const lot = curLot();
+    state.setup.minD = lot.minD;
+    state.setup.maxD = lot.maxD;
     startMeasure(null, { resume: true });
   } else {
     renderRange();

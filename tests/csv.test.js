@@ -59,6 +59,12 @@ test('perDiameter方針なら明細の小計を足した値が合計に一致す
 test('CSVのカラム構成が仕様どおり', () => {
   const csv = buildCsv(ticketOf(4, [[20, 2]]));
   const [header, row] = csv.trim().split('\r\n');
-  assert.equal(header, '日付,伝票番号,納入規格(cm),規格長(m),径級(cm),本数,小計材積(m³),累計本数,累計材積(m³),メモ');
-  assert.equal(row, '2026-09-20,001,6-72,4,20,2,0.320,2,0.320,');
+  assert.equal(header, '日付,伝票番号,車番,現場,樹種,納入規格(cm),規格長(m),径級(cm),本数,小計材積(m³),累計本数,累計材積(m³),メモ');
+  assert.equal(row, '2026-09-20,001,,,スギ,6-72,4,20,2,0.320,2,0.320,');
+});
+
+test('車番・現場・樹種がCSVの各行に入る', () => {
+  const t = ticketOf(4, [[20, 1]], { truck: '岩手 100 あ 12-34', site: '本谷' });
+  const [, row] = buildCsv(t).trim().split('\r\n');
+  assert.equal(row, '2026-09-20,001,岩手 100 あ 12-34,本谷,スギ,6-72,4,20,1,0.160,1,0.160,');
 });

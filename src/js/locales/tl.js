@@ -131,4 +131,19 @@ export default {
   'csv.totalCount': 'Tinatakdang bilang',
   'csv.totalVolume': 'Tinatakdang volume(m³)',
   'csv.memo': 'Memo',
+
+  // 便（1台に複数の材）
+  'csv.truck': 'Plate no.',
+  'csv.site': 'Sityo',
+  'csv.species': 'Uri ng puno',
+  'lots.menu': 'Maraming uri ng kahoy sa isang trak (pagsubok)',
+  'lots.menuHint': 'Gamitin kapag iba-iba ang uri, haba o sityo ng kahoy sa isang trak. Kapag naka-on, lalabas ang "+" sa screen ng pagsukat.',
+  'lots.addAria': 'Magdagdag ng kahoy',
+  'lots.addTitle': 'Magdagdag ng karga',
+  'lots.editTitle': 'Baguhin ang detalye',
+  'lots.dup': 'Nandiyan na ang kahoy na iyon. Lumipat na dito',
+  'lots.dupEdit': 'Mayroon nang kaparehong kahoy. Baguhin ang detalye',
+  'lots.rangeKept': 'Hindi maaalis ang diameter na may input, kaya pinalawak ang saklaw',
+  'lots.tripTotal': 'Kabuuan ng biyahe',
+  'lots.tapEdit': 'Pindutin ulit para baguhin',
 };

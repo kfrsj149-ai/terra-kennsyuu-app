@@ -539,3 +539,50 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 }
 .seg button:nth-child(2) { font-size: 1.15rem; }
 .seg button:nth-child(3) { font-size: 1.35rem; }
+
+/* ---------------- 便：材（ロット）のタブ ---------------- */
+/* 1台に複数の材を積むときだけ出る。横に流れて、選択中の材が常に見える */
+#lot-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 2px 0 3px;
+}
+#lot-tabs::-webkit-scrollbar { display: none; }
+#lot-tabs[hidden] { display: none; }
+.lot-tab, .lot-add {
+  flex: 0 0 auto;
+  min-height: calc(34px * var(--ui-scale));
+  padding: 0 10px;
+  border: 2px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: calc(.85rem * var(--ui-scale));
+  font-weight: 800;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lot-tab b {
+  font-size: calc(.85rem * var(--ui-scale));
+  min-width: 1.6em;
+  text-align: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--c-bg);
+  color: var(--c-text);
+}
+.lot-tab.is-active { background: var(--c-brand); border-color: var(--c-brand); color: var(--c-brand-ink); }
+.lot-tab.is-active b { background: rgba(255, 255, 255, .22); color: var(--c-brand-ink); }
+.lot-add { min-width: calc(44px * var(--ui-scale)); justify-content: center; font-size: calc(1.2rem * var(--ui-scale)); color: var(--c-brand); }
+.lot-add:active { background: var(--c-neutral); }
+
+/* 出力確認：材ごとの見出し */
+.lot-head { margin: 10px 0 0; font-weight: 900; font-size: calc(1.05rem * var(--ui-scale)); border-left: 5px solid var(--c-brand); padding-left: 8px; }
+.lot-head small { font-weight: 600; color: var(--c-text-weak); font-size: .8em; }
+#output-detail .detail-table { margin-top: 2px; }
+.summary-table th.sum-head { text-align: left; color: var(--c-brand); font-weight: 900; border-bottom-width: 2px; }

@@ -1,9 +1,13 @@
 /**
  * CSV生成と共有。カラム構成は CLAUDE.md 準拠（ヘッダーは選択言語で出力）。
- * 日付,伝票番号,納入規格(cm),規格長(m),径級(cm),本数,小計材積(m³),累計本数,累計材積(m³),メモ
+ * 日付,伝票番号,車番,現場,樹種,納入規格(cm),規格長(m),径級(cm),本数,小計材積(m³),累計本数,累計材積(m³),メモ
+ *
+ * 1台に複数の材（ロット）を積んだときは、ロットごとに行が続く。
+ * 累計本数・累計材積は「ロットごと」に数え直す（そのロットの最後の行が、そのロットの合計）。
  */
 import { t } from './i18n.js';
 import { formatVolume, formatLength, toHundredths, volumeNumerator, quantizeNumerator, diameterRange } from './jas.js';
+import { normalizeTicket } from './lots.js';
 
 /**
  * 合計材積の丸め方針。ここ1か所を変えれば画面もCSVも同時に切り替わる。
@@ -18,13 +22,15 @@ const applyRounding = (numerator) =>
   (VOLUME_ROUNDING === 'perDiameter' ? quantizeNumerator(numerator) : numerator);
 
 const CSV_KEYS = [
-  'csv.date', 'csv.ticketNo', 'csv.spec', 'csv.length', 'csv.diameter',
+  'csv.date', 'csv.ticketNo', 'csv.truck', 'csv.site', 'csv.species',
+  'csv.spec', 'csv.length', 'csv.diameter',
   'csv.count', 'csv.subtotal', 'csv.totalCount', 'csv.totalVolume', 'csv.memo',
 ];
 
 /**
- * 伝票データから径級ごとの集計を作る（取消済みは除外）。
- * @param {object} ticket
+ * ロット1つ（または古い形の伝票）から、径級ごとの集計を作る（取消済みは除外）。
+ * entries・minD・maxD・lengthM を持つものなら何でも渡せる。
+ * @param {object} lot
  * @returns {{rows: Array, totalCount: number, totalVolume: bigint}}
  */
 export function aggregate(ticket) {
@@ -54,6 +60,39 @@ export function aggregate(ticket) {
 }
 
 /**
+ * 便ぜんたい（すべてのロット）の集計。古い形の伝票も渡せる。
+ * 合計は、ロットごとの端数を保持したまま足し、表示の瞬間にだけ丸める
+ * （1ロットの中で径級ごとに足すのと同じ考え方）。
+ * @returns {{lots: Array<{lot:object, rows:Array, totalCount:number, totalVolume:bigint}>, totalCount:number, totalVolume:bigint}}
+ */
+export function aggregateTicket(ticket) {
+  const { lots } = normalizeTicket(ticket);
+  const result = [];
+  let totalCount = 0;
+  let totalVolume = 0n;
+  for (const lot of lots) {
+    const a = aggregate(lot);
+    result.push({ lot, ...a });
+    totalCount += a.totalCount;
+    totalVolume += a.totalVolume;
+  }
+  return { lots: result, totalCount, totalVolume };
+}
+
+/** 便ぜんたいの合計（画面のリアルタイム表示用）。出力確認・CSVと必ず同じ数字になる */
+export function ticketTotals(ticket) {
+  const { lots } = normalizeTicket(ticket);
+  let count = 0;
+  let volume = 0n;
+  for (const lot of lots) {
+    const part = totalsOf(lot.entries, lot.lengthM);
+    count += part.count;
+    volume += part.volume;
+  }
+  return { count, volume };
+}
+
+/**
  * 取消を除いた合計（画面のリアルタイム表示用）。
  * 出力確認画面・CSVと必ず同じ数字になるよう、径級ごとに集計してから丸め方針を適用する。
  */
@@ -79,27 +118,33 @@ function escapeCell(value) {
 
 /**
  * 伝票をCSV文字列にする。
- * @param {object} ticket
+ * @param {object} ticket 古い形でも新しい形でもよい
  * @returns {string}
  */
 export function buildCsv(ticket) {
-  const { rows } = aggregate(ticket);
-  const spec = `${ticket.minD}-${ticket.maxD}`;
-  const length = formatLength(toHundredths(ticket.lengthM));
+  const norm = normalizeTicket(ticket);
+  const { lots } = aggregateTicket(norm);
   const lines = [CSV_KEYS.map((k) => escapeCell(t(k))).join(',')];
-  for (const r of rows) {
-    lines.push([
-      ticket.dateStr,
-      ticket.ticketNo,
-      spec,
-      length,
-      r.d,
-      r.count,
-      formatVolume(r.subtotal),
-      r.runningCount,
-      formatVolume(r.runningVolume),
-      ticket.note ?? '',
-    ].map(escapeCell).join(','));
+  for (const { lot, rows } of lots) {
+    const spec = `${lot.minD}-${lot.maxD}`;
+    const length = formatLength(toHundredths(lot.lengthM));
+    for (const r of rows) {
+      lines.push([
+        norm.dateStr,
+        norm.ticketNo,
+        norm.truck ?? '',
+        lot.site ?? '',
+        lot.species,
+        spec,
+        length,
+        r.d,
+        r.count,
+        formatVolume(r.subtotal),
+        r.runningCount,
+        formatVolume(r.runningVolume),
+        norm.note ?? '',
+      ].map(escapeCell).join(','));
+    }
   }
   return lines.join('\r\n') + '\r\n';
 }

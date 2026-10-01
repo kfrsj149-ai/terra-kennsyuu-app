@@ -109,6 +109,8 @@
         <span id="meta-text"></span>
         <span id="meta-net" data-online="true">📶</span>
       </div>
+      <!-- 便（複数の材）：材ごとのタブ。メニューでオンにしたときだけ出る -->
+      <div id="lot-tabs" hidden></div>
       <!-- 合計はラベルと数字を同じ行に置く。2段にすると、その分だけ径級ボタンが小さくなる -->
       <div id="totals">
         <div class="total-box">
@@ -210,6 +212,14 @@
     </div>
 
     <div class="menu-section">
+      <label class="switch">
+        <input type="checkbox" id="lots-enabled">
+        <span data-i18n="lots.menu">複数の材を積む（試験中）</span>
+      </label>
+      <p class="note" data-i18n="lots.menuHint"></p>
+    </div>
+
+    <div class="menu-section">
       <h3 data-i18n="menu.history">伝票履歴</h3>
       <button type="button" class="btn btn-sm" id="open-history" data-i18n="history.title">伝票履歴</button>
     </div>
@@ -297,7 +307,7 @@
     </div>
     <table class="summary-table" id="output-summary"></table>
     <!-- 手書き伝票への転記元になる明細表 -->
-    <table class="detail-table" id="output-detail"></table>
+    <div id="output-detail"></div>
     <div class="field">
       <label for="out-note" data-i18n="output.note">備考</label>
       <textarea id="out-note"></textarea>
@@ -323,7 +333,50 @@
   </div>
 </dialog>
 
-<!-- 径級ごとの取消 -->
+<!-- 材（ロット）の追加・修正：樹種・長さ・範囲・現場 -->
+<dialog id="dlg-lot">
+  <div class="dlg-body">
+    <div class="dlg-title" id="lot-title"></div>
+    <div class="field">
+      <label for="lot-species" data-i18n="setup.species">樹種</label>
+      <input type="text" id="lot-species" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="lot-length" data-i18n="setup.length">規格長さ（m）</label>
+      <input type="text" id="lot-length" inputmode="decimal" autocomplete="off">
+    </div>
+    <div class="field">
+      <label data-i18n="setup.range">納入規格範囲（径級 cm）</label>
+      <div class="picker">
+        <div class="picker-group">
+          <span data-i18n="setup.rangeMin">最小</span>
+          <div class="picker-row">
+            <button type="button" class="picker-btn lot-picker-btn" data-dia="min" data-dir="-1">▼</button>
+            <div class="picker-value" id="lot-val-min">14</div>
+            <button type="button" class="picker-btn lot-picker-btn" data-dia="min" data-dir="1">▲</button>
+          </div>
+        </div>
+        <div class="picker-group">
+          <span data-i18n="setup.rangeMax">最大</span>
+          <div class="picker-row">
+            <button type="button" class="picker-btn lot-picker-btn" data-dia="max" data-dir="-1">▼</button>
+            <div class="picker-value" id="lot-val-max">30</div>
+            <button type="button" class="picker-btn lot-picker-btn" data-dia="max" data-dir="1">▲</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label for="lot-site" data-i18n="setup.site">現場名</label>
+      <select id="lot-site"></select>
+    </div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-primary" id="lot-ok" data-i18n="common.confirm">確定</button>
+    <button type="button" class="btn" id="lot-cancel" data-i18n="common.back">戻る</button>
+  </div>
+</dialog>
+
 <!-- 伝票履歴 -->
 <dialog id="dlg-history">
   <div class="dlg-body">

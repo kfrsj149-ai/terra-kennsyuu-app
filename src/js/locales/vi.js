@@ -131,4 +131,19 @@ export default {
   'csv.totalCount': 'Lũy kế số cây',
   'csv.totalVolume': 'Lũy kế thể tích(m³)',
   'csv.memo': 'Ghi chú',
+
+  // 便（1台に複数の材）
+  'csv.truck': 'Biển số',
+  'csv.site': 'Hiện trường',
+  'csv.species': 'Loài cây',
+  'lots.menu': 'Chở nhiều loại gỗ trên một xe (thử nghiệm)',
+  'lots.menuHint': 'Dùng khi một xe chở gỗ khác loài, khác chiều dài hoặc khác hiện trường. Khi bật, nút "+" sẽ hiện trên màn hình đo.',
+  'lots.addAria': 'Thêm loại gỗ',
+  'lots.addTitle': 'Thêm hàng chở',
+  'lots.editTitle': 'Sửa thông tin gỗ',
+  'lots.dup': 'Loại gỗ này đã có. Đã chuyển sang loại đó',
+  'lots.dupEdit': 'Đã có loại gỗ giống hệt. Hãy đổi thông tin',
+  'lots.rangeKept': 'Không thể bỏ đường kính đã nhập nên phạm vi đã được mở rộng',
+  'lots.tripTotal': 'Tổng cả chuyến',
+  'lots.tapEdit': 'Bấm lần nữa để sửa',
 };

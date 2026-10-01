@@ -131,4 +131,19 @@ export default {
   'csv.totalCount': '累計本数',
   'csv.totalVolume': '累計材積(m³)',
   'csv.memo': 'メモ',
+
+  // 便（1台に複数の材）
+  'csv.truck': '車番',
+  'csv.site': '現場',
+  'csv.species': '樹種',
+  'lots.menu': '複数の材を積む（試験中）',
+  'lots.menuHint': '1台に、樹種・長さ・現場がちがう材を積むときに使います。オンにすると計測画面に「＋」が出ます。',
+  'lots.addAria': '材を追加',
+  'lots.addTitle': '積み荷を追加',
+  'lots.editTitle': '材の内容を直す',
+  'lots.dup': 'その材はすでにあります。そちらに切り替えました',
+  'lots.dupEdit': 'すでに同じ材があります。内容を変えてください',
+  'lots.rangeKept': '入力済みの径級は範囲から外せないため、範囲を広げました',
+  'lots.tripTotal': '便の合計',
+  'lots.tapEdit': 'もう一度押すと内容を直せます',
 };

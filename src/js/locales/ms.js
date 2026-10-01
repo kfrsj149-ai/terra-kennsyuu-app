@@ -131,4 +131,19 @@ export default {
   'csv.totalCount': 'Bilangan terkumpul',
   'csv.totalVolume': 'Isipadu terkumpul(m³)',
   'csv.memo': 'Memo',
+
+  // 便（1台に複数の材）
+  'csv.truck': 'No. plat',
+  'csv.site': 'Tapak',
+  'csv.species': 'Jenis kayu',
+  'lots.menu': 'Muatkan beberapa kayu dalam satu lori (percubaan)',
+  'lots.menuHint': 'Gunakan apabila satu lori membawa kayu berbeza jenis, panjang atau tapak. Apabila dihidupkan, butang "+" muncul pada skrin ukuran.',
+  'lots.addAria': 'Tambah kayu',
+  'lots.addTitle': 'Tambah muatan',
+  'lots.editTitle': 'Ubah butiran kayu',
+  'lots.dup': 'Kayu itu sudah ada. Beralih ke kayu tersebut',
+  'lots.dupEdit': 'Kayu yang sama sudah ada. Sila ubah butiran',
+  'lots.rangeKept': 'Diameter yang telah dimasukkan tidak boleh dikeluarkan, jadi julat diperluas',
+  'lots.tripTotal': 'Jumlah satu trip',
+  'lots.tapEdit': 'Tekan sekali lagi untuk ubah',
 };
