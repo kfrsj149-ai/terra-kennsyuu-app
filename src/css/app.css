@@ -588,3 +588,44 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 .summary-table th.sum-head { text-align: left; color: var(--c-brand); font-weight: 900; border-bottom-width: 2px; }
 #lot-delete[hidden] { display: none; }
 #lot-delete { width: 100%; }
+
+/* ---------------- 事務所からのお知らせ・納入枠 ---------------- */
+/* 荷下ろしできない知らせは、見落とすと運転手の1日が無駄になる。いちばん目立つ色で出す */
+#notice-band {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  font-weight: 800;
+  font-size: calc(.9rem * var(--ui-scale));
+  line-height: 1.25;
+  background: var(--c-danger);
+  color: var(--c-danger-ink);
+}
+#notice-band[hidden] { display: none; }
+#notice-band[data-kind='restricted'] { background: #e65100; color: #fff; }
+#notice-band[data-kind='info'] { background: var(--c-accent); color: var(--c-accent-ink); }
+#notice-band .nb-kind { flex: 0 0 auto; background: #fff; color: #7a0000; border-radius: 999px; padding: 0 8px; }
+#notice-band[data-kind='restricted'] .nb-kind { color: #7a2f00; }
+#notice-band[data-kind='info'] .nb-kind { color: #0b3b6b; }
+#notice-band .nb-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#notice-band .nb-more { flex: 0 0 auto; opacity: .9; font-size: .85em; }
+
+#quota-card { margin-bottom: 14px; padding: 10px 12px; background: var(--c-surface); border: 2px solid var(--c-border); border-radius: var(--r-md); }
+#quota-card[hidden] { display: none; }
+#quota-card .qc-title { font-size: .8rem; color: var(--c-text-weak); font-weight: 700; }
+#quota-card .qc-left { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+#quota-card .qc-left.is-over { color: var(--c-danger); }
+#quota-card .qc-window { font-weight: 700; }
+#quota-card .qc-window.is-open { color: var(--c-primary); }
+#quota-card .qc-window.is-shut { color: var(--c-danger); }
+#quota-card .qc-stale { font-size: .78rem; color: var(--c-text-weak); }
+#quota-card .qc-stale.is-warn { color: var(--c-danger); font-weight: 700; }
+#quota-card .qc-item + .qc-item { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--c-border); }
+#notice-list .nl-item { padding: 8px 0; border-bottom: 1px solid var(--c-border); }
+#notice-list .nl-head { font-weight: 800; }
+#notice-list .nl-body { white-space: pre-wrap; }
+#notice-list .nl-period { font-size: .8rem; color: var(--c-text-weak); }

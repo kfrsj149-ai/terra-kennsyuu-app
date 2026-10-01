@@ -16,6 +16,8 @@ import { VoiceInput, isVoiceSupported, isVoiceAvailable } from './voice.js';
 import * as subscription from './subscription.js';
 import * as backup from './backup.js';
 import * as updater from './updater.js';
+import * as officeSync from './office-sync.js';
+import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading } from './office-rules.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -33,6 +35,8 @@ const state = {
   /** いま入力している材（ロット）の径級一覧 */
   diameters: [],
   voice: null,
+  /** 事務所から最後に受け取った 納入枠・お知らせ・現場の台帳（圏外では、これを使い続ける） */
+  feed: null,
 };
 
 /* ==================================================================
@@ -69,6 +73,7 @@ function showScreen(name) {
   else releaseWakeLock();
   // 計測が終わって戻ってきたら、保留していたアプリ更新をここで反映する
   if (name !== 'measure' && updater.hasPending()) updater.applyPending();
+  renderOfficeInfo();
 }
 
 /**
@@ -109,6 +114,7 @@ async function loadSettings() {
     size: saved?.size ?? 'm',          // 文字とボタンの大きさ（m / l / xl）
     voiceConsent: saved?.voiceConsent ?? false,
     lots: saved?.lots ?? CONFIG.features.lotsDefault,   // 1台に複数の材を積む機能
+    office: saved?.office ?? false,                      // 事務所とデータを共有する（初期はオフ）
   };
   await applySettings();
 }
@@ -127,6 +133,8 @@ async function applySettings() {
   $('#voice-consent-section').hidden = !CONFIG.voiceDataCollection;
   $('#voice-consent').checked = state.settings.voiceConsent;
   $('#lots-enabled').checked = state.settings.lots;
+  $('#office-enabled').checked = state.settings.office;
+  $('#office-sync-now').hidden = !state.settings.office;
   renderSetupStatics();
   if (state.draft) renderMeasure();
 }
@@ -171,6 +179,34 @@ async function renderLists() {
   }
 }
 
+/** 名前の表記ゆれ（空白・全角半角）で重複しないようにまとめる */
+function uniqueNames(values) {
+  const seen = new Set();
+  return values.filter((v) => {
+    const k = nameKey(v);
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
+/**
+ * 選択肢の一覧。事務所とデータを共有している端末では、事務所が登録した
+ * 現場の台帳（現場名）と納入枠の工場名を先頭に混ぜる。端末で登録した名前もそのまま残す
+ * （台帳に無い名前でも記録を止めない）。
+ */
+async function choicesFor(kind) {
+  const local = (await db.listOptions(kind)).map((o) => o.value);
+  const feed = state.settings.office ? state.feed : null;
+  let fromOffice = [];
+  if (kind === 'site') fromOffice = (feed?.sites ?? []).filter((x) => !x.closed).map((x) => x.name);
+  if (kind === 'destination') fromOffice = (feed?.quotas ?? []).filter((q) => q.status === 'active').map((q) => q.destination);
+  return uniqueNames([...fromOffice, ...local]);
+}
+
+/** 現場名から、事務所の台帳のIDを引く。引けなければ null（記録は止めない） */
+const siteIdFor = (name) => resolveSiteId(state.feed?.sites ?? [], name);
+
 async function fillSelects() {
   const map = {
     '#in-truck': 'truck',
@@ -181,16 +217,16 @@ async function fillSelects() {
   for (const [sel, kind] of Object.entries(map)) {
     const el = $(sel);
     const prev = el.value;
-    const items = await db.listOptions(kind);
+    const values = await choicesFor(kind);
     el.innerHTML = '';
     const blank = document.createElement('option');
     blank.value = '';
-    blank.textContent = items.length ? t('common.select') : t('common.none');
+    blank.textContent = values.length ? t('common.select') : t('common.none');
     el.appendChild(blank);
-    for (const item of items) {
+    for (const value of values) {
       const opt = document.createElement('option');
-      opt.value = item.value;
-      opt.textContent = item.value;
+      opt.value = value;
+      opt.textContent = value;
       el.appendChild(opt);
     }
     if (prev) el.value = prev;
@@ -352,7 +388,7 @@ function startMeasure(setup, { resume = false } = {}) {
       destination: setup.destination,
       ownCompany: setup.ownCompany,
       note: setup.note,
-      lots: [newLot(setup)],
+      lots: [newLot({ ...setup, siteId: siteIdFor(setup.site) })],
       activeLot: 0,
       syncState: 'pending',
     };
@@ -725,8 +761,8 @@ async function openLotDialog(mode) {
   blank.value = '';
   blank.textContent = '-';
   sel.appendChild(blank);
-  const sites = (await db.listOptions('site')).map((o) => o.value);
-  if (lot.site && !sites.includes(lot.site)) sites.push(lot.site);
+  const sites = await choicesFor('site');
+  if (lot.site && !sites.some((v) => nameKey(v) === nameKey(lot.site))) sites.push(lot.site);
   for (const v of sites) {
     const opt = document.createElement('option');
     opt.value = v;
@@ -763,7 +799,7 @@ function applyLotDialog() {
       switchLot(dup);
       return;
     }
-    draft.lots.push(newLot(spec));
+    draft.lots.push(newLot({ ...spec, siteId: siteIdFor(spec.site) }));
     switchLot(draft.lots.length - 1);
     return;
   }
@@ -774,7 +810,7 @@ function applyLotDialog() {
   // すでに入力のある径級を範囲から外すと、画面に出ない入力が合計にだけ入ってしまう
   const range = clampRangeToEntries(lot, spec.minD, spec.maxD);
   if (range.minD !== spec.minD || range.maxD !== spec.maxD) toast(t('lots.rangeKept'), 4000);
-  Object.assign(lot, { species, lengthM, site: spec.site, minD: range.minD, maxD: range.maxD });
+  Object.assign(lot, { species, lengthM, site: spec.site, siteId: siteIdFor(spec.site), minD: range.minD, maxD: range.maxD });
   $('#dlg-lot').close();
   state.diameters = diameterRange(lot.minD, lot.maxD);
   buildGrid();
@@ -879,6 +915,8 @@ async function doOutput() {
   draft.note = $('#out-note').value.trim();
   draft.outputAt = Date.now();
   draft.syncState = 'pending';
+  // 台帳が更新されていたら、現場IDを引き直して記録に入れる（名前は記録時点のまま残す）
+  for (const lot of draft.lots) lot.siteId = siteIdFor(lot.site) ?? lot.siteId ?? null;
 
   await db.saveTicket({ ...draft });
   await commitTicketNo(draft.dateStr, draft.ticketNo);
@@ -896,6 +934,8 @@ async function doOutput() {
   showScreen('setup');
   $('#in-note').value = '';
   backup.runBackup().catch(() => {});
+  // 事務所とデータを共有している端末は、通信できるとき事務所へ送る（失敗しても現場の操作は止めない）
+  officeSync.enqueue(draft.id).then(() => syncOffice()).catch(() => {});
 }
 
 /* ==================================================================
@@ -1008,6 +1048,123 @@ async function renderBackupStatus() {
 }
 
 /* ==================================================================
+ * 事務所との連携（お知らせの帯・納入枠・同期の状態）
+ * ================================================================== */
+/** いま見ている納入先。計測中は便の納入先、準備中は選択中のもの */
+const currentDestination = () => (state.screen === 'measure' ? (state.draft?.destination ?? '') : $('#in-destination').value);
+
+const whenText = (ms) => new Date(ms).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+function appendText(parent, cls, text, tag = 'span') {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  el.textContent = text;
+  parent.appendChild(el);
+  return el;
+}
+
+/** 最終更新の表示。古い情報で空振りしないよう、圏外のときは「最新でない可能性」を必ず添える */
+function staleLine(parent, cls) {
+  const feed = state.feed;
+  if (!feed) return;
+  const line = appendText(parent, cls, t('office.updatedAt', { when: whenText(feed.fetchedAt) }), 'div');
+  if (!navigator.onLine) {
+    line.classList.add('is-warn');
+    line.textContent += ` — ${t('office.stale')}`;
+  }
+}
+
+function renderOfficeInfo() {
+  const band = $('#notice-band');
+  const card = $('#quota-card');
+  const feed = state.settings.office ? state.feed : null;
+  if (!feed) { band.hidden = true; card.hidden = true; return; }
+  const now = new Date();
+  const dest = currentDestination();
+
+  // お知らせの帯（止める種類を先頭に。納入先が決まっていれば、その工場宛と全体向けだけ）
+  const notices = noticesFor(feed.notices, dest, now);
+  band.replaceChildren();
+  if (notices.length) {
+    const top = notices[0];
+    band.hidden = false;
+    band.dataset.kind = top.kind;
+    appendText(band, 'nb-kind', t(`office.kind.${top.kind}`));
+    const where = [top.destination || t('office.allFactories'), top.place].filter(Boolean).join(' ');
+    appendText(band, 'nb-text', `${where}：${top.body}`);
+    if (notices.length > 1) appendText(band, 'nb-more', t('office.more', { n: notices.length - 1 }));
+  } else {
+    band.hidden = true;
+  }
+
+  // 納入枠（準備画面だけ。計測中は画面を使わない）
+  card.replaceChildren();
+  const quotas = state.screen === 'setup' ? quotasFor(feed, dest, now) : [];
+  card.hidden = quotas.length === 0;
+  for (const { quota, window: win, left } of quotas.slice(0, 3)) {
+    const item = document.createElement('div');
+    item.className = 'qc-item';
+    appendText(item, 'qc-title', `${t('office.quota')}　${quota.destination}${quota.species ? ` ${quota.species}` : ''}`, 'div');
+    appendText(item, `qc-left${left.over ? ' is-over' : ''}`,
+      left.over ? t('office.quotaOver', { v: formatVolume(-left.remain) }) : t('office.quotaLeft', { v: formatVolume(left.remain) }), 'div');
+    const next = win.nextOpenAt ? ` (${t('office.nextOpen', { when: whenText(win.nextOpenAt.getTime()) })})` : '';
+    appendText(item, `qc-window ${win.open ? 'is-open' : 'is-shut'}`, win.open ? t('office.canUnload') : `${t('office.cannotUnload')}${next}`, 'div');
+    card.appendChild(item);
+  }
+  if (quotas.length) staleLine(card, 'qc-stale');
+}
+
+function openNoticeList() {
+  const feed = state.feed;
+  if (!feed) return;
+  const list = $('#notice-list');
+  list.replaceChildren();
+  for (const n of noticesFor(feed.notices, currentDestination(), new Date())) {
+    const item = document.createElement('div');
+    item.className = 'nl-item';
+    const head = [t(`office.kind.${n.kind}`), n.destination || t('office.allFactories'), n.place].filter(Boolean).join('　');
+    appendText(item, 'nl-head', head, 'div');
+    appendText(item, 'nl-body', n.body, 'div');
+    const period = [n.from, n.to].some(Boolean) ? `${(n.from || '').replace('T', ' ')} 〜 ${(n.to || '').replace('T', ' ')}` : '';
+    if (period) appendText(item, 'nl-period', period, 'div');
+    list.appendChild(item);
+  }
+  const stale = $('#notice-stale');
+  stale.replaceChildren();
+  staleLine(stale, 'qc-stale');
+  $('#dlg-notices').showModal();
+}
+
+async function renderOfficeStatus() {
+  const el = $('#office-status');
+  if (!state.settings.office) { el.textContent = ''; return; }
+  const st = await officeSync.status();
+  const parts = [];
+  if (st.pending > 0) parts.push(t('office.pending', { n: st.pending }));
+  if (st.lastSyncAt) parts.push(t('office.synced', { date: whenText(st.lastSyncAt) }));
+  if (st.feedAt) parts.push(t('office.updatedAt', { when: whenText(st.feedAt) }));
+  if (st.error === 'office_not_set_up') parts.push(t('office.notSetUp'));
+  else if (st.error === 'no_license') parts.push(t('office.needLicense'));
+  else if (st.error && st.error !== 'offline') parts.push(t('office.error'));
+  el.textContent = parts.join(' / ');
+}
+
+/** 送れていない便を送り、事務所の最新を受け取る。通信できなければ何もしない */
+async function syncOffice({ force = false } = {}) {
+  if (!state.settings.office) return;
+  try {
+    await officeSync.flush();
+    const feed = await officeSync.refreshFeed({ force });
+    if (feed) state.feed = feed;
+  } catch {
+    // 事務所との連携が失敗しても、計測・保存は止めない
+  }
+  await fillSelects();
+  renderOfficeInfo();
+  renderOfficeStatus();
+}
+
+/* ==================================================================
  * ドロワー
  * ================================================================== */
 function openDrawer() {
@@ -1018,6 +1175,7 @@ function openDrawer() {
   renderPresets();
   renderSubscription();
   renderBackupStatus();
+  renderOfficeStatus();
 }
 
 function closeDrawer() {
@@ -1048,6 +1206,25 @@ function wireEvents() {
   });
   $('#voice-consent').addEventListener('change', (e) => saveSettings({ voiceConsent: e.target.checked }));
   $('#lots-enabled').addEventListener('change', (e) => saveSettings({ lots: e.target.checked }));
+  $('#office-enabled').addEventListener('change', async (e) => {
+    await saveSettings({ office: e.target.checked });
+    if (e.target.checked) {
+      state.feed = (await officeSync.getFeed()) ?? state.feed;
+      await syncOffice({ force: true });
+    } else {
+      state.feed = null;       // オフにしたら、事務所の情報は画面にも選択肢にも出さない
+      await fillSelects();
+    }
+    renderOfficeInfo();
+    renderOfficeStatus();
+  });
+  $('#office-sync-now').addEventListener('click', async () => {
+    await syncOffice({ force: true });
+    toast(t('office.syncNow'));
+  });
+  $('#notice-band').addEventListener('click', openNoticeList);
+  $('#notices-close').addEventListener('click', () => $('#dlg-notices').close());
+  $('#in-destination').addEventListener('change', renderOfficeInfo);
 
   // 事前登録リストの追加
   $$('.menu-section[data-list]').forEach((section) => {
@@ -1232,6 +1409,7 @@ function wireEvents() {
   };
   window.addEventListener('online', () => {
     updateNet();
+    syncOffice({ force: true });
     subscription.revalidate().then(renderSubscription);
     checkForUpdate();
   });
@@ -1241,7 +1419,7 @@ function wireEvents() {
   // アプリを開き直した／他アプリから戻ってきたときに最新かどうか確かめる。
   // 山でスマホだけで直すとき、これがあると「開き直すだけ」で反映される。
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkForUpdate();
+    if (document.visibilityState === 'visible') { checkForUpdate(); syncOffice(); }
   });
 
   $('#update-btn').addEventListener('click', async () => {
@@ -1258,6 +1436,7 @@ function wireEvents() {
  * ================================================================== */
 async function boot() {
   await loadSettings();
+  state.feed = state.settings.office ? await officeSync.getFeed() : null;   // 圏外でも、最後に受け取った事務所の情報で始める
   await renderLists();
   await fillSelects();
   await renderPresets();
@@ -1278,6 +1457,9 @@ async function boot() {
   } else {
     renderRange();
   }
+
+  syncOffice();                       // 待たない。通信できれば事務所と同期する
+  setInterval(renderOfficeInfo, 60_000);   // 時間の経過で、お知らせの期限や荷下ろしできる時間が変わるため
 
   await handleCheckoutReturn();
   checkForUpdate().then(renderVersion);

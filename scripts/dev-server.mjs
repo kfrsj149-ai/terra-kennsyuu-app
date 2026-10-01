@@ -28,6 +28,15 @@ const TYPES = {
  *   STRIPE_SECRET_KEY=sk_test_... LICENSE_SECRET=適当な長い文字列 npm run dev
  */
 async function serveApi(req, res, name) {
+  // 事務所端末の確認用：OFFICE_DEV=1 のときだけ、メモリ保存・サブスク常時有効で動かす（本番では使わない）
+  if (name === 'office' && process.env.OFFICE_DEV === '1' && !globalThis.__officeDevReady) {
+    const { createOffice } = await import(new URL('../api/_office-core.js', import.meta.url));
+    const { memoryStore } = await import(new URL('../api/_office-store.js', import.meta.url));
+    const mod = await import(new URL('../api/office.js', import.meta.url));
+    mod.__setOfficeForTests(createOffice({ store: memoryStore(), isSubscriptionActive: async () => true }));
+    globalThis.__officeDevReady = true;
+    console.log('事務所API: 開発モード（メモリ保存。再起動で消えます）');
+  }
   const mod = await import(new URL(`../api/${name}.js`, import.meta.url)).catch(() => null);
   if (!mod?.default) {
     res.writeHead(404, { 'Content-Type': TYPES['.json'] }).end('{"ok":false,"error":"not_found"}');

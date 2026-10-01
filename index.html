@@ -25,6 +25,9 @@
 
 <div id="sub-banner" class="banner"></div>
 
+<!-- 事務所からのお知らせ（納入不可・入場制限など）。事務所と共有をオンにした端末だけに出る -->
+<button type="button" id="notice-band" hidden></button>
+
 <main>
   <!-- ========== 画面1：セットアップ ========== -->
   <section id="screen-setup" class="screen is-active">
@@ -83,6 +86,8 @@
         <label for="in-destination" data-i18n="setup.destination">納入先</label>
         <select id="in-destination"></select>
       </div>
+      <!-- 事務所が登録した納入枠の残りと、いま荷下ろしできるか -->
+      <div id="quota-card" hidden></div>
       <div class="field">
         <label for="in-own" data-i18n="setup.own">自社名</label>
         <select id="in-own"></select>
@@ -217,6 +222,16 @@
         <span data-i18n="lots.menu">複数の材を積む（試験中）</span>
       </label>
       <p class="note" data-i18n="lots.menuHint"></p>
+    </div>
+
+    <div class="menu-section">
+      <label class="switch">
+        <input type="checkbox" id="office-enabled">
+        <span data-i18n="office.menu">事務所とデータを共有する（試験中）</span>
+      </label>
+      <p class="note" data-i18n="office.menuHint"></p>
+      <div class="note" id="office-status"></div>
+      <button type="button" class="btn btn-sm" id="office-sync-now" data-i18n="office.syncNow" hidden>今すぐ同期</button>
     </div>
 
     <div class="menu-section">
@@ -388,6 +403,18 @@
   </div>
   <div class="dlg-foot">
     <button type="button" class="btn" id="history-close" data-i18n="common.close">閉じる</button>
+  </div>
+</dialog>
+
+<!-- 事務所からのお知らせの一覧 -->
+<dialog id="dlg-notices">
+  <div class="dlg-body">
+    <div class="dlg-title" data-i18n="office.title">お知らせ</div>
+    <div id="notice-list"></div>
+    <p class="note" id="notice-stale"></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn" id="notices-close" data-i18n="common.close">閉じる</button>
   </div>
 </dialog>
 

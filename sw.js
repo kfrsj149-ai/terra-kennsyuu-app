@@ -45,7 +45,7 @@ async function toCacheable(response) {
     headers: response.headers,
   });
 }
-const VERSION = 'terra-kennsyuu-v11';
+const VERSION = 'terra-kennsyuu-v12';
 const CACHE = `${VERSION}`;
 
 const SHELL = [
@@ -67,6 +67,7 @@ const SHELL = [
   './src/js/i18n.js',
   './src/js/csv.js',
   './src/js/lots.js',
+  './src/js/office-rules.js',
   './src/js/feedback.js',
   './src/js/voice.js',
   './src/js/subscription.js',
@@ -119,6 +120,10 @@ self.addEventListener('fetch', (event) => {
   // サブスク確認用のサーバーレス関数もキャッシュしない。
   // 古い「有効」の返事を返してしまうと、解約後も使えてしまう。
   if (url.pathname.startsWith('/api/')) return;
+
+  // 事務所端末の画面はオンライン専用で、キャッシュしない。
+  // 圏外のとき現場アプリの画面が代わりに出ると、事務員が混乱するため。
+  if (url.pathname.startsWith('/office/')) return;
 
   /*
    * 画面遷移。圏外のときは

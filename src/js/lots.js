@@ -14,7 +14,7 @@
  */
 
 /** ロット1つを作る。entries には径級ごとの入力（取消も残す）が入る */
-export function newLot({ id, species, lengthM, minD, maxD, site = '' }) {
+export function newLot({ id, species, lengthM, minD, maxD, site = '', siteId = null }) {
   return {
     id: id ?? `lot-${Math.random().toString(36).slice(2, 10)}`,
     species: String(species ?? '').trim(),
@@ -22,6 +22,7 @@ export function newLot({ id, species, lengthM, minD, maxD, site = '' }) {
     minD: Number(minD),
     maxD: Number(maxD),
     site: String(site ?? ''),
+    siteId: siteId || null,         // 事務所の現場台帳のID。台帳に無い名前なら null（記録は止めない）
     entries: [],
   };
 }
@@ -39,7 +40,7 @@ export function normalizeTicket(ticket) {
     const active = Number.isInteger(ticket.activeLot) && ticket.activeLot >= 0 && ticket.activeLot < n ? ticket.activeLot : 0;
     return active === ticket.activeLot ? ticket : { ...ticket, activeLot: active };
   }
-  const { species, lengthM, minD, maxD, site, entries, ...rest } = ticket;
+  const { species, lengthM, minD, maxD, site, siteId, entries, ...rest } = ticket;
   return {
     ...rest,
     lots: [{
@@ -49,6 +50,7 @@ export function normalizeTicket(ticket) {
       minD: Number(minD),
       maxD: Number(maxD),
       site: site ?? '',
+      siteId: siteId ?? null,
       entries: entries ?? [],
     }],
     activeLot: 0,

@@ -96,6 +96,35 @@ export function verifyToken(token) {
   }
 }
 
+/**
+ * 用途ごとに鍵を分けた署名（事務所端末のログイン札など）。
+ * ライセンスコードと同じ LICENSE_SECRET から、用途名を混ぜて別の鍵を作る。
+ * こうしておくと、ライセンスコードをログイン札として使い回すことができない。
+ */
+const purposeKey = (purpose) => createHmac('sha256', licenseSecret()).update(`purpose:${purpose}`).digest();
+
+export function signPayload(purpose, payload) {
+  const body = b64url(JSON.stringify(payload));
+  const mac = b64url(createHmac('sha256', purposeKey(purpose)).update(body).digest());
+  return `${body}.${mac}`;
+}
+
+/** @returns {object|null} 署名が合わない・壊れているなら null */
+export function verifyPayload(purpose, token) {
+  if (typeof token !== 'string' || !token.includes('.')) return null;
+  const [body, mac] = token.split('.');
+  if (!body || !mac) return null;
+  const expected = b64url(createHmac('sha256', purposeKey(purpose)).update(body).digest());
+  const a = Buffer.from(mac);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    return JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+}
+
 /* ------------------------------------------------------------------
  * サブスクリプションの状態をアプリが使う形に直す
  * ------------------------------------------------------------------ */

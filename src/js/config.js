@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'TERRA 検収',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v11',
+  cacheVersion: 'terra-kennsyuu-v12',
 
   /** 機能の初期値（メニューで利用者が切り替えられる） */
   features: {
@@ -47,6 +47,7 @@ export const CONFIG = {
     activate: './api/activate',
     verify: './api/verify',
     portal: './api/portal',
+    office: './api/office',
   },
 
   /** サブスク確認まわりの猶予設定 */

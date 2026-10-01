@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#1f6b2d">
+<title>TERRA 事務所</title>
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/src/css/tokens.css">
+<link rel="stylesheet" href="/office/office.css">
+</head>
+<body>
+
+<!-- ========== ログイン ========== -->
+<main id="login" hidden>
+  <div class="login-card">
+    <h1>TERRA 事務所</h1>
+    <p class="lead">現場から届いた検収データを見る・納入枠やお知らせを現場に送る、事務所用の画面です。</p>
+
+    <form id="login-form" class="stack">
+      <label>ライセンスコード
+        <textarea id="in-code" rows="3" autocomplete="off" spellcheck="false" required></textarea>
+      </label>
+      <p class="hint">現場アプリの ☰ メニュー →「サブスクリプション」の「ライセンスコード」でコピーできます。</p>
+      <label>事務所コード（12文字）
+        <input id="in-office-code" type="text" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" required>
+      </label>
+      <button type="submit" class="btn primary">ログイン</button>
+    </form>
+
+    <details class="first-time">
+      <summary>はじめて使う（事務所の初期設定）</summary>
+      <p class="hint">会社で最初に1回だけ行います。<b>最初に設定した人が、事務所の管理者</b>になります。
+        現場の人にライセンスコードを配る前に、事務所の方が設定してください。</p>
+      <form id="setup-form" class="stack">
+        <label>ライセンスコード
+          <textarea id="in-setup-code" rows="3" autocomplete="off" spellcheck="false" required></textarea>
+        </label>
+        <button type="submit" class="btn">事務所の画面をつくる</button>
+      </form>
+    </details>
+    <p id="login-error" class="error" role="alert"></p>
+  </div>
+</main>
+
+<!-- ========== 本体 ========== -->
+<div id="app" hidden>
+  <header class="top">
+    <h1>TERRA 事務所</h1>
+    <nav id="tabs" aria-label="メニュー">
+      <button type="button" data-tab="tickets">便</button>
+      <button type="button" data-tab="quotas">納入枠</button>
+      <button type="button" data-tab="notices">お知らせ</button>
+      <button type="button" data-tab="sites">現場</button>
+      <button type="button" data-tab="inbox">受信箱</button>
+      <button type="button" data-tab="settings">設定</button>
+    </nav>
+  </header>
+  <main id="view"></main>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="/office/office.js"></script>
+</body>
+</html>
