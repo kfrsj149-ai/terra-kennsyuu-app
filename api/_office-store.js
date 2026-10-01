@@ -56,19 +56,23 @@ export function upstashStore(url, token) {
     del: (key) => cmd(['DEL', key]),
     mget: async (keys) => (keys.length ? cmd(['MGET', ...keys]) : []),
     hget: (key, field) => cmd(['HGET', key, field]),
+    hmget: async (key, fields) => (fields.length ? cmd(['HMGET', key, ...fields]) : []),
     hgetall: async (key) => pairs(await cmd(['HGETALL', key])),
     hset: (key, field, value) => cmd(['HSET', key, field, value]),
     hdel: (key, field) => cmd(['HDEL', key, field]),
     zadd: (key, score, member) => cmd(['ZADD', key, String(score), member]),
     zrem: (key, member) => cmd(['ZREM', key, member]),
+    zcard: async (key) => Number(await cmd(['ZCARD', key])),
     /** スコアの大きい順に、min〜max の範囲で offset から limit 件のメンバーを返す */
     zrevrangebyscore: (key, max, min, offset, limit) =>
       cmd(['ZREVRANGEBYSCORE', key, String(max), String(min), 'LIMIT', String(offset), String(limit)]),
-    /** 回数を1増やして返す。初回のときだけ有効期限を付ける */
+    /**
+     * 回数を1増やして返す。有効期限は、先に「無ければ作る（NX）」で付けておく。
+     * 数える→期限を付ける の順だと、その間に落ちたとき期限のない回数が残り、ロックが永久に解けなくなるため
+     */
     incr: async (key, ttlSec) => {
-      const n = Number(await cmd(['INCR', key]));
-      if (n === 1 && ttlSec) await cmd(['EXPIRE', key, String(ttlSec)]);
-      return n;
+      if (ttlSec) await cmd(['SET', key, '0', 'NX', 'EX', String(ttlSec)]);
+      return Number(await cmd(['INCR', key]));
     },
   };
 }
@@ -97,11 +101,13 @@ export function memoryStore(now = Date.now) {
     async del(key) { const had = kv.delete(key); hashes.delete(key); zsets.delete(key); return had ? 1 : 0; },
     async mget(keys) { return keys.map((k) => { const e = kv.get(k); return alive(e) ? e.v : null; }); },
     async hget(key, field) { return hashes.get(key)?.get(field) ?? null; },
+    async hmget(key, fields) { const h = hashes.get(key); return fields.map((f) => h?.get(f) ?? null); },
     async hgetall(key) { return Object.fromEntries(hashes.get(key) ?? []); },
     async hset(key, field, value) { hash(key).set(field, String(value)); return 1; },
     async hdel(key, field) { return hash(key).delete(field) ? 1 : 0; },
     async zadd(key, score, member) { zset(key).set(member, Number(score)); return 1; },
     async zrem(key, member) { return zset(key).delete(member) ? 1 : 0; },
+    async zcard(key) { return zsets.get(key)?.size ?? 0; },
     async zrevrangebyscore(key, max, min, offset, limit) {
       const hi = max === '+inf' ? Infinity : Number(max);
       const lo = min === '-inf' ? -Infinity : Number(min);

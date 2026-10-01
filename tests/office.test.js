@@ -17,7 +17,9 @@ const { createOffice } = await import('../api/_office-core.js');
 const { memoryStore } = await import('../api/_office-store.js');
 const { formatVolume } = await import('../src/js/jas.js');
 
-function setupEnv({ active = new Set(['sub_A', 'sub_B']) } = {}) {
+const EMAILS = { cus_A: 'owner-a@example.com', cus_B: 'owner-b@example.com', cus_C: 'owner-c@example.com' };
+
+function setupEnv({ active = new Set(['sub_A', 'sub_B']), limits } = {}) {
   const clock = { t: Date.UTC(2026, 9, 5, 0, 0, 0) };     // 2026-10-05 09:00 JST
   const store = memoryStore(() => clock.t);
   const stripeDown = { v: false };
@@ -25,6 +27,8 @@ function setupEnv({ active = new Set(['sub_A', 'sub_B']) } = {}) {
     store,
     now: () => clock.t,
     isSubscriptionActive: async (id) => { if (stripeDown.v) throw new Error('down'); return active.has(id); },
+    getCustomerEmail: async (p) => EMAILS[p.c] ?? null,
+    limits,
   });
   const call = async (body) => (await office.handle(body));
   const ok = async (body) => {
@@ -46,7 +50,7 @@ const codeA = lib.signToken({ s: 'sub_A', c: 'cus_A' });
 const codeB = lib.signToken({ s: 'sub_B', c: 'cus_B' });
 
 async function companyWithOffice(env, code) {
-  const s = await env.ok({ op: 'office.setup', code });
+  const s = await env.ok({ op: 'office.setup', code, email: EMAILS[lib.verifyToken(code).c] });
   return { token: s.token, officeCode: s.officeCode, cid: s.companyId, code };
 }
 
@@ -75,23 +79,23 @@ test('知らない操作は400、大きすぎる本体は413', async () => {
 
 test('初期設定：事務所コードは一度だけ表示され、二度目の設定はできない', async () => {
   const env = setupEnv();
-  const s = await env.ok({ op: 'office.setup', code: codeA });
+  const s = await env.ok({ op: 'office.setup', code: codeA, email: EMAILS.cus_A });
   assert.match(s.officeCode, /^[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}-[0-9A-HJKMNP-TV-Z]{4}$/);
   assert.match(s.companyId, /^[0-9A-HJKMNP-TV-Z]{8}$/);
-  await env.err({ op: 'office.setup', code: codeA }, 'already_setup');
+  await env.err({ op: 'office.setup', code: codeA, email: EMAILS.cus_A }, 'already_setup');
 });
 
 test('初期設定：偽のライセンスコード・無効なサブスクは通らない', async () => {
   const env = setupEnv();
-  await env.err({ op: 'office.setup', code: codeA.slice(0, -2) + 'xx' }, 'invalid_code');
-  await env.err({ op: 'office.setup', code: 'でたらめ' }, 'invalid_code');
+  await env.err({ op: 'office.setup', code: codeA.slice(0, -2) + 'xx', email: EMAILS.cus_A }, 'invalid_code');
+  await env.err({ op: 'office.setup', code: 'でたらめ', email: EMAILS.cus_A }, 'invalid_code');
   const dead = lib.signToken({ s: 'sub_dead', c: 'cus_dead' });
-  await env.err({ op: 'office.setup', code: dead }, 'subscription_inactive', 402);
+  await env.err({ op: 'office.setup', code: dead, email: 'x@example.com' }, 'subscription_inactive', 402);
 });
 
 test('サーバーには事務所コードの平文を残さない', async () => {
   const env = setupEnv();
-  const s = await env.ok({ op: 'office.setup', code: codeA });
+  const s = await env.ok({ op: 'office.setup', code: codeA, email: EMAILS.cus_A });
   const raw = await env.store.get(`co:${s.companyId}:auth`);
   assert.ok(!raw.includes(s.officeCode.replaceAll('-', '')));
   assert.match(raw, /"hash":"[0-9a-f]{64}"/);
@@ -483,4 +487,177 @@ test('入力に混じった制御文字は取り除かれる', async () => {
   const co = await companyWithOffice(env, codeA);
   const n = (await env.ok({ op: 'notice.put', token: co.token, notice: { kind: 'info', body: 'こんにちは\u0000\u0007世界' } })).notice;
   assert.equal(n.body, 'こんにちは世界');
+});
+
+/* ================================================================
+ * セキュリティ点検（2026-10-01）で見つかった問題の再発防止
+ * ================================================================ */
+test('【点検A】ライセンスコードだけを知る運転手は、事務所の初期設定を先取りできない', async () => {
+  const env = setupEnv();
+  await env.err({ op: 'office.setup', code: codeA }, 'bad_email');                                            // メールなし（違うものとして数える）
+  await env.err({ op: 'office.setup', code: codeA, email: 'driver@example.com' }, 'bad_email');            // 当てずっぽう
+  // 本人（購入時のメール）は、大文字小文字・全角・前後の空白の違いがあっても設定できる
+  const s = await env.ok({ op: 'office.setup', code: codeA, email: '  Owner-A＠Example.com ' });
+  assert.ok(s.officeCode);
+});
+
+test('【点検A】メールアドレスの当てずっぽうは、回数でロックされる', async () => {
+  const env = setupEnv();
+  for (let i = 0; i < 7; i += 1) await env.err({ op: 'office.setup', code: codeA, email: `g${i}@example.com` }, 'bad_email');
+  await env.err({ op: 'office.setup', code: codeA, email: 'g8@example.com' }, 'locked', 429);
+  await env.err({ op: 'office.setup', code: codeA, email: EMAILS.cus_A }, 'locked', 429);          // ロック中は本人でも待つ
+  env.clock.t += 16 * 60 * 1000;
+  await env.ok({ op: 'office.setup', code: codeA, email: EMAILS.cus_A });
+});
+
+test('【点検A】購入時のメールが登録されていない契約は、初期設定できない（安全側）', async () => {
+  const env = setupEnv();
+  const noMail = lib.signToken({ s: 'sub_A', c: 'cus_nomail' });
+  await env.err({ op: 'office.setup', code: noMail, email: 'a@example.com' }, 'no_email');
+});
+
+test('【点検A】事務所コードをなくしても、契約者本人はメールで復旧できる。古い札・コードは無効になる', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.err({ op: 'office.recover', code: codeA, email: 'driver@example.com' }, 'bad_email');
+  await env.err({ op: 'office.recover', code: codeB, email: EMAILS.cus_B }, 'office_not_set_up');          // 設定していない会社
+  const r = await env.ok({ op: 'office.recover', code: codeA, email: EMAILS.cus_A });
+  assert.notEqual(r.officeCode, co.officeCode);
+  assert.equal(r.companyId, co.cid);                                                                      // 同じ事業体のまま（データは残る）
+  await env.err({ op: 'site.list', token: co.token }, 'unauthorized', 401);
+  await env.err({ op: 'office.login', code: codeA, officeCode: co.officeCode }, 'bad_office_code');
+  await env.ok({ op: 'site.list', token: r.token });
+  await env.ok({ op: 'office.login', code: codeA, officeCode: r.officeCode });
+});
+
+test('【点検A・E】運転手が事務所コードを間違え続けて締め出しても、本人はメールで復旧して入れる', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  for (let i = 0; i < 8; i += 1) await env.call({ op: 'office.login', code: codeA, officeCode: 'AAAA-AAAA-AAAA' });
+  await env.err({ op: 'office.login', code: codeA, officeCode: co.officeCode }, 'locked', 429);
+  const r = await env.ok({ op: 'office.recover', code: codeA, email: EMAILS.cus_A });
+  await env.ok({ op: 'site.list', token: r.token });
+  await env.ok({ op: 'office.login', code: codeA, officeCode: r.officeCode });                          // 復旧でロックも解ける
+});
+
+test('【点検B】1社が保存できる便の数・1分あたりの送信数・1便の大きさに上限がある', async () => {
+  const env = setupEnv({ limits: { maxTickets: 3, putsPerMinute: 5 } });
+  await companyWithOffice(env, codeA);
+  for (let i = 1; i <= 3; i += 1) await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: `tk-${i}000`, ticketNo: String(i) }) });
+  await env.err({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-4000', ticketNo: '4' }) }, 'limit_reached');
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-1000', ticketNo: '1', note: '再送は件数に数えない' }) });
+  await env.err({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-1000' }) }, 'rate_limited', 429);
+  env.clock.t += 61_000;
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-1000' }) });
+});
+
+test('【点検B】極端に大きい便は受け付けない', async () => {
+  const env = setupEnv();
+  await companyWithOffice(env, codeA);
+  const big = ticket();
+  big.lots = Array.from({ length: 20 }, (_, i) => ({
+    species: `樹種${i}`, lengthM: '4.00', minD: 6, maxD: 72, site: '', siteId: null,
+    rows: Array.from({ length: 80 }, (__, j) => ({ d: 6 + j, n: 99999, volNum: '9'.repeat(30) })),
+  }));
+  await env.err({ op: 'ticket.put', code: codeA, ticket: big }, 'too_large', 413);
+  const manyLots = ticket(); manyLots.lots = Array.from({ length: 21 }, () => lotOf('スギ', 1));
+  await env.err({ op: 'ticket.put', code: codeA, ticket: manyLots }, 'invalid');
+});
+
+test('【点検B】枠の集計で読む便が多すぎるときは、黙って落とさず truncated を返す', async () => {
+  const env = setupEnv({ limits: { scan: 2 } });
+  const co = await companyWithOffice(env, codeA);
+  const q = (await env.ok({ op: 'quota.put', token: co.token, quota: { destination: '秋田プライウッド', amount: '100', from: '2026-10-01', to: '2026-10-31' } })).quota;
+  for (let i = 1; i <= 3; i += 1) await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: `tk-${i}000`, ticketNo: String(i), lots: [lotOf('スギ', 1)] }) });
+  assert.equal((await env.ok({ op: 'quota.list', token: co.token })).usage[q.id].truncated, true);
+});
+
+test('【点検C】伝票番号に日付などの大きな数を入れても、別の日の便として扱われない', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-big1', dateStr: '2026-10-05', ticketNo: '20261005' }) });
+  const day5 = (await env.ok({ op: 'ticket.list', token: co.token, from: '2026-10-05', to: '2026-10-05' })).tickets.map((t) => t.id);
+  const day25 = (await env.ok({ op: 'ticket.list', token: co.token, from: '2026-10-25', to: '2026-10-25' })).tickets.map((t) => t.id);
+  assert.deepEqual(day5, ['tk-big1']);
+  assert.deepEqual(day25, []);
+});
+
+test('【点検F】配列の中身が null でも 500 にならず invalid を返す。存在しない日付・年は通らない', async () => {
+  const env = setupEnv();
+  await companyWithOffice(env, codeA);
+  const nullLot = ticket(); nullLot.lots = [null];
+  const nullRow = ticket(); nullRow.lots[0].rows = [null];
+  await env.err({ op: 'ticket.put', code: codeA, ticket: nullLot }, 'invalid', 200);
+  await env.err({ op: 'ticket.put', code: codeA, ticket: nullRow }, 'invalid', 200);
+  for (const d of ['2026-02-31', '2026-13-01', '2026-04-31', '1999-12-31', '2101-01-01']) {
+    await env.err({ op: 'ticket.put', code: codeA, ticket: ticket({ dateStr: d }) }, 'invalid');
+  }
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-leap', dateStr: '2028-02-29' }) });   // うるう日は通る
+});
+
+test('【点検F】一覧の offset・limit に変な値が来ても、エラーにならず既定値で動く', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
+  for (const v of ['Infinity', 1.5, -1, 'abc', null, 1e30]) {
+    const r = await env.ok({ op: 'ticket.list', token: co.token, offset: v, limit: v });
+    assert.ok(Array.isArray(r.tickets));
+  }
+});
+
+test('【点検F】お知らせの日時も、存在しない日付・時刻は通らない', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  for (const from of ['2026-02-31', '2026-10-05T25:00', '2026-10-05T10:60']) {
+    await env.err({ op: 'notice.put', token: co.token, notice: { kind: 'info', body: 'x', from } }, 'invalid');
+  }
+  await env.ok({ op: 'notice.put', token: co.token, notice: { kind: 'info', body: 'x', from: '2026-10-05T23:59' } });
+});
+
+test('【点検G】Stripeの返事の種類で扱いを分ける（404は無効・設定ミスは猶予なし・通信障害だけ猶予）', async () => {
+  const store = memoryStore();
+  const clock = { t: Date.UTC(2026, 9, 5) };
+  const office = createOffice({ store, now: () => clock.t, getCustomerEmail: async (p) => EMAILS[p.c] });
+  const stripe = { mode: 'ok' };
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (stripe.mode === 'ok') return { ok: true, status: 200, json: async () => ({ id: 'sub_A', status: 'active', customer: 'cus_A', items: { data: [{ current_period_end: 1822102566 }] } }) };
+    const status = { notfound: 404, unauthorized: 401, down: 503, network: 0 }[stripe.mode];
+    if (status === 0) throw new Error('network');
+    return { ok: false, status, json: async () => ({ error: { message: 'x' } }) };
+  };
+  try {
+    const call = async (body) => (await office.handle(body)).payload;
+    const s = await call({ op: 'office.setup', code: codeA, email: EMAILS.cus_A });
+    assert.equal(s.ok, true, JSON.stringify(s));
+    const expire = () => { clock.t += 2 * 3600_000; };                     // 確認結果のキャッシュ（1時間）を切らす
+
+    stripe.mode = 'down'; expire();
+    assert.equal((await call({ op: 'feed', code: codeA })).ok, true, '5xx：最近有効だったので猶予で通す');
+    stripe.mode = 'network'; expire();
+    assert.equal((await call({ op: 'feed', code: codeA })).ok, true, '通信エラー：猶予で通す');
+    stripe.mode = 'unauthorized'; expire();
+    assert.equal((await call({ op: 'feed', code: codeA })).error, 'subscription_unverified', '401（鍵の誤り）：猶予を与えない');
+    stripe.mode = 'notfound'; expire();
+    assert.equal((await call({ op: 'feed', code: codeA })).error, 'subscription_inactive', '404（契約が無い）：無効');
+    stripe.mode = 'ok'; expire();
+    assert.equal((await call({ op: 'feed', code: codeA })).ok, true);
+  } finally { globalThis.fetch = original; }
+});
+
+test('【点検H】工場の検収値は便とは別に保存され、現場からの再送・削除と競合しない', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
+  await env.ok({ op: 'ticket.setFactory', token: co.token, id: 'tk-0001', volume: '5' });
+  // 便の本体を直接読んでも、工場の値は入っていない（別の場所にある）
+  const raw = JSON.parse(await env.store.get(`co:${co.cid}:t:tk-0001`));
+  assert.equal('factoryNum' in raw, false);
+  // 再送しても消えない
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ note: '再送' }) });
+  assert.equal(formatVolume(BigInt((await env.ok({ op: 'ticket.list', token: co.token })).tickets[0].factoryNum)), '5.000');
+  // 便を削除して同じIDで送り直しても、昔の工場の値は引き継がれない
+  await env.ok({ op: 'ticket.delete', token: co.token, id: 'tk-0001' });
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
+  assert.equal((await env.ok({ op: 'ticket.list', token: co.token })).tickets[0].factoryNum, null);
 });

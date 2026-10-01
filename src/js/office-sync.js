@@ -103,7 +103,7 @@ export async function flush() {
         queue = queue.filter((x) => x !== id);
         await kvSet(QUEUE, queue);
         await setMeta({ lastSyncAt: Date.now(), error: null });
-      } else if (r.error === 'invalid' || r.error === 'too_long') {
+      } else if (r.error === 'invalid' || r.error === 'too_long' || r.error === 'too_large') {
         // この便は事務所に受け付けてもらえない（形の問題）。いつまでも再送せず、待ち行列から外して知らせる
         queue = queue.filter((x) => x !== id);
         await kvSet(QUEUE, queue);

@@ -37,7 +37,25 @@
         <label>ライセンスコード
           <textarea id="in-setup-code" rows="3" autocomplete="off" spellcheck="false" required></textarea>
         </label>
+        <label>購入時に登録したメールアドレス
+          <input id="in-setup-email" type="email" autocomplete="email" required>
+        </label>
+        <p class="hint">契約者ご本人かどうかを確かめるために使います（運転手さんなど、ライセンスコードだけを知っている人は設定できません）。</p>
         <button type="submit" class="btn">事務所の画面をつくる</button>
+      </form>
+    </details>
+
+    <details class="first-time">
+      <summary>事務所コードをなくした</summary>
+      <p class="hint">契約者ご本人であれば、新しい事務所コードを受け取れます。古いコードと、ログイン済みのすべての端末は使えなくなります。</p>
+      <form id="recover-form" class="stack">
+        <label>ライセンスコード
+          <textarea id="in-recover-code" rows="3" autocomplete="off" spellcheck="false" required></textarea>
+        </label>
+        <label>購入時に登録したメールアドレス
+          <input id="in-recover-email" type="email" autocomplete="email" required>
+        </label>
+        <button type="submit" class="btn">新しい事務所コードを受け取る</button>
       </form>
     </details>
     <p id="login-error" class="error" role="alert"></p>

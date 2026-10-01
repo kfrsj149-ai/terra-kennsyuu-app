@@ -37,7 +37,11 @@ const SESSION_MS = 30 * DAY_MS;          // 事務所端末のログインが続
 const LOCK_MAX = 8;                      // 事務所コードを間違えてよい回数
 const LOCK_SEC = 15 * 60;
 const USAGE_CACHE_SEC = 60;
-const MAX_TICKETS_SCAN = 2000;
+const MAX_TICKETS_SCAN = 2000;           // 1つの枠の集計で読む便の上限（超えたら「一部が含まれていません」と知らせる）
+const MGET_CHUNK = 200;
+const MAX_TICKETS_PER_COMPANY = 15_000;  // 1社が保存できる便の数（共有の保存先を、1社が使い切らないため）
+const MAX_TICKET_BYTES = 12_000;         // 1便の大きさ（実際の便は1〜3KB）
+const MAX_PUTS_PER_MINUTE = 120;         // 1社が1分間に送れる便の数
 
 /** 画面の操作に対する「想定内の失敗」。HTTP 200 で ok:false を返す */
 class Fail extends Error {
@@ -98,20 +102,36 @@ const digits = (v, field) => {
   if (!/^\d{1,30}$/.test(s)) throw fail('invalid', { field });
   return s;
 };
+/** 実在する日付か（2026-02-31 のような、月末をはみ出す日付は通さない）。年は 2000〜2100 */
+const isRealDate = (s) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s && d.getUTCFullYear() >= 2000 && d.getUTCFullYear() <= 2100;
+};
 const dateStr = (v, field, required = true) => {
   const s = clean(v);
   if (!s && !required) return '';
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(new Date(`${s}T00:00`).getTime())) throw fail('invalid', { field });
+  if (!isRealDate(s)) throw fail('invalid', { field });
   return s;
 };
 const whenStr = (v, field) => {
   const s = clean(v);
   if (!s) return '';
-  if (!/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/.test(s) || Number.isNaN(new Date(s.length === 10 ? `${s}T00:00` : s).getTime())) throw fail('invalid', { field });
+  const m = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}):(\d{2}))?$/.exec(s);
+  if (!m || !isRealDate(m[1]) || (m[2] !== undefined && (Number(m[2]) > 23 || Number(m[3]) > 59))) throw fail('invalid', { field });
   return s;
 };
+/** 0以上の整数だけを通す（Infinity・小数・負数・文字は既定値に戻す） */
+const nonNegInt = (v, fallback, max) => {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 ? Math.min(n, max) : fallback;
+};
 const dayKey = (ds) => Number(ds.replaceAll('-', ''));                 // 20261001
-const ticketScore = (ds, ticketNo) => dayKey(ds) * 1_000_000 + (Number(String(ticketNo).replace(/\D/g, '')) || 0);
+/**
+ * 便の並び順のキー（日付→伝票番号）。伝票番号は6桁までに丸める。
+ * 丸めないと、番号に日付などを手入力したとき、桁が日付の部分にあふれて別の日の便として扱われる。
+ */
+const ticketScore = (ds, ticketNo) => dayKey(ds) * 1_000_000 + Math.min(Number(String(ticketNo).replace(/\D/g, '').slice(0, 6)) || 0, 999_999);
 
 /* ==================================================================
  * 本体
@@ -121,8 +141,11 @@ const ticketScore = (ds, ticketNo) => dayKey(ds) * 1_000_000 + (Number(String(ti
  * @param {import('./_office-store.js').Store|null} deps.store
  * @param {() => number} [deps.now]
  * @param {(subId:string) => Promise<boolean>} [deps.isSubscriptionActive]
+ * @param {(payload:{s:string,c:string|null}) => Promise<string|null>} [deps.getCustomerEmail] 購入時のメールアドレス（本人確認用）
+ * @param {{maxTickets?:number, putsPerMinute?:number, scan?:number}} [deps.limits] 上限（テストで小さくするため差し替え可能）
  */
-export function createOffice({ store, now = () => Date.now(), isSubscriptionActive = defaultIsActive }) {
+export function createOffice({ store, now = () => Date.now(), isSubscriptionActive = defaultIsActive, getCustomerEmail = defaultCustomerEmail, limits = {} }) {
+  const LIM = { maxTickets: MAX_TICKETS_PER_COMPANY, putsPerMinute: MAX_PUTS_PER_MINUTE, scan: MAX_TICKETS_SCAN, ...limits };
   /* ---------------- サブスクの確認（キャッシュつき） ---------------- */
   async function ensureSubscription(cid, subId) {
     const ck = key(cid, `sub:${subId}`);
@@ -134,9 +157,10 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     let active;
     try {
       active = await isSubscriptionActive(subId);
-    } catch {
-      // Stripeに繋がらない。最近まで有効だったなら通す（現場を止めない）
-      if (cached?.active && now() - cached.checkedAt < SUB_STALE_OK_MS) return;
+    } catch (err) {
+      // Stripeに繋がらない（通信エラー・Stripe側の障害）。最近まで有効だったなら通す（現場を止めない）。
+      // 設定ミスなど「待っても直らない」エラーのときは、猶予を与えない
+      if (!err?.permanent && cached?.active && now() - cached.checkedAt < SUB_STALE_OK_MS) return;
       throw fail('subscription_unverified', {}, 503);
     }
     await store.set(ck, JSON.stringify({ active, checkedAt: now() }), 40 * 86400);
@@ -166,6 +190,27 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   const issueToken = (cid, epoch) => signPayload('office', { cid, ep: epoch, x: now() + SESSION_MS });
 
   /* ---------------- 初期設定・ログイン ---------------- */
+  /**
+   * 契約者本人であることの確認。ライセンスコードは運転手も持っているので、それだけでは
+   * 事務所の初期設定・復旧はできないようにする（先に設定されて社長が入れなくなるのを防ぐ）。
+   * もう1つの鍵として、購入時にStripeへ登録したメールアドレスを使う。
+   * 間違いが続いたら15分止める（メールアドレスの当てずっぽうを防ぐ）。
+   */
+  async function verifyOwnerEmail(payload, email) {
+    const failKey = `mailfail:${licKey(payload)}`;
+    if (Number(await store.get(failKey) ?? 0) >= LOCK_MAX) throw fail('locked', { retryAfterSec: LOCK_SEC }, 429);
+    let registered;
+    try { registered = await getCustomerEmail(payload); } catch { throw fail('subscription_unverified', {}, 503); }
+    if (!registered) throw fail('no_email');
+    const a = Buffer.from(String(email ?? '').normalize('NFKC').trim().toLowerCase());
+    const b = Buffer.from(String(registered).normalize('NFKC').trim().toLowerCase());
+    if (a.length !== b.length || a.length === 0 || !timingSafeEqual(a, b)) {
+      const n = await store.incr(failKey, LOCK_SEC);
+      throw fail(n >= LOCK_MAX ? 'locked' : 'bad_email', n >= LOCK_MAX ? { retryAfterSec: LOCK_SEC } : { triesLeft: LOCK_MAX - n }, n >= LOCK_MAX ? 429 : 200);
+    }
+    await store.del(failKey);
+  }
+
   async function setup(body) {
     const payload = verifyToken(String(body.code ?? '').trim());
     if (!payload) throw fail('invalid_code');
@@ -173,6 +218,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     let active;
     try { active = await isSubscriptionActive(payload.s); } catch { throw fail('subscription_unverified', {}, 503); }
     if (!active) throw fail('subscription_inactive', {}, 402);
+    await verifyOwnerEmail(payload, body.email);
 
     let cid = null;
     for (let i = 0; i < 10 && !cid; i += 1) {
@@ -192,6 +238,27 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       throw fail('already_setup');
     }
     await store.set(key(cid, 'sub:' + payload.s), JSON.stringify({ active: true, checkedAt: now() }), 40 * 86400);
+    return { companyId: cid, officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
+  }
+
+  /**
+   * 事務所コードをなくしたとき（どの端末も入れないとき）の復旧。
+   * 契約者本人（ライセンスコード＋購入時のメールアドレス）だけが、新しい事務所コードを受け取れる。
+   * 古い事務所コードとログイン済みの端末は、すべて無効になる。
+   */
+  async function recover(body) {
+    const payload = verifyToken(String(body.code ?? '').trim());
+    if (!payload) throw fail('invalid_code');
+    const cid = await store.get(licKey(payload));
+    if (!cid) throw fail('office_not_set_up');
+    await ensureSubscription(cid, payload.s);
+    await verifyOwnerEmail(payload, body.email);
+    const old = parseJson(await store.get(key(cid, 'auth')));
+    const raw = randomChars(12);
+    const salt = randomBytes(16).toString('hex');
+    const auth = { salt, hash: hashCode(raw, salt), epoch: (old?.epoch ?? 0) + 1, createdAt: now() };
+    await store.set(key(cid, 'auth'), JSON.stringify(auth));
+    await store.del(key(cid, 'fail'));
     return { companyId: cid, officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
   }
 
@@ -308,7 +375,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   async function siteUnlinked(body) {
     const { cid } = await officeCtx(body);
     const sites = await loadSites(cid);
-    const tickets = await recentTickets(cid, MAX_TICKETS_SCAN);
+    const tickets = await recentTickets(cid, LIM.scan);
     const seen = new Map();
     for (const t of tickets) {
       for (const lot of t.lots) {
@@ -325,28 +392,49 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   }
 
   /* ---------------- 便（伝票） ---------------- */
-  async function recentTickets(cid, limit, { fromKey = 0, toKey = 99_999_999_999_999, offset = 0 } = {}) {
+  /**
+   * 便を新しい順に読む。工場の検収値は別の場所（factory）に持っていて、ここで合わせる。
+   * 別に持つのは、現場からの再送（便の書き込み）と、事務所の入力（工場の値）が同時に起きても、
+   * お互いを上書きしないため。
+   * @returns {Promise<{tickets:Array, truncated:boolean}>}
+   */
+  async function readTickets(cid, limit, { fromKey = 0, toKey = 99_999_999_999_999, offset = 0 } = {}) {
     const ids = await store.zrevrangebyscore(key(cid, 'tidx'), toKey, fromKey, offset, limit);
-    if (!ids.length) return [];
-    const rows = await store.mget(ids.map((id) => key(cid, `t:${id}`)));
-    return rows.map((r) => parseJson(r)).filter(Boolean);
+    const tickets = [];
+    for (let i = 0; i < ids.length; i += MGET_CHUNK) {
+      const part = ids.slice(i, i + MGET_CHUNK);
+      const rows = await store.mget(part.map((id) => key(cid, `t:${id}`)));
+      const factory = await store.hmget(key(cid, 'factory'), part);
+      rows.forEach((r, j) => {
+        const t = parseJson(r);
+        if (!t) return;
+        const f = parseJson(factory[j]);
+        t.factoryNum = f?.num ?? null;
+        t.factoryAt = f?.at ?? null;
+        tickets.push(t);
+      });
+    }
+    return { tickets, truncated: ids.length >= limit };
   }
+  const recentTickets = async (cid, limit, range) => (await readTickets(cid, limit, range)).tickets;
 
-  function cleanTicket(input, previous) {
+  function cleanTicket(input) {
     if (!input || typeof input !== 'object') throw fail('invalid', { field: 'ticket' });
     const id = clean(input.id);
     if (!/^[A-Za-z0-9_-]{4,64}$/.test(id)) throw fail('invalid', { field: 'id' });
     const lotsIn = Array.isArray(input.lots) ? input.lots : [];
-    if (!lotsIn.length || lotsIn.length > 50) throw fail('invalid', { field: 'lots' });
+    if (!lotsIn.length || lotsIn.length > 20) throw fail('invalid', { field: 'lots' });
 
     let totalCount = 0;
     let totalVol = 0n;
     const lots = lotsIn.map((l, i) => {
+      if (!l || typeof l !== 'object') throw fail('invalid', { field: `lots[${i}]` });
       const rowsIn = Array.isArray(l.rows) ? l.rows : [];
-      if (rowsIn.length > 200) throw fail('invalid', { field: `lots[${i}].rows` });
+      if (rowsIn.length > 80) throw fail('invalid', { field: `lots[${i}].rows` });
       let count = 0;
       let vol = 0n;
       const rows = rowsIn.map((r, j) => {
+        if (!r || typeof r !== 'object') throw fail('invalid', { field: `lots[${i}].rows[${j}]` });
         const n = intIn(r.n, 0, 100000, `lots[${i}].rows[${j}].n`);
         const v = digits(r.volNum, `lots[${i}].rows[${j}].volNum`);
         count += n; vol += BigInt(v);
@@ -380,20 +468,19 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       lots,
       totalCount,
       totalVolNum: totalVol.toString(),
-      // 工場の検収値は事務所が入れるもの。現場から再送されても消さない
-      factoryNum: previous?.factoryNum ?? null,
-      factoryAt: previous?.factoryAt ?? null,
     };
   }
 
   async function ticketPut(body) {
     const { cid } = await memberCtx(body);
-    const id = clean(body.ticket?.id);
-    const previous = /^[A-Za-z0-9_-]{4,64}$/.test(id) ? parseJson(await store.get(key(cid, `t:${id}`))) : null;
-    const ticket = cleanTicket(body.ticket, previous);
-    if (previous && previous.dateStr !== ticket.dateStr) await store.zrem(key(cid, 'tidx'), ticket.id);
+    // 1社が短時間に大量に送る・保存先を使い切るのを防ぐ（正常な使い方では届かない上限）
+    if (await store.incr(key(cid, 'rate'), 60) > LIM.putsPerMinute) throw fail('rate_limited', {}, 429);
+    const ticket = cleanTicket(body.ticket);
+    if (JSON.stringify(ticket).length > MAX_TICKET_BYTES) throw fail('too_large', { max: MAX_TICKET_BYTES }, 413);
+    const isNew = (await store.get(key(cid, `t:${ticket.id}`))) === null;
+    if (isNew && (await store.zcard(key(cid, 'tidx'))) >= LIM.maxTickets) throw fail('limit_reached');
     await store.set(key(cid, `t:${ticket.id}`), JSON.stringify(ticket));
-    await store.zadd(key(cid, 'tidx'), ticketScore(ticket.dateStr, ticket.ticketNo), ticket.id);
+    await store.zadd(key(cid, 'tidx'), ticketScore(ticket.dateStr, ticket.ticketNo), ticket.id);   // 日付が変わった再送は、同じidのスコアが更新される
     await store.del(key(cid, 'usage'));
     return { id: ticket.id };
   }
@@ -402,8 +489,8 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const { cid } = await officeCtx(body);
     const from = body.from ? dateStr(body.from, 'from') : null;
     const to = body.to ? dateStr(body.to, 'to') : null;
-    const limit = Math.min(200, Math.max(1, Number(body.limit) || 100));
-    const offset = Math.max(0, Number(body.offset) || 0);
+    const limit = Math.max(1, nonNegInt(body.limit, 100, 200));
+    const offset = nonNegInt(body.offset, 0, 100_000);
     const tickets = await recentTickets(cid, limit + 1, {
       fromKey: from ? dayKey(from) * 1_000_000 : 0,
       toKey: to ? dayKey(to) * 1_000_000 + 999_999 : 99_999_999_999_999,
@@ -415,16 +502,19 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   async function ticketSetFactory(body) {
     const { cid } = await officeCtx(body);
     const id = clean(body.id);
+    if (!/^[A-Za-z0-9_-]{4,64}$/.test(id)) throw fail('not_found');
     const t = parseJson(await store.get(key(cid, `t:${id}`)));
     if (!t) throw fail('not_found');
     const text = clean(body.volume);
-    if (text === '') { t.factoryNum = null; t.factoryAt = null; } else {
+    if (text === '') {
+      await store.hdel(key(cid, 'factory'), id);
+      t.factoryNum = null; t.factoryAt = null;
+    } else {
       const num = parseM3(text);
       if (num === null) throw fail('invalid', { field: 'volume' });
-      t.factoryNum = num.toString();
-      t.factoryAt = now();
+      t.factoryNum = num.toString(); t.factoryAt = now();
+      await store.hset(key(cid, 'factory'), id, JSON.stringify({ num: t.factoryNum, at: t.factoryAt }));
     }
-    await store.set(key(cid, `t:${id}`), JSON.stringify(t));
     await store.del(key(cid, 'usage'));
     return { ticket: t };
   }
@@ -434,6 +524,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const id = clean(body.id);
     await store.del(key(cid, `t:${id}`));
     await store.zrem(key(cid, 'tidx'), id);
+    await store.hdel(key(cid, 'factory'), id);
     await store.del(key(cid, 'usage'));
     return {};
   }
@@ -503,7 +594,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
 
     const usage = {};
     for (const q of quotas) {
-      const tickets = await recentTickets(cid, MAX_TICKETS_SCAN, {
+      const { tickets, truncated } = await readTickets(cid, LIM.scan, {
         fromKey: dayKey(q.from) * 1_000_000,
         toKey: dayKey(q.to) * 1_000_000 + 999_999,
       });
@@ -524,6 +615,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       usage[q.id] = {
         confirmedNum: confirmed.toString(), estimatedNum: estimated.toString(),
         confirmedTickets, estimatedTickets,
+        truncated,                 // 便が多すぎて一部を数えていない（画面に警告を出す）
       };
     }
     await store.set(key(cid, 'usage'), JSON.stringify(usage), USAGE_CACHE_SEC);
@@ -646,7 +738,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
 
   /* ---------------- 振り分け ---------------- */
   const OPS = {
-    'office.setup': setup, 'office.login': login, 'office.link': link, 'office.resetCode': resetCode,
+    'office.setup': setup, 'office.recover': recover, 'office.login': login, 'office.link': link, 'office.resetCode': resetCode,
     'feed': feed, 'image.get': imageGet,
     'ticket.put': ticketPut, 'ticket.list': ticketList, 'ticket.setFactory': ticketSetFactory, 'ticket.delete': ticketDelete,
     'site.list': siteList, 'site.put': sitePut, 'site.unlinked': siteUnlinked,
@@ -677,7 +769,27 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   return { handle, OPS };
 }
 
+/**
+ * Stripeの返事を「有効／無効／確認できない」に分ける。
+ *   404（その契約は存在しない）  → 無効。猶予は与えない
+ *   401・403・400（鍵や設定の誤り）→ 確認できない（permanent）。待っても直らないので猶予も与えない
+ *   通信エラー・429・5xx          → 確認できない（一時的）。最近まで有効だったなら猶予で通す
+ */
 async function defaultIsActive(subId) {
-  const sub = await stripeGet(`/subscriptions/${encodeURIComponent(subId)}`);
-  return describeSubscription(sub).status === 'active';
+  try {
+    const sub = await stripeGet(`/subscriptions/${encodeURIComponent(subId)}`);
+    return describeSubscription(sub).status === 'active';
+  } catch (err) {
+    const status = err?.httpStatus;
+    if (status === 404) return false;
+    if (status && status >= 400 && status < 500 && status !== 429) err.permanent = true;
+    throw err;
+  }
+}
+
+/** 購入時にStripeへ登録されたメールアドレス（契約者本人の確認用）。無ければ null */
+async function defaultCustomerEmail(payload) {
+  if (!payload.c) return null;
+  const customer = await stripeGet(`/customers/${encodeURIComponent(payload.c)}`);
+  return customer?.email ?? null;
 }

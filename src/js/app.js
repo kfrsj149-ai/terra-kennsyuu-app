@@ -956,7 +956,7 @@ async function openHistory() {
     const icon = ticket.syncState === 'synced' ? '✅' : '☁️';
     const syncLabel = ticket.syncState === 'synced' ? t('history.synced') : t('history.pending');
     el.innerHTML = `
-      <div class="head"><span>${ticket.dateStr} No.${ticket.ticketNo}</span><span>${icon}</span></div>
+      <div class="head"><span>${esc(ticket.dateStr)} No.${esc(ticket.ticketNo)}</span><span>${icon}</span></div>
       ${ticket.lots.map((lot) => `<div class="sub">${esc(lot.species)} / ${formatLength(toHundredths(lot.lengthM))}m / ${lot.minD}-${lot.maxD}cm${ticket.lots.length > 1 && lot.site ? ` / ${esc(lot.site)}` : ''}</div>`).join('')}
       <div class="sub">${totalCount} ${t('measure.unitCount')} / ${formatVolume(totalVolume)} m³ · ${syncLabel}</div>`;
     const btn = document.createElement('button');

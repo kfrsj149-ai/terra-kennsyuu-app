@@ -33,9 +33,9 @@ async function serveApi(req, res, name) {
     const { createOffice } = await import(new URL('../api/_office-core.js', import.meta.url));
     const { memoryStore } = await import(new URL('../api/_office-store.js', import.meta.url));
     const mod = await import(new URL('../api/office.js', import.meta.url));
-    mod.__setOfficeForTests(createOffice({ store: memoryStore(), isSubscriptionActive: async () => true }));
+    mod.__setOfficeForTests(createOffice({ store: memoryStore(), isSubscriptionActive: async () => true, getCustomerEmail: async () => 'dev@example.com' }));
     globalThis.__officeDevReady = true;
-    console.log('事務所API: 開発モード（メモリ保存。再起動で消えます）');
+    console.log('事務所API: 開発モード（メモリ保存・購入時メールは dev@example.com。再起動で消えます）');
   }
   const mod = await import(new URL(`../api/${name}.js`, import.meta.url)).catch(() => null);
   if (!mod?.default) {

@@ -9,7 +9,7 @@
  */
 import { formatVolume, formatLength, toHundredths } from '../src/js/jas.js';
 import {
-  windowStatus, noticeState, blocksUnloading, findSiteByName, nameKey, normalizeName, parseM3, dateKey,
+  windowStatus, noticeState, blocksUnloading, findSiteByName, nameKey, normalizeName, parseM3, dateKey, csvCell,
 } from '../src/js/office-rules.js';
 
 const STORE_KEY = 'terra-office';
@@ -117,13 +117,17 @@ function explain(e) {
     case 'already_setup': return 'この契約は、すでに事務所の初期設定が済んでいます。事務所コードでログインしてください。';
     case 'invalid_code': return 'ライセンスコードが正しくありません。コピーし直してください。';
     case 'bad_office_code': return `事務所コードが違います（あと${e.info.triesLeft}回でロックされます）。`;
-    case 'locked': return '間違いが続いたため、15分間ログインできません。';
+    case 'locked': return '間違いが続いたため、15分間ログインできません。事務所コードをなくした場合は、メールアドレスでの復旧もお試しください。';
     case 'subscription_inactive': return 'サブスクリプションが有効ではありません。';
     case 'subscription_unverified': return '契約の状態を確認できませんでした。少し待ってからやり直してください。';
     case 'license_in_use': return 'そのライセンスコードは、別の事業体につながっています。';
     case 'name_taken': return `その名前は、すでに現場「${e.info.with?.name ?? ''}」として登録されています（名前・別名のどちらかが同じです）。`;
     case 'too_long': return `${field}が長すぎます。`;
-    case 'too_large': return '写真が大きすぎます。';
+    case 'too_large': return '大きすぎて受け付けられません。';
+    case 'bad_email': return `メールアドレスが、購入時に登録されたものと違います（あと${e.info.triesLeft}回でロックされます）。`;
+    case 'no_email': return '購入時のメールアドレスを確認できませんでした。サポートへご連絡ください。';
+    case 'rate_limited': return '短い時間にたくさん送られたため、少し待ってからやり直してください。';
+    case 'limit_reached': return '保存できる便の数の上限に達しました。古い便を削除してください。';
     case 'in_use': return '枠かお知らせで使っている写真は消せません。';
     case 'not_found': return '見つかりませんでした。画面を開き直してください。';
     case 'invalid': return `${field}の入力を確認してください。`;
@@ -320,7 +324,7 @@ function groupSummary(tickets) {
 
 function csvOfTickets(tickets) {
   const head = ['日付', '伝票番号', '車番', '納入先', '現場', '樹種', '納入規格(cm)', '規格長(m)', '径級(cm)', '本数', '小計材積(m³)', '便の合計材積(m³)', '工場の検収材積(m³)', 'メモ'];
-  const esc = (v) => { const s = String(v ?? ''); return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s; };
+  const esc = csvCell;   // 先頭が = + - @ の文字は、Excelに数式として実行されないよう ' を付ける
   const lines = [head.map(esc).join(',')];
   for (const t of [...tickets].sort((a, b) => (a.dateStr + a.ticketNo < b.dateStr + b.ticketNo ? -1 : 1))) {
     for (const l of t.lots) {
@@ -474,6 +478,7 @@ function quotaCard(q) {
       h('i', { class: 'estimated', style: `width:${Math.min(pct(estimated), 100 - pct(confirmed))}%` })),
     h('div', { class: 'muted' },
       `枠 ${q.amount} m³　／　確定 ${formatVolume(confirmed)}（工場の値・${u.confirmedTickets}便）＋ 見込み ${formatVolume(estimated)}（現場の値・${u.estimatedTickets}便）`),
+    u.truncated ? h('div', { class: 'error' }, '⚠ 便が多すぎて、一部が集計に含まれていません。期間を短く区切ってください。') : null,
     q.status === 'active' ? h('div', { class: `window ${win.open ? 'open' : 'shut'}` }, win.open ? '● ' : '○ ', winText) : null,
     q.note ? h('p', {}, q.note) : null,
     h('div', { class: 'card-actions' },
@@ -865,10 +870,23 @@ function wireLogin() {
     $('#login-error').textContent = '';
     try {
       const code = $('#in-setup-code').value.trim();
-      const r = await api('office.setup', { code }, { as: 'none' });
+      const r = await api('office.setup', { code, email: $('#in-setup-email').value }, { as: 'none' });
       state.token = r.token; state.code = code; saveLogin();
       await showApp();
       showOfficeCode(r.officeCode, '事務所の準備ができました');
+    } catch (e) { $('#login-error').textContent = explain(e); } finally { btn.disabled = false; }
+  });
+
+  $('#recover-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const btn = ev.submitter; btn.disabled = true;
+    $('#login-error').textContent = '';
+    try {
+      const code = $('#in-recover-code').value.trim();
+      const r = await api('office.recover', { code, email: $('#in-recover-email').value }, { as: 'none' });
+      state.token = r.token; state.code = code; saveLogin();
+      await showApp();
+      showOfficeCode(r.officeCode, '新しい事務所コード');
     } catch (e) { $('#login-error').textContent = explain(e); } finally { btn.disabled = false; }
   });
 
@@ -881,9 +899,11 @@ async function boot() {
   // スマホ用のログインリンク（#t=…）。札はサーバーに送られない部分（#以降）に入れてある
   const m = /^#t=([\w.-]+)$/.exec(location.hash);
   if (m) {
-    state.token = m[1];
+    const linkToken = m[1];
     history.replaceState(null, '', location.pathname);
-    saveLogin();
+    // 他人が作ったリンクを開かされて、知らない事務所に入ってしまうのを防ぐため、必ず確認する
+    const adopt = await confirmDialog('ログイン用のリンクが開かれました。ご自身が「設定」でコピーして送ったリンクですか？ 心当たりがなければ「やめる」を押してください。', 'このリンクでログインする');
+    if (adopt) { state.token = linkToken; saveLogin(); }
   }
   if (!state.token) { showLogin(); return; }
   try {

@@ -8,6 +8,7 @@
 import { t } from './i18n.js';
 import { formatVolume, formatLength, toHundredths, volumeNumerator, quantizeNumerator, diameterRange } from './jas.js';
 import { normalizeTicket } from './lots.js';
+import { csvCell } from './office-rules.js';
 
 /**
  * 合計材積の丸め方針。ここ1か所を変えれば画面もCSVも同時に切り替わる。
@@ -111,10 +112,7 @@ export function totalsOf(entries, lengthM) {
   return { count, volume };
 }
 
-function escapeCell(value) {
-  const s = String(value ?? '');
-  return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
-}
+const escapeCell = csvCell;
 
 /**
  * 伝票をCSV文字列にする。

@@ -168,3 +168,31 @@ test('納入先に合う枠だけを返す（表記ゆれ吸収・期間外と�
   assert.deepEqual(quotasFor(feed, '', at(2026, 10, 5)), []);
   assert.deepEqual(quotasFor(null, '工場'), []);
 });
+
+import { csvCell } from '../src/js/office-rules.js';
+import { buildCsv } from '../src/js/csv.js';
+
+test('【点検D】CSVの先頭が = + - @ のセルは、Excelに数式として実行されないよう文字にする', () => {
+  assert.equal(csvCell('=HYPERLINK("http://evil","x")'), '"\'=HYPERLINK(""http://evil"",""x"")"');
+  assert.equal(csvCell('+1+1'), "'+1+1");
+  assert.equal(csvCell('-2'), "'-2");
+  assert.equal(csvCell('@SUM(A1)'), "'@SUM(A1)");
+  assert.equal(csvCell('\tcmd'), "'\tcmd");
+  // 普通の文字・数値・空は変えない
+  assert.equal(csvCell('本谷'), '本谷');
+  assert.equal(csvCell(0.32), '0.32');
+  assert.equal(csvCell('0.320'), '0.320');
+  assert.equal(csvCell(null), '');
+  assert.equal(csvCell('a,b'), '"a,b"');
+});
+
+test('【点検D】現場アプリのCSVも同じ対策を通る（備考・車番・現場・樹種）', () => {
+  const entries = [{ id: 'a', ts: 1, d: 20, source: 'tap', cancelled: false }];
+  const csv = buildCsv({ dateStr: '2026-10-05', ticketNo: '001', truck: '=cmd|\' /C calc\'!A0', note: '@memo', species: '+スギ', lengthM: '4.00', minD: 14, maxD: 30, site: '-本谷', entries });
+  const row = csv.trim().split('\r\n')[1];
+  assert.ok(row.includes("'=cmd"), row);
+  assert.ok(row.includes("'@memo"));
+  assert.ok(row.includes("'+スギ"));
+  assert.ok(row.includes("'-本谷"));
+  assert.ok(!/(^|,)[=+@-]/.test(row.replaceAll('2026-10-05', 'D')), row);
+});

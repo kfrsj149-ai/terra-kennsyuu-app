@@ -214,3 +214,19 @@ export function quotasFor(feed, destination, now = new Date()) {
 /** お知らせが納入を止める「いま」の状態か（納入先の指定がなければ全体向けだけを見る） */
 export const isBlocked = (notices, destination, now = new Date()) =>
   noticesFor(notices, destination, now).some(blocksUnloading);
+
+/* ------------------------------------------------------------------
+ * CSV（Excelで開く前提）
+ * ------------------------------------------------------------------ */
+/**
+ * CSVの1セル分の文字列にする。
+ * ・カンマ・引用符・改行を含むなら "…" で囲む
+ * ・先頭が = + - @ タブ 復帰 のセルは、Excelが「数式」として実行してしまう（CSVインジェクション）。
+ *   運転手が備考欄などに入れた文字で事務員のPCが操作されないよう、先頭に ' を付けて文字として扱わせる。
+ *   数値のセルは、先頭が - になることがないので、この処理を通しても変わらない。
+ */
+export function csvCell(value) {
+  let s = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\r\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+}
