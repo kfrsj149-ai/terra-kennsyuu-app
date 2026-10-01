@@ -50,13 +50,14 @@ async function api(op, args = {}, { auth = true } = {}) {
     res = await fetch('/api/ops', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   } catch { throw new ApiError('offline'); }
   const json = await res.json().catch(() => ({ ok: false, error: 'server_error' }));
-  if (res.status === 401 && auth) { logout('ログインの有効期限が切れました。'); throw new ApiError('unauthorized'); }
+  if (res.status === 401 && auth) { state.token = ''; try { sessionStorage.removeItem(STORE_KEY); } catch { /* 無視 */ } showLogin('ログインの有効期限が切れました。'); throw new ApiError('unauthorized'); }
   if (!json.ok) throw new ApiError(json.error ?? 'server_error', json);
   return json;
 }
 
 const MESSAGES = {
   offline: '通信できません。', not_configured: '保存先（Upstash）が未設定です。', ops_not_configured: '運営者の鍵（環境変数 OPERATOR_KEY・24文字以上）が未設定です。',
+  no_consent: 'この会社は現行の同意文に同意していないため、生データは閲覧できません。', not_found: '見つかりません（事務所が設定されていない会社です）。',
   bad_key: '鍵が違います。', locked: '間違いが続いたため、15分間ログインできません。', invalid: '入力を確認してください。', server_error: 'サーバーでエラーが起きました。',
 };
 const explain = (e) => (e instanceof ApiError ? (MESSAGES[e.code] ?? `失敗しました（${e.code}）`) : '予期しないエラーです。');
@@ -114,25 +115,30 @@ async function renderTickets(offset = 0) {
 
 /* ---------------- 匿名化エクスポート ---------------- */
 function renderExport() {
-  const mode = h('select', {}, h('option', { value: 'aggregate' }, '集計（月×樹種×長さ×径級）'), h('option', { value: 'records' }, '個別（仮名の会社つき・1行ずつ）'));
-  const from = h('input', { type: 'date' }); const to = h('input', { type: 'date' });
+  const mode = h('select', {}, h('option', { value: 'aggregate' }, '集計（月×樹種×長さ×径級）'), h('option', { value: 'records' }, '個別（書き出しごとに変わる仮名の会社つき・1行ずつ）'));
+  const from = h('input', { type: 'month' }); const to = h('input', { type: 'month' });
   const k = h('input', { type: 'number', min: 3, max: 100, value: 3 });
   const out = h('div', {});
   let last = null;
 
-  const run = () => guard(async () => {
+  const run = (refresh = false) => guard(async () => {
     out.replaceChildren(h('p', { class: 'muted' }, '作成中…'));
-    const r = await api('ops.export', { mode: mode.value, from: from.value || undefined, to: to.value || undefined, k: Number(k.value) });
+    const r = await api('ops.export', { mode: mode.value, from: from.value || undefined, to: to.value || undefined, k: Number(k.value), refresh });
     last = r;
     const keys = r.rows[0] ? Object.keys(r.rows[0]) : [];
     out.replaceChildren(
       h('div', { class: 'card' },
-        h('p', {}, `${r.meta.rows.toLocaleString()} 行（含めた会社 ${r.meta.companiesIncluded} 社／同意が現行版でないため除外 ${r.meta.companiesExcludedNoConsent} 社／k=${r.meta.k} 未満で出さなかった組み合わせ ${r.meta.suppressedGroups}）`),
+        h('p', {}, `${r.meta.rows.toLocaleString()} 行（期間 ${r.meta.from}〜${r.meta.to}／含めた会社 ${r.meta.companiesIncluded} 社／同意が現行版でないため除外 ${r.meta.companiesExcludedNoConsent} 社／出さなかった組み合わせ ${r.meta.suppressedGroups}）`),
+        r.meta.frozen ? h('p', { class: 'hint' }, '同じ条件の書き出しは、前回作った結果を（凍結したまま）表示しています。期間をずらした書き出しの差から個別の便が推測されるのを防ぐためです。') : null,
+        r.meta.freezeSkipped ? h('p', { class: 'error' }, '⚠ 大きすぎて凍結できませんでした。同じ条件でも、次回は結果が変わることがあります。') : null,
         h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn primary', disabled: !r.rows.length, onclick: () => {
           const head = keys.join(',');
           download(`terra-anonymized-${r.meta.mode}-${new Date(r.meta.generatedAt).toISOString().slice(0, 10)}.csv`,
             `﻿${[head, ...r.rows.map((row) => keys.map((key) => csvCell(row[key])).join(','))].join('\r\n')}\r\n`);
-        } }, 'CSVをダウンロード'))),
+        } }, 'CSVをダウンロード'),
+          h('button', { type: 'button', class: 'btn sm', onclick: () => {
+            if (confirm('作り直します。遅れて届いた便が入り、前回の結果との差から個別の便が推測される可能性があります。第三者へ渡した書き出しがある場合は、作り直さないでください。作り直しは閲覧記録に残ります。続けますか？')) run(true);
+          } }, '作り直す'))),
       r.rows.length ? h('div', { class: 'table-wrap', style: 'margin-top:12px' }, h('table', {},
         h('thead', {}, h('tr', {}, keys.map((x) => h('th', {}, x)))),
         h('tbody', {}, r.rows.slice(0, 100).map((row) => h('tr', {}, keys.map((key) => h('td', {}, String(row[key])))))))) : h('div', { class: 'empty' }, '条件に合うデータがありません（会社が少ない場合は出ません）。'),
@@ -142,10 +148,11 @@ function renderExport() {
   setView('export',
     h('h2', {}, '匿名化エクスポート'),
     h('div', { class: 'card stack' },
-      h('p', { class: 'hint' }, '会社名・車番・現場名・納入先・備考・伝票番号・正確な日付は含めません。会社は鍵付きの仮名にし、関わった会社がk社未満の組み合わせは出しません（kは3未満にできません）。現行の同意文に同意した会社のデータだけを使います。'),
-      h('p', { class: 'hint' }, '※ これは個人情報保護法の「匿名加工情報」の基準を満たすことまでは保証しません。第三者へ販売・提供する前に、専門家に確認してください。'),
+      h('p', { class: 'hint' }, '会社名・車番・現場名・納入先・備考・伝票番号・正確な日付（月まで）は含めません。会社は書き出しごとに変わる鍵付きの仮名にします。関わった会社がk社未満の組み合わせ、および1社の寄与が8割を超える組み合わせは出しません（kは3未満にできません）。現行の同意文に同意した会社のデータだけを使います。'),
+      h('p', { class: 'hint' }, '期間は月単位で、確定した過去の月だけです（いまの月は含まれません）。同じ条件の再書き出しは、凍結した同じ結果を返します。'),
+      h('p', { class: 'hint' }, '※ 仮名は、運営者が鍵と会社一覧を持っていれば元に戻せます（第三者に渡すときの保護です）。また、個人情報保護法の「匿名加工情報」の基準を満たすことまでは保証しません。第三者へ販売・提供する前に、専門家に確認してください。'),
       h('label', {}, '種類', mode),
-      h('div', { class: 'grid2' }, h('label', {}, '期間（から）', from), h('label', {}, '（まで）', to)),
+      h('div', { class: 'grid2' }, h('label', {}, '期間（から・月）', from), h('label', {}, '（まで・月）', to)),
       h('label', {}, '最小の会社数 k（3以上）', k),
       h('div', {}, h('button', { type: 'button', class: 'btn primary', onclick: run }, '作成する'))),
     out);
@@ -180,6 +187,8 @@ function showLogin(message = '') {
   $('#app').hidden = true; $('#login').hidden = false; $('#login-error').textContent = message;
 }
 function logout(message = '') {
+  // サーバー側でも札を無効にする（失敗しても画面は閉じる）
+  if (state.token) api('ops.logout').catch(() => {});
   state.token = '';
   try { sessionStorage.removeItem(STORE_KEY); } catch { /* 無視 */ }
   showLogin(message);

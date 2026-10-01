@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'TERRA 検収',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v13',
+  cacheVersion: 'terra-kennsyuu-v14',
 
   /** 機能の初期値（メニューで利用者が切り替えられる） */
   features: {

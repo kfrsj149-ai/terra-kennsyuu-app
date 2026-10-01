@@ -7,28 +7,43 @@
  *       事務所の初期設定のとき（同意文の版 CONSENT_VERSION）に利用者の同意を得ている。
  *
  * 【守っていること】
- *   ・閲覧専用。会社のデータを書き換える操作は1つもない（書くのは閲覧記録だけ）
- *   ・認証は環境変数 OPERATOR_KEY（24文字以上）。未設定なら機能全体が無効
- *   ・すべての閲覧・書き出しを閲覧記録（ops:audit:YYYYMM）に残す
- *   ・扱うのは、現行の同意文に同意している会社のデータだけ（書き出し）。閲覧画面は、同意がなくても
- *     「存在する」ことだけは会社一覧に出す（同意が欠けた会社を運営者が把握できるように）
- *   ・匿名化の書き出しでは、会社名・車番・現場名・納入先・備考・伝票番号・正確な日付を含めない。
- *     会社は鍵付きの仮名（運営者にも元に戻せない）に置き換え、会社数が少ない組み合わせは出さない（k匿名）
+ *   ・閲覧専用。会社のデータを書き換える操作はない（書くのは閲覧記録・ログインの試行回数・書き出しの凍結だけ）
+ *   ・認証は環境変数 OPERATOR_KEY（24文字以上）。未設定なら機能全体が無効。ログインの試行はIPごと・全体で数え、
+ *     数えてから照合する（並列に送っても回数を超えて試せない）。失敗・ロックも閲覧記録に残す
+ *   ・すべての閲覧・書き出しを閲覧記録（ops:audit:YYYYMM）に残す。記録→返却の順なので、記録できなければ何も返さない
+ *   ・生データの閲覧も、書き出しも、現行の同意文に同意している会社だけ
+ *   ・札はサーバー側で失効できる（ops.logout）。鍵を変えても全部失効する
  *
- * 注意：ここでの「匿名化」は、個々の便と会社を結びつけにくくする処理であって、個人情報保護法の
- * 「匿名加工情報」の基準を満たすことまでは保証しない。第三者へ販売・提供する前に、必ず専門家に確認すること。
+ * 【匿名化の書き出しで守っていること】
+ *   ・含めない：会社名・車番・現場名・納入先・備考・伝票番号・便ID・正確な日付（月まで）
+ *   ・k匿名：関わった会社がk社（3以上）未満の組み合わせは出さない。さらに、1社の寄与が8割を超える組み合わせも出さない（優位性）
+ *   ・期間は「確定した過去の月」だけを月単位で受け付ける。同じ条件の再書き出しは、凍結した同じ結果を返す
+ *     （期間を少しずつずらしたり、時点を変えて2回書き出して引き算すると、特定の1社・1日分が復元できてしまうため）。
+ *     作り直す（refresh）と凍結が更新され、その旨が閲覧記録に残る
+ *   ・会社は、書き出しごとに変わる鍵付きの仮名にする。別々の書き出し同士を結合できない
+ *
+ * 【できないこと・限界（正直に）】
+ *   ・仮名は、運営者が鍵（LICENSE_SECRET）と会社一覧を持っていれば、再計算して元の会社に結びつけられる。
+ *     つまり個別モードは「匿名」ではなく「仮名化」であり、運営者に対する匿名性はない。第三者へ渡すときの保護である
+ *   ・同じ人が複数の契約（複数の事業体）を作って会社数を水増しすることは、システムでは見分けられない
+ *   ・個人情報保護法の「匿名加工情報」の基準を満たすことまでは保証しない。第三者へ販売・提供する前に、必ず専門家に確認すること
+ *   ・閲覧記録は、同じ保存先（Upstash）の認証情報を持つ人なら消せる。APIの上では消す操作がない、という意味である
  */
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { signPayload, verifyPayload } from './_lib.js';
 import { key, parseJson, readTicketsFrom, dayRangeKeys, isDateString } from './_office-core.js';
 import { CONSENT_VERSION, isValidId, normalizeName } from '../src/js/office-rules.js';
 import { formatVolume, formatLength, toHundredths } from '../src/js/jas.js';
 
-const LOCK_MAX = 8;
+const LOCK_MAX = 8;                      // 1つのIPが15分に試せる回数
+const GLOBAL_LOCK_MAX = 200;             // 全体で15分に試せる回数（IPを変えて試し続けるのを止める）
 const LOCK_SEC = 15 * 60;
 const SESSION_MS = 12 * 3600 * 1000;
 const MIN_KEY_LENGTH = 24;
 const MIN_K = 3;
+const DOMINANCE = 0.8;                   // 1社の寄与がこの割合を超える組み合わせは出さない
+const SNAPSHOT_MAX = 900_000;            // 凍結した結果の保存サイズ上限（圧縮後）
 const PER_COMPANY_LIMIT = 15_000;
 const AUDIT_KEEP = 300;
 
@@ -58,49 +73,78 @@ export function createOps({
   /** 鍵を変えたら、発行済みの札がすべて無効になるよう、札の用途名に鍵の指紋を混ぜる */
   const purpose = (k) => `operator:${sha(k).toString('hex').slice(0, 16)}`;
 
+  const isMonth = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(String(m)) && Number(String(m).slice(0, 4)) >= 2000 && Number(String(m).slice(0, 4)) <= 2100;
+  /** UTCで見た「いまの月」の前の月。いまの月は未確定なので、書き出しの対象にしない */
+  const lastCompletedMonth = () => {
+    const d = new Date(now());
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 7);
+  };
+  const monthEnd = (m) => { const [y, mo] = m.split('-').map(Number); return `${m}-${String(new Date(Date.UTC(y, mo, 0)).getUTCDate()).padStart(2, '0')}`; };
+
   /* ---------------- 閲覧記録 ---------------- */
-  const auditKey = (t) => `ops:audit:${new Date(t).toISOString().slice(0, 7).replace('-', '')}`;
+  const monthKey = (y, m0) => `ops:audit:${y}${String(m0 + 1).padStart(2, '0')}`;      // m0 は 0〜11
+  const auditKey = (t) => { const d = new Date(t); return monthKey(d.getUTCFullYear(), d.getUTCMonth()); };
   async function audit(op, detail = {}) {
     const t = now();
     await store.hset(auditKey(t), `${t}-${Math.random().toString(36).slice(2, 7)}`, JSON.stringify({ at: t, op, ...detail }));
   }
 
   /* ---------------- 認証 ---------------- */
-  async function login(body) {
+  const ipId = (ip) => sha(String(ip ?? 'unknown')).toString('hex').slice(0, 12);     // 記録には、IPそのものでなく指紋だけを残す
+
+  async function login(body, ctx = {}) {
     const k = configuredKey();
     if (!k) throw fail('ops_not_configured');
-    if (Number(await store.get('ops:fail') ?? 0) >= LOCK_MAX) throw fail('locked', { retryAfterSec: LOCK_SEC }, 429);
-    const given = sha(String(body.key ?? ''));
-    if (!timingSafeEqual(given, sha(k))) {
-      const n = await store.incr('ops:fail', LOCK_SEC);
-      throw fail(n >= LOCK_MAX ? 'locked' : 'bad_key', n >= LOCK_MAX ? { retryAfterSec: LOCK_SEC } : {}, n >= LOCK_MAX ? 429 : 200);
+    // 先に回数を数え、その結果で止める（確認してから数えると、並列に送られたとき回数を超えて試せてしまう）
+    const who = ipId(ctx.ip);
+    const ipKey = `ops:fail:ip:${who}`;
+    const nIp = await store.incr(ipKey, LOCK_SEC);
+    const nAll = await store.incr('ops:fail:all', LOCK_SEC);
+    if (nIp > LOCK_MAX || nAll > GLOBAL_LOCK_MAX) {
+      if (nIp === LOCK_MAX + 1 || nAll === GLOBAL_LOCK_MAX + 1) await audit('ops.login.locked', { ip: who });
+      throw fail('locked', { retryAfterSec: LOCK_SEC }, 429);
     }
-    await store.del('ops:fail');
-    await audit('ops.login');
-    return { token: signPayload(purpose(k), { x: now() + SESSION_MS }) };
+    if (!timingSafeEqual(sha(String(body.key ?? '')), sha(k))) {
+      await audit('ops.login.failed', { ip: who });
+      throw fail('bad_key');
+    }
+    await store.del(ipKey);
+    await audit('ops.login', { ip: who });
+    const epoch = Number(await store.get('ops:epoch') ?? 0);
+    return { token: signPayload(purpose(k), { x: now() + SESSION_MS, ep: epoch }) };
   }
 
-  function requireOperator(body) {
+  async function requireOperator(body) {
     const k = configuredKey();
     if (!k) throw fail('ops_not_configured');
     const tok = verifyPayload(purpose(k), String(body.token ?? ''));
-    if (!tok || !(tok.x > now())) throw fail('unauthorized', {}, 401);
+    if (!tok || !(tok.x > now()) || tok.ep !== Number(await store.get('ops:epoch') ?? 0)) throw fail('unauthorized', {}, 401);
+  }
+
+  /** すべての札を無効にする（ログアウト。盗まれた札の無効化にも使える） */
+  async function logout(body) {
+    await requireOperator(body);
+    await store.incr('ops:epoch');
+    await audit('ops.logout');
+    return {};
   }
 
   /* ---------------- 会社一覧 ---------------- */
   async function companies(body) {
-    requireOperator(body);
+    await requireOperator(body);
     const index = await store.hgetall('companies');
     const list = [];
     for (const [cid, raw] of Object.entries(index)) {
       if (!isValidId(cid)) continue;
       const meta = parseJson(raw, {});
       const consent = parseJson(await store.get(key(cid, 'consent')));
-      const { tickets: latest } = await readTicketsFrom(store, cid, 1);
+      const consentOk = consent?.version === CONSENT_VERSION;
+      // 現行の同意がない会社は、存在と件数だけ。便の中身（会社名を含む）は見ない
+      const latest = consentOk ? (await readTicketsFrom(store, cid, 1)).tickets : [];
       list.push({
         id: cid,
         createdAt: meta.createdAt ?? null,
-        consentOk: consent?.version === CONSENT_VERSION,
+        consentOk,
         consentVersion: consent?.version ?? null,
         tickets: await store.zcard(key(cid, 'tidx')),
         latestDate: latest[0]?.dateStr ?? null,
@@ -114,8 +158,15 @@ export function createOps({
 
   /* ---------------- 生データの閲覧 ---------------- */
   async function tickets(body) {
-    requireOperator(body);
+    await requireOperator(body);
     if (!isValidId(body.cid)) throw fail('invalid', { field: 'cid' });
+    // 同意が現行版でない会社の生データは閲覧しない（利用者が同意した範囲でだけ見る）
+    const consent = parseJson(await store.get(key(body.cid, 'consent')));
+    if (!consent) throw fail('not_found');                  // 事務所を設定していない（存在しない）会社
+    if (consent.version !== CONSENT_VERSION) {
+      await audit('ops.tickets.denied', { cid: body.cid, reason: 'no_consent' });
+      throw fail('no_consent');
+    }
     const from = body.from ? (isDateString(body.from) ? body.from : (() => { throw fail('invalid', { field: 'from' }); })()) : null;
     const to = body.to ? (isDateString(body.to) ? body.to : (() => { throw fail('invalid', { field: 'to' }); })()) : null;
     const limit = Math.min(200, Math.max(1, Number.isInteger(Number(body.limit)) ? Number(body.limit) : 100));
@@ -126,35 +177,64 @@ export function createOps({
   }
 
   /* ---------------- 匿名化した書き出し ---------------- */
-  /** 会社を鍵付きのハッシュで仮名にする。同じ会社は常に同じ仮名になるが、鍵がなければ元に戻せない */
-  const pseudonym = (cid) => `c_${createHmac('sha256', String(pseudonymSecret() ?? '')).update(`export-pseudonym-v1:${cid}`).digest('hex').slice(0, 10)}`;
+  /**
+   * 会社を鍵付きのハッシュで仮名にする。書き出しごとに salt が変わるので、別々の書き出し同士は結合できない。
+   * （運営者が鍵と会社一覧を持てば再計算できるので、運営者に対する匿名性はない。第三者へ渡すときの保護）
+   */
+  const pseudonym = (cid, salt = '') => `c_${createHmac('sha256', String(pseudonymSecret() ?? '')).update(`export-pseudonym-v2:${salt}:${cid}`).digest('hex').slice(0, 10)}`;
+
+  /** 1つの組み合わせ（セル）を出してよいか。会社がk社以上で、1社の寄与が8割以下 */
+  const publishable = (contrib, k) => {
+    const total = [...contrib.values()].reduce((a, b) => a + b, 0);
+    const max = Math.max(...contrib.values());
+    return contrib.size >= k && total > 0 && max / total <= DOMINANCE;
+  };
 
   async function exportData(body) {
-    requireOperator(body);
+    await requireOperator(body);
     const mode = body.mode === 'records' ? 'records' : 'aggregate';
     const k = Math.max(MIN_K, Math.min(100, Number.isInteger(Number(body.k)) ? Number(body.k) : MIN_K));
-    const from = body.from ? (isDateString(body.from) ? body.from : (() => { throw fail('invalid', { field: 'from' }); })()) : null;
-    const to = body.to ? (isDateString(body.to) ? body.to : (() => { throw fail('invalid', { field: 'to' }); })()) : null;
     if (!String(pseudonymSecret() ?? '')) throw fail('ops_not_configured');
+    // 期間は月単位。確定した過去の月（いまの月より前）だけ
+    if ((body.from && !isMonth(body.from)) || (body.to && !isMonth(body.to))) throw fail('invalid', { field: 'month' });
+    const last = lastCompletedMonth();
+    const from = body.from || '2000-01';
+    const to = body.to && body.to < last ? body.to : last;
+    const refresh = body.refresh === true;
 
+    const snapKey = `ops:export:${mode}:${k}:${from}:${to}`;
+    if (!refresh) {
+      const frozen = await store.get(snapKey);
+      if (frozen) {
+        const r = JSON.parse(gunzipSync(Buffer.from(frozen, 'base64')).toString('utf8'));
+        r.meta.frozen = true;
+        await audit('ops.export', { mode, k, from, to, rows: r.rows.length, frozen: true });
+        return r;
+      }
+    }
+
+    const salt = randomBytes(8).toString('hex');
     const index = await store.hgetall('companies');
     let included = 0;
     let excluded = 0;
     /** 1行ぶんの材料（会社・月・樹種・長さ・径級・本数・材積）。会社名や車番はここで捨てる */
     const items = [];
-    for (const cid of Object.keys(index).filter(isValidId)) {
-      const consent = parseJson(await store.get(key(cid, 'consent')));
-      if (consent?.version !== CONSENT_VERSION) { excluded += 1; continue; }     // 現行の同意がない会社のデータは使わない
-      included += 1;
-      const { tickets: ts } = await readTicketsFrom(store, cid, PER_COMPANY_LIMIT, dayRangeKeys(from, to));
-      const who = pseudonym(cid);
-      for (const t of ts) {
-        const period = String(t.dateStr).slice(0, 7);
-        for (const lot of t.lots) {
-          const species = normalizeName(lot.species);
-          const lengthM = formatLength(toHundredths(lot.lengthM));
-          for (const r of lot.rows) {
-            items.push({ who, period, species, lengthM, minD: lot.minD, maxD: lot.maxD, d: r.d, n: r.n, vol: BigInt(r.volNum) });
+    if (from <= to) {
+      for (const cid of Object.keys(index).filter(isValidId)) {
+        const consent = parseJson(await store.get(key(cid, 'consent')));
+        if (consent?.version !== CONSENT_VERSION) { excluded += 1; continue; }     // 現行の同意がない会社のデータは使わない
+        included += 1;
+        const { tickets: ts } = await readTicketsFrom(store, cid, PER_COMPANY_LIMIT, dayRangeKeys(`${from}-01`, monthEnd(to)));
+        const who = pseudonym(cid, salt);
+        for (const t of ts) {
+          const period = String(t.dateStr).slice(0, 7);
+          for (const lot of t.lots) {
+            const species = normalizeName(lot.species);
+            const lengthM = formatLength(toHundredths(lot.lengthM));
+            for (const r of lot.rows) {
+              if (!(r.n > 0) || BigInt(r.volNum) <= 0n) continue;                  // 実体のない行は、会社数の水増しになるので数えない
+              items.push({ who, period, species, lengthM, minD: lot.minD, maxD: lot.maxD, d: r.d, n: r.n, vol: BigInt(r.volNum) });
+            }
           }
         }
       }
@@ -163,68 +243,81 @@ export function createOps({
     let rows;
     let suppressed = 0;
     if (mode === 'aggregate') {
-      // 月×樹種×長さ×径級ごとに合計する。関わった会社がk社未満の組み合わせは出さない
+      // 月×樹種×長さ×径級ごとに合計する
       const groups = new Map();
       for (const it of items) {
         const g = `${it.period}|${it.species}|${it.lengthM}|${it.d}`;
-        const cur = groups.get(g) ?? { period: it.period, species: it.species, lengthM: it.lengthM, d: it.d, n: 0, vol: 0n, who: new Set() };
-        cur.n += it.n; cur.vol += it.vol; cur.who.add(it.who);
+        const cur = groups.get(g) ?? { period: it.period, species: it.species, lengthM: it.lengthM, d: it.d, n: 0, vol: 0n, contrib: new Map() };
+        cur.n += it.n; cur.vol += it.vol; cur.contrib.set(it.who, (cur.contrib.get(it.who) ?? 0) + it.n);
         groups.set(g, cur);
       }
       rows = [];
       for (const g of groups.values()) {
-        if (g.who.size < k) { suppressed += 1; continue; }
-        rows.push({ period: g.period, species: g.species, lengthM: g.lengthM, d: g.d, n: g.n, volM3: formatVolume(g.vol), companies: g.who.size });
+        if (!publishable(g.contrib, k)) { suppressed += 1; continue; }
+        rows.push({ period: g.period, species: g.species, lengthM: g.lengthM, d: g.d, n: g.n, volM3: formatVolume(g.vol), companies: g.contrib.size });
       }
       rows.sort((a, b) => (a.period + a.species + a.lengthM).localeCompare(b.period + b.species + b.lengthM, 'ja') || a.d - b.d);
     } else {
-      // 1行ずつ。ただし、月×樹種×長さの組み合わせに関わった会社がk社未満なら、その組み合わせは出さない
+      // 1行ずつ。月×樹種×長さの組み合わせ（セル）が出してよい条件を満たすときだけ
       const cells = new Map();
       for (const it of items) {
         const c = `${it.period}|${it.species}|${it.lengthM}`;
-        if (!cells.has(c)) cells.set(c, new Set());
-        cells.get(c).add(it.who);
+        if (!cells.has(c)) cells.set(c, new Map());
+        cells.get(c).set(it.who, (cells.get(c).get(it.who) ?? 0) + it.n);
       }
       rows = [];
       const dropped = new Set();
       for (const it of items) {
         const c = `${it.period}|${it.species}|${it.lengthM}`;
-        if (cells.get(c).size < k) { dropped.add(c); continue; }
+        if (!publishable(cells.get(c), k)) { dropped.add(c); continue; }
         rows.push({ company: it.who, period: it.period, species: it.species, lengthM: it.lengthM, minD: it.minD, maxD: it.maxD, d: it.d, n: it.n, volM3: formatVolume(it.vol) });
       }
       suppressed = dropped.size;
-      rows.sort((a, b) => (a.period + a.species + a.lengthM + a.company).localeCompare(b.period + b.species + b.lengthM + b.company, 'ja') || a.d - b.d);
+      // 並びは、元の便の順序が残らないよう、内容だけで決める
+      rows.sort((a, b) => (a.period + a.species + a.lengthM + a.company).localeCompare(b.period + b.species + b.lengthM + b.company, 'ja') || a.d - b.d || a.n - b.n);
     }
 
-    const meta = { mode, k, from, to, companiesIncluded: included, companiesExcludedNoConsent: excluded, suppressedGroups: suppressed, rows: rows.length, generatedAt: now(), consentVersion: CONSENT_VERSION };
-    await audit('ops.export', { mode, k, from, to, rows: rows.length, companies: included });
-    return { rows, meta };
+    const meta = {
+      mode, k, from, to, exportId: salt, dominance: DOMINANCE, frozen: false, refreshed: refresh,
+      companiesIncluded: included, companiesExcludedNoConsent: excluded, suppressedGroups: suppressed, rows: rows.length,
+      generatedAt: now(), consentVersion: CONSENT_VERSION,
+    };
+    const result = { rows, meta };
+    // 同じ条件の再書き出しが同じ結果になるよう凍結する（差分から個別の便が推測されるのを防ぐ）。大きすぎる場合は凍結できない
+    const packed = gzipSync(Buffer.from(JSON.stringify(result), 'utf8')).toString('base64');
+    if (packed.length <= SNAPSHOT_MAX) await store.set(snapKey, packed);
+    else meta.freezeSkipped = true;
+    await audit('ops.export', { mode, k, from, to, rows: rows.length, companies: included, refresh });
+    return result;
   }
 
   /* ---------------- 閲覧記録 ---------------- */
   async function auditList(body) {
-    requireOperator(body);
-    const t = now();
-    const prev = new Date(t); prev.setUTCMonth(prev.getUTCMonth() - 1);
+    await requireOperator(body);
+    const d = new Date(now());
+    const keys = [monthKey(d.getUTCFullYear(), d.getUTCMonth())];
+    const prev = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1));       // 月末でも前の月になる作り方
+    keys.push(monthKey(prev.getUTCFullYear(), prev.getUTCMonth()));
     const entries = [];
-    for (const k of [auditKey(t), auditKey(prev.getTime())]) {
+    for (const k of keys) {
       for (const v of Object.values(await store.hgetall(k))) { const e = parseJson(v); if (e) entries.push(e); }
     }
     entries.sort((a, b) => b.at - a.at);
+    await audit('ops.audit');                         // 記録を見たこと自体も記録する
     return { entries: entries.slice(0, AUDIT_KEEP) };
   }
 
-  const OPS = { 'ops.login': login, 'ops.companies': companies, 'ops.tickets': tickets, 'ops.export': exportData, 'ops.audit': auditList };
+  const OPS = { 'ops.login': login, 'ops.logout': logout, 'ops.companies': companies, 'ops.tickets': tickets, 'ops.export': exportData, 'ops.audit': auditList };
 
   /** @returns {Promise<{status:number, payload:object}>} */
-  async function handle(body) {
+  async function handle(body, ctx = {}) {
     if (!store) return { status: 200, payload: { ok: false, error: 'not_configured' } };
     const op = String(body?.op ?? '');
     const run = OPS[op];
     if (!run) return { status: 400, payload: { ok: false, error: 'unknown_op' } };
     if (JSON.stringify(body).length > 20_000) return { status: 413, payload: { ok: false, error: 'too_large' } };
     try {
-      return { status: 200, payload: { ok: true, ...(await run(body)) } };
+      return { status: 200, payload: { ok: true, ...(await run(body, ctx)) } };
     } catch (err) {
       if (err instanceof Fail) return { status: err.status, payload: { ok: false, error: err.error, ...err.extra } };
       console.error('ops error', op, err?.message ?? err);

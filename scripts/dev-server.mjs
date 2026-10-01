@@ -35,7 +35,8 @@ async function serveApi(req, res, name) {
     const { memoryStore } = await import(new URL('../api/_office-store.js', import.meta.url));
     const store = memoryStore();                       // 事務所と運営者が同じ保存先を見る
     (await import(new URL('../api/office.js', import.meta.url))).__setOfficeForTests(
-      createOffice({ store, isSubscriptionActive: async () => true, getCustomerEmail: async () => 'dev@example.com' }));
+      createOffice({ store, isSubscriptionActive: async () => true, getCustomerEmail: async () => 'dev@example.com',
+        limits: { verifyVolume: process.env.OFFICE_DEV_NOVERIFY !== '1' } }));   // 材積の検算。確認用の適当な値を使うときだけ OFFICE_DEV_NOVERIFY=1
     (await import(new URL('../api/ops.js', import.meta.url))).__setOpsForTests(createOps({ store }));
     globalThis.__officeDevReady = true;
     console.log('事務所API・運営者API: 開発モード（メモリ保存・購入時メールは dev@example.com。再起動で消えます）');
@@ -80,6 +81,8 @@ createServer(async (req, res) => {
     res.writeHead(200, {
       'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream',
       'Cache-Control': 'no-cache',
+      // 本番（vercel.json）と同じ表示のセキュリティ設定。画面が壊れないか手元で確かめるため
+      ...(/^\/(office|ops)\//.test(path) ? { 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'", 'X-Frame-Options': 'DENY' } : {}),
       ...(path === '/sw.js' ? { 'Service-Worker-Allowed': '/' } : {}),
     });
     res.end(body);

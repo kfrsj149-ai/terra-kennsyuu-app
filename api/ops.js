@@ -17,6 +17,8 @@ export default async function handler(req, res) {
   if (rejectNonPost(req, res)) return;
   if (!ops) ops = createOps({ store: configuredStore() });
   const body = await readBody(req);
-  const { status, payload } = await ops.handle(body);
+  // ログインの試行回数をIPごとに数えるため。Vercelは x-forwarded-for に接続元を入れる
+  const ip = String(req.headers?.['x-forwarded-for'] ?? '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown';
+  const { status, payload } = await ops.handle(body, { ip });
   return json(res, status, payload);
 }

@@ -23,6 +23,7 @@
  *   ライセンスコードは運転手も持っているので、事務所の操作はライセンスコード＋事務所コードの両方が要る。
  */
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
+import { volumeNumerator } from '../src/js/jas.js';
 import { verifyToken, signPayload, verifyPayload, stripeGet, describeSubscription } from './_lib.js';
 import {
   ID_ALPHABET, isValidId, normalizeName, validateSiteName, findSiteByName, nameKey,
@@ -173,10 +174,10 @@ export const isDateString = isRealDate;
  * @param {() => number} [deps.now]
  * @param {(subId:string) => Promise<boolean>} [deps.isSubscriptionActive]
  * @param {(payload:{s:string,c:string|null}) => Promise<string|null>} [deps.getCustomerEmail] 購入時のメールアドレス（本人確認用）
- * @param {{maxTickets?:number, putsPerMinute?:number, scan?:number}} [deps.limits] 上限（テストで小さくするため差し替え可能）
+ * @param {{maxTickets?:number, putsPerMinute?:number, scan?:number, verifyVolume?:boolean}} [deps.limits] 上限（テストで小さくするため差し替え可能）
  */
 export function createOffice({ store, now = () => Date.now(), isSubscriptionActive = defaultIsActive, getCustomerEmail = defaultCustomerEmail, limits = {} }) {
-  const LIM = { maxTickets: MAX_TICKETS_PER_COMPANY, putsPerMinute: MAX_PUTS_PER_MINUTE, scan: MAX_TICKETS_SCAN, ...limits };
+  const LIM = { maxTickets: MAX_TICKETS_PER_COMPANY, putsPerMinute: MAX_PUTS_PER_MINUTE, scan: MAX_TICKETS_SCAN, verifyVolume: true, ...limits };
   /* ---------------- サブスクの確認（キャッシュつき） ---------------- */
   async function ensureSubscription(cid, subId) {
     const ck = key(cid, `sub:${subId}`);
@@ -267,15 +268,17 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const auth = { salt, hash: hashCode(raw, salt), epoch: 1, createdAt: now() };
     await store.set(key(cid, 'auth'), JSON.stringify(auth));
     await store.set(key(cid, 'primary'), JSON.stringify({ s: payload.s }));
+    // 運営者の会社一覧の索引は、契約との結びつきより先に書く（途中で失敗して一覧に載らない会社ができないように）
+    await store.hset('companies', cid, JSON.stringify({ createdAt: now() }));
     // 同じ契約で同時に初期設定されても、先に結びついたほうだけを有効にする
     if (!(await store.setIfAbsent(licKey(payload), cid))) {
       await store.del(key(cid, 'auth')); await store.del(key(cid, 'primary')); await store.del(key(cid, 'created'));
+      await store.hdel('companies', cid);
       throw fail('already_setup');
     }
     await store.set(key(cid, 'sub:' + payload.s), JSON.stringify({ active: true, checkedAt: now() }), 40 * 86400);
     const consent = { version: CONSENT_VERSION, at: now() };
     await store.set(key(cid, 'consent'), JSON.stringify(consent));
-    await store.hset('companies', cid, JSON.stringify({ createdAt: now() }));       // 運営者の画面の会社一覧に使う索引
     return { companyId: cid, officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
   }
 
@@ -465,10 +468,21 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       let vol = 0n;
       const rows = rowsIn.map((r, j) => {
         if (!r || typeof r !== 'object') throw fail('invalid', { field: `lots[${i}].rows[${j}]` });
-        const n = intIn(r.n, 0, 100000, `lots[${i}].rows[${j}].n`);
-        const v = digits(r.volNum, `lots[${i}].rows[${j}].volNum`);
+        const field = `lots[${i}].rows[${j}]`;
+        const n = intIn(r.n, 1, 100000, `${field}.n`);          // 本数0の行は受け付けない（会社数の水増し・無意味な行を防ぐ）
+        const d = intIn(r.d, 1, 200, `${field}.d`);
+        const v = digits(r.volNum, `${field}.volNum`);
+        if (LIM.verifyVolume) {
+          // 材積は、規格長・径級・本数から決まる。任意の値を送って集計を汚したり、会社数を水増しできないよう検算する。
+          // 丸め方針（径級ごとに丸める／丸めない）の違いを許す幅をもたせる
+          let expected;
+          try { expected = volumeNumerator(clean(l.lengthM), d) * BigInt(n); } catch { throw fail('invalid', { field: `${field}.volNum` }); }
+          const tolerance = expected / 100n + 40_000_000n;
+          const diff = BigInt(v) > expected ? BigInt(v) - expected : expected - BigInt(v);
+          if (BigInt(v) <= 0n || diff > tolerance) throw fail('invalid', { field: `${field}.volNum` });
+        }
         count += n; vol += BigInt(v);
-        return { d: intIn(r.d, 1, 200, `lots[${i}].rows[${j}].d`), n, volNum: v };
+        return { d, n, volNum: v };
       });
       totalCount += count; totalVol += vol;
       const siteId = l.siteId == null || l.siteId === '' ? null : (isValidId(l.siteId) ? l.siteId : (() => { throw fail('invalid', { field: `lots[${i}].siteId` }); })());

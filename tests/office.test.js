@@ -29,7 +29,7 @@ function setupEnv({ active = new Set(['sub_A', 'sub_B']), limits } = {}) {
     now: () => clock.t,
     isSubscriptionActive: async (id) => { if (stripeDown.v) throw new Error('down'); return active.has(id); },
     getCustomerEmail: async (p) => EMAILS[p.c] ?? null,
-    limits,
+    limits: { verifyVolume: false, ...limits },        // 既存テストは材積に適当な整数を使うため、検算は専用のテストで確かめる
   });
   const call = async (body) => (await office.handle(body));
   const ok = async (body) => {
@@ -692,4 +692,30 @@ test('【同意】同意文の版が変わると、事務所が改めて同意�
   await env.err({ op: 'office.consent', token: co.token, consent: 'wrong' }, 'consent_required');
   await env.ok({ op: 'office.consent', token: co.token, consent: CONSENT });
   await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-0002', ticketNo: '002' }) });
+});
+
+test('【点検2】本数0の行・材積が径級と本数に合わない行は受け付けない（集計の汚染・会社数の水増しを防ぐ）', async () => {
+  const store = memoryStore();
+  const office = createOffice({ store, isSubscriptionActive: async () => true, getCustomerEmail: async (p) => EMAILS[p.c] });   // 検算あり（既定）
+  const { volumeNumerator } = await import('../src/js/jas.js');
+  const s = await office.handle({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A });
+  assert.equal(s.payload.ok, true);
+  const real = (d, n) => String(volumeNumerator('4.00', d) * BigInt(n));
+  const put = (rows) => office.handle({ op: 'ticket.put', code: codeA, ticket: ticket({ lots: [{ species: 'ヒノキ', lengthM: '4.00', minD: 14, maxD: 30, site: '', siteId: null, rows }] }) });
+  assert.equal((await put([{ d: 24, n: 7, volNum: real(24, 7) }])).payload.ok, true);                       // 正しい値
+  assert.equal((await put([{ d: 24, n: 7, volNum: String(BigInt(real(24, 7)) + 5_000_000n) }])).payload.ok, true);   // 丸めの違いの範囲
+  assert.equal((await put([{ d: 24, n: 0, volNum: '0' }])).payload.error, 'invalid');                       // 本数0
+  assert.equal((await put([{ d: 24, n: 7, volNum: '0' }])).payload.error, 'invalid');                       // 材積0
+  assert.equal((await put([{ d: 24, n: 7, volNum: real(24, 70) }])).payload.error, 'invalid');              // 10倍の材積
+  assert.equal((await put([{ d: 24, n: 7, volNum: '1' }])).payload.error, 'invalid');
+  assert.equal((await put([{ d: 24, n: 7, volNum: real(20, 7) }])).payload.error, 'invalid');               // 別の径級の材積
+});
+
+test('【点検7】事務所の初期設定で、会社の一覧の索引が契約との結びつきより先に書かれる（途中で失敗しても一覧から漏れない）', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  assert.ok(await env.store.hget('companies', co.cid));
+  // 同じ契約の2度目の設定は、索引を増やさない
+  await env.err({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A }, 'already_setup');
+  assert.equal(Object.keys(await env.store.hgetall('companies')).length, 1);
 });

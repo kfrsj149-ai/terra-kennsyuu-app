@@ -27,10 +27,11 @@ function env({ operatorKey = OP_KEY } = {}) {
     store, now: () => clock.t,
     isSubscriptionActive: async (id) => active.has(id),
     getCustomerEmail: async (p) => emails[p.c] ?? null,
+    limits: { verifyVolume: false },
   });
   const ops = createOps({ store, now: () => clock.t, operatorKey: () => operatorKey, pseudonymSecret: () => process.env.LICENSE_SECRET });
   const o = async (body) => (await office.handle(body)).payload;
-  const p = async (body) => (await ops.handle(body));
+  const p = async (body, ctx) => (await ops.handle(body, ctx));
   const login = async () => (await p({ op: 'ops.login', key: OP_KEY })).payload.token;
 
   /** 会社を作る（同意つき）。返り値：{cid, code, token} */
@@ -69,14 +70,53 @@ test('保存先が未設定なら何もしない', async () => {
   assert.deepEqual((await ops.handle({ op: 'ops.login', key: OP_KEY })).payload, { ok: false, error: 'not_configured' });
 });
 
-test('ログイン：正しい鍵で札が得られ、間違いは8回でロックされる（正しくても解除まで入れない）', async () => {
+test('ログイン：正しい鍵で札が得られ、間違いは8回まで。9回目からは（正しい鍵でも）解除までロック', async () => {
   const e = env();
-  for (let i = 0; i < 7; i += 1) assert.equal((await e.p({ op: 'ops.login', key: 'wrong' })).payload.error, 'bad_key');
-  const locked = await e.p({ op: 'ops.login', key: 'wrong' });
-  assert.equal(locked.status, 429);
-  assert.equal((await e.p({ op: 'ops.login', key: OP_KEY })).status, 429);
+  for (let i = 0; i < 8; i += 1) assert.equal((await e.p({ op: 'ops.login', key: 'wrong' }, { ip: '1.1.1.1' })).payload.error, 'bad_key');
+  assert.equal((await e.p({ op: 'ops.login', key: 'wrong' }, { ip: '1.1.1.1' })).status, 429);
+  assert.equal((await e.p({ op: 'ops.login', key: OP_KEY }, { ip: '1.1.1.1' })).status, 429);
+  // 別のIPからは入れる（1つのIPが運営者を締め出し続けられない）
+  assert.equal((await e.p({ op: 'ops.login', key: OP_KEY }, { ip: '2.2.2.2' })).payload.ok, true);
   e.clock.t += 16 * 60 * 1000;
-  assert.equal((await e.p({ op: 'ops.login', key: OP_KEY })).payload.ok, true);
+  assert.equal((await e.p({ op: 'ops.login', key: OP_KEY }, { ip: '1.1.1.1' })).payload.ok, true);
+});
+
+test('【点検4】ログインの試行は先に数える：並列に大量に送っても、8回を超えて照合されない', async () => {
+  const e = env();
+  const results = await Promise.all(Array.from({ length: 200 }, (_, i) => e.p({ op: 'ops.login', key: i === 150 ? OP_KEY : `wrong-${i}` }, { ip: '9.9.9.9' })));
+  const checked = results.filter((r) => r.status !== 429).length;
+  assert.ok(checked <= 8, `照合された回数: ${checked}`);
+  // 200件目まででロック。全体のロック（200回）にも達する
+  assert.equal((await e.p({ op: 'ops.login', key: OP_KEY }, { ip: '3.3.3.3' })).status, 429);
+});
+
+test('【点検6】ログインの失敗・ロックも閲覧記録に残る。ログアウトで、発行済みの札がすべて無効になる', async () => {
+  const e = env();
+  await e.p({ op: 'ops.login', key: 'wrong' }, { ip: '4.4.4.4' });
+  const token = await e.login();
+  e.clock.t += 1000;
+  assert.equal((await e.p({ op: 'ops.companies', token })).payload.ok, true);
+  const t2 = (await e.p({ op: 'ops.login', key: OP_KEY })).payload.token;
+  await e.p({ op: 'ops.logout', token });
+  assert.equal((await e.p({ op: 'ops.companies', token })).status, 401);
+  assert.equal((await e.p({ op: 'ops.companies', token: t2 })).status, 401);               // 別に発行した札も無効
+  const fresh = (await e.p({ op: 'ops.login', key: OP_KEY })).payload.token;
+  const { entries } = (await e.p({ op: 'ops.audit', token: fresh })).payload;
+  const ops = entries.map((x) => x.op);
+  assert.ok(ops.includes('ops.login.failed'));
+  assert.ok(ops.includes('ops.logout'));
+  assert.ok(!JSON.stringify(entries).includes('4.4.4.4'));                                  // IPそのものは残さない（指紋だけ）
+});
+
+test('【点検6】閲覧記録の「直近2か月」は、月末でも前の月を含む', async () => {
+  const e = env();
+  e.clock.t = Date.UTC(2026, 8, 30, 12);                      // 9/30
+  const t1 = await e.login();
+  e.clock.t = Date.UTC(2026, 9, 31, 12);                      // 10/31（月末）
+  const t2 = await e.login();
+  const { entries } = (await e.p({ op: 'ops.audit', token: t2 })).payload;
+  assert.equal(entries.filter((x) => x.op === 'ops.login').length, 2, '9月の記録が出ていない');
+  assert.ok(t1);
 });
 
 test('札：なし・改ざん・期限切れ・事務所の札やライセンスコードの流用は通らない。鍵を変えると旧札は無効', async () => {
@@ -127,7 +167,7 @@ test('生データの閲覧：会社を指定して、車番・現場・備考�
   for (const cid of ['../x', 'abc', 'ILLEGAL1', undefined, `${a.cid}:t:tk-a001`]) {
     assert.equal((await e.p({ op: 'ops.tickets', token, cid })).payload.error, 'invalid', String(cid));
   }
-  assert.deepEqual((await e.p({ op: 'ops.tickets', token, cid: 'ZZZZZZZZ' })).payload.tickets, []);   // 存在しない会社は空
+  assert.equal((await e.p({ op: 'ops.tickets', token, cid: 'ZZZZZZZZ' })).payload.error, 'not_found');   // 存在しない会社
   assert.equal((await e.p({ op: 'ops.tickets', token, cid: a.cid, from: '2026-02-31' })).payload.error, 'invalid');
 });
 
@@ -161,15 +201,20 @@ test('閲覧記録：ログイン・一覧・閲覧・書き出しがすべて�
   e.clock.t += 1000;
   await e.p({ op: 'ops.tickets', token, cid: a.cid, from: '2026-10-01', to: '2026-10-31' });
   e.clock.t += 1000;
-  await e.p({ op: 'ops.export', token, mode: 'aggregate', k: 5 });
+  await e.p({ op: 'ops.export', token, mode: 'aggregate', k: 5, from: '2026-08' });
+  e.clock.t += 1000;
   const { entries } = (await e.p({ op: 'ops.audit', token })).payload;
   assert.deepEqual(entries.map((x) => x.op), ['ops.export', 'ops.tickets', 'ops.companies', 'ops.login']);
   assert.equal(entries[1].cid, a.cid);
   assert.equal(entries[1].from, '2026-10-01');
   assert.equal(entries[0].k, 5);
-  // 失敗した認証は記録しない（ロックで守る）。札のない要求は何も記録されない
+  assert.equal(entries[0].from, '2026-08');
+  // 記録を見たこと自体も記録される。札のない要求は何も記録されない
+  e.clock.t += 1000;
   await e.p({ op: 'ops.companies', token: 'bad' });
-  assert.equal((await e.p({ op: 'ops.audit', token })).payload.entries.length, 4);
+  e.clock.t += 1000;
+  const again = (await e.p({ op: 'ops.audit', token })).payload.entries.map((x) => x.op);
+  assert.deepEqual(again, ['ops.audit', 'ops.export', 'ops.tickets', 'ops.companies', 'ops.login']);
 });
 
 /* ---------------- 匿名化した書き出し ---------------- */
@@ -178,7 +223,7 @@ async function threeCompaniesWithData(e) {
   for (const n of [1, 2, 3]) {
     const c = await e.company(n);
     await e.o({ op: 'ticket.put', code: c.code, ticket: ticket(`tk-${n}001`, {
-      truck: `ナンバー${n}`, destination: `工場${n}`, ownCompany: `会社${n}`, note: `備考${n}`, ticketNo: `00${n}`, dateStr: `2026-10-0${n}`,
+      truck: `ナンバー${n}`, destination: `工場${n}`, ownCompany: `会社${n}`, note: `備考${n}`, ticketNo: `00${n}`, dateStr: `2026-09-0${n}`,
       lots: [{ species: 'カラマツ', lengthM: '4.00', minD: 14, maxD: 30, site: `現場${n}`, siteId: null, rows: [{ d: 20, n: 10 * n, volNum: N(1.6 * n) }] }],
     }) });
     cos.push(c);
@@ -194,28 +239,39 @@ test('匿名化（個別）：会社名・車番・現場・納入先・備考�
   assert.equal(meta.companiesIncluded, 3);
   assert.ok(rows.length >= 3);
   const text = JSON.stringify(rows);
-  for (const secret of ['ナンバー', '工場', '会社1', '会社2', '現場', '備考', 'tk-', '2026-10-0', ...cos.map((c) => c.cid), ...cos.map((c) => c.code), 'example.com', '杉澤']) {
+  for (const secret of ['ナンバー', '工場', '会社1', '会社2', '現場', '備考', 'tk-', '2026-09-0', ...cos.map((c) => c.cid), ...cos.map((c) => c.code), 'example.com', '杉澤']) {
     assert.ok(!text.includes(secret), `漏れている: ${secret}`);
   }
   for (const r of rows) {
     assert.deepEqual(Object.keys(r).sort(), ['company', 'd', 'lengthM', 'maxD', 'minD', 'n', 'period', 'species', 'volM3']);
-    assert.match(r.period, /^\d{4}-\d{2}$/);                 // 月まで。日は出さない
+    assert.equal(r.period, '2026-09');                       // 月まで。日は出さない
     assert.match(r.company, /^c_[0-9a-f]{10}$/);
   }
 });
 
-test('匿名化：同じ会社は常に同じ仮名、別の会社は別の仮名。仮名は鍵が変わると変わる（元に戻せない）', async () => {
+test('【点検5】仮名：1回の書き出しの中では同じ会社は同じ仮名・別の会社は別の仮名。書き出しごとに変わり、別々の書き出しを結合できない', async () => {
   const e = env();
-  const cos = await threeCompaniesWithData(e);
+  await threeCompaniesWithData(e);
   const token = await e.login();
-  const one = (await e.p({ op: 'ops.export', token, mode: 'records' })).payload.rows;
-  const two = (await e.p({ op: 'ops.export', token, mode: 'records' })).payload.rows;
-  assert.deepEqual(one, two);
-  assert.equal(new Set(one.map((r) => r.company)).size, 3);
-  assert.equal(e.ops.pseudonym(cos[0].cid), e.ops.pseudonym(cos[0].cid));
-  assert.notEqual(e.ops.pseudonym(cos[0].cid), e.ops.pseudonym(cos[1].cid));
+  const one = (await e.p({ op: 'ops.export', token, mode: 'records' })).payload;
+  assert.equal(new Set(one.rows.map((r) => r.company)).size, 3);
+  // 同じ条件の再書き出しは凍結した同じ結果（仮名も同じ）
+  const again = (await e.p({ op: 'ops.export', token, mode: 'records' })).payload;
+  assert.equal(again.meta.frozen, true);
+  assert.deepEqual(again.rows, one.rows);
+  // 作り直す（refresh）と、仮名が別のものになる
+  const fresh = (await e.p({ op: 'ops.export', token, mode: 'records', refresh: true })).payload;
+  assert.notEqual(fresh.meta.exportId, one.meta.exportId);
+  assert.equal(new Set(fresh.rows.map((r) => r.company)).size, 3);
+  assert.equal(fresh.rows.filter((r) => one.rows.some((x) => x.company === r.company)).length, 0);
+  // 条件が違う（kが違う）書き出しも、別の仮名
+  const k4 = (await e.p({ op: 'ops.export', token, mode: 'records', k: 3, to: '2026-09' })).payload;
+  assert.notEqual(k4.meta.exportId, one.meta.exportId);
+  // 鍵が違うと、同じ会社でも違う仮名
+  const cos = Object.keys(await e.store.hgetall('companies'));
   const other = createOps({ store: e.store, operatorKey: () => OP_KEY, pseudonymSecret: () => '別の鍵-0123456789-abcdefghijklmnop' });
-  assert.notEqual(other.pseudonym(cos[0].cid), e.ops.pseudonym(cos[0].cid));
+  assert.notEqual(other.pseudonym(cos[0], 'x'), e.ops.pseudonym(cos[0], 'x'));
+  assert.notEqual(e.ops.pseudonym(cos[0], 'x'), e.ops.pseudonym(cos[0], 'y'));
 });
 
 test('匿名化：関わった会社がk社未満の組み合わせは出さない（k匿名）。kは3未満にできない', async () => {
@@ -223,7 +279,7 @@ test('匿名化：関わった会社がk社未満の組み合わせは出さな�
   await threeCompaniesWithData(e);
   const d = await e.company(4);
   // 4社目だけが扱うヒノキ。1社しかいないので、個別でも集計でも出てはいけない
-  await e.o({ op: 'ticket.put', code: d.code, ticket: ticket('tk-4001', { lots: [{ species: 'ヒノキ', lengthM: '3.00', minD: 14, maxD: 30, site: '', siteId: null, rows: [{ d: 18, n: 7, volNum: N(0.9) }] }] }) });
+  await e.o({ op: 'ticket.put', code: d.code, ticket: ticket('tk-4001', { dateStr: '2026-09-04', lots: [{ species: 'ヒノキ', lengthM: '3.00', minD: 14, maxD: 30, site: '', siteId: null, rows: [{ d: 18, n: 7, volNum: N(0.9) }] }] }) });
   const token = await e.login();
   for (const mode of ['records', 'aggregate']) {
     const r = (await e.p({ op: 'ops.export', token, mode, k: 1 })).payload;          // k=1 を指定しても3に引き上げる
@@ -241,7 +297,7 @@ test('匿名化（集計）：月×樹種×長さ×径級ごとの合計。端�
   const token = await e.login();
   const { rows } = (await e.p({ op: 'ops.export', token, mode: 'aggregate', k: 3 })).payload;
   assert.equal(rows.length, 1);
-  assert.deepEqual(rows[0], { period: '2026-10', species: 'カラマツ', lengthM: '4', d: 20, n: 60, volM3: formatVolume(BigInt(N(1.6)) + BigInt(N(3.2)) + BigInt(N(4.8))), companies: 3 });
+  assert.deepEqual(rows[0], { period: '2026-09', species: 'カラマツ', lengthM: '4', d: 20, n: 60, volM3: formatVolume(BigInt(N(1.6)) + BigInt(N(3.2)) + BigInt(N(4.8))), companies: 3 });
 });
 
 test('匿名化：現行の同意がない会社のデータは、書き出しに含めない', async () => {
@@ -255,14 +311,100 @@ test('匿名化：現行の同意がない会社のデータは、書き出し�
   assert.equal(r.rows.length, 0);                                                    // 2社ではk=3を満たさない
 });
 
-test('匿名化：期間で絞れる。日付の形が違えば拒否', async () => {
+test('【点検5】同意が現行版でない会社の生データは閲覧できない（会社一覧には、存在と件数だけが出る）', async () => {
+  const e = env();
+  const a = await e.company(1);
+  await e.o({ op: 'ticket.put', code: a.code, ticket: ticket('tk-a001') });
+  await e.store.set(`co:${a.cid}:consent`, JSON.stringify({ version: '2025-01-01', at: 1 }));
+  const token = await e.login();
+  const r = await e.p({ op: 'ops.tickets', token, cid: a.cid });
+  assert.equal(r.payload.error, 'no_consent');
+  const list = (await e.p({ op: 'ops.companies', token })).payload.companies[0];
+  assert.equal(list.consentOk, false);
+  assert.equal(list.tickets, 1);
+  assert.equal(list.latestOwnCompany, '');                                      // 便の中身（会社名）は見ない
+  assert.equal(list.latestDate, null);
+  const audit = (await e.p({ op: 'ops.audit', token })).payload.entries;
+  assert.ok(audit.some((x) => x.op === 'ops.tickets.denied' && x.reason === 'no_consent'));
+});
+
+test('【点検1】期間は月単位で、確定した過去の月だけ。いまの月・日付での指定は受け付けない', async () => {
+  const e = env();
+  await threeCompaniesWithData(e);                                                   // データは 2026-09、いまは 2026-10-05
+  for (const n of [1, 2, 3]) {
+    const c = Object.keys(await e.store.hgetall('companies'))[n - 1];
+    assert.ok(c);
+  }
+  const token = await e.login();
+  const ex = async (extra) => (await e.p({ op: 'ops.export', token, mode: 'aggregate', k: 3, ...extra })).payload;
+  assert.equal((await ex({})).rows.length, 1);
+  assert.equal((await ex({ from: '2026-09', to: '2026-09' })).rows.length, 1);
+  assert.equal((await ex({ from: '2026-10' })).rows.length, 0);                      // いまの月は未確定なので対象外
+  assert.equal((await ex({ from: '2026-10' })).meta.to, '2026-09');
+  assert.equal((await ex({ to: '2026-08' })).rows.length, 0);                        // データのない月
+  for (const bad of ['2026-09-01', '2026-13', '09', 'x', '1999-12']) assert.equal((await ex({ from: bad })).error, 'invalid', bad);
+});
+
+test('【点検1】期間をずらして2回書き出して引き算する攻撃：日単位の指定ができず、同じ条件は凍結した同じ結果になる', async () => {
   const e = env();
   await threeCompaniesWithData(e);
+  // 後から1社だけに遅れて届いた便（A社の同じ月・同じ樹種・長さ・径級に大量）
+  const a = Object.keys(await e.store.hgetall('companies'))[0];
+  const code = lib.signToken({ s: 'sub_1', c: 'cus_1' });
   const token = await e.login();
-  const r = (await e.p({ op: 'ops.export', token, mode: 'records', k: 3, from: '2026-10-02', to: '2026-10-03' })).payload;
-  assert.equal(r.meta.companiesIncluded, 3);
-  assert.equal(r.rows.length, 0);                                                    // 期間内は2社ぶんだけ → k=3未満で出ない
-  assert.equal((await e.p({ op: 'ops.export', token, mode: 'records', from: 'x' })).payload.error, 'invalid');
+  const before = (await e.p({ op: 'ops.export', token, mode: 'aggregate', k: 3 })).payload;
+  await e.o({ op: 'ticket.put', code, ticket: ticket('tk-late', { ticketNo: '009', dateStr: '2026-09-30', lots: [{ species: 'カラマツ', lengthM: '4.00', minD: 14, maxD: 30, site: '', siteId: null, rows: [{ d: 20, n: 100, volNum: N(16) }] }] }) });
+  const after = (await e.p({ op: 'ops.export', token, mode: 'aggregate', k: 3 })).payload;
+  assert.equal(after.meta.frozen, true);
+  assert.deepEqual(after.rows, before.rows);                                         // 引き算しても差が出ない
+  assert.ok(a);
+  // 日単位の指定は受け付けない（月末の1日だけを切り出せない）
+  assert.equal((await e.p({ op: 'ops.export', token, mode: 'aggregate', from: '2026-09-30', to: '2026-09-30' })).payload.error, 'invalid');
+  // 作り直すと、遅れて届いた分も入る。その旨は閲覧記録に残る
+  const fresh = (await e.p({ op: 'ops.export', token, mode: 'aggregate', k: 3, refresh: true })).payload;
+  assert.equal(fresh.meta.refreshed, true);
+  const log = (await e.p({ op: 'ops.audit', token })).payload.entries.filter((x) => x.op === 'ops.export');
+  assert.ok(log.some((x) => x.refresh === true));
+  assert.ok(log.some((x) => x.frozen === true));
+});
+
+test('【点検2】本数0の行や架空の会社でk社に見せかけても、実体のある会社が3社なければ出ない', async () => {
+  const e = env();
+  const v = await e.company(9);
+  await e.o({ op: 'ticket.put', code: v.code, ticket: ticket('tk-v001', { dateStr: '2026-09-05', lots: [{ species: 'ヒノキ', lengthM: '3.00', minD: 14, maxD: 30, site: '', siteId: null, rows: [{ d: 24, n: 7, volNum: N(1.9) }] }] }) });
+  for (const n of [1, 2]) {
+    const s = await e.company(n);
+    // 実体のない行（本数0）。サーバーの検査で拒否される（検算を有効にした環境）か、書き出しで数えられない
+    await e.o({ op: 'ticket.put', code: s.code, ticket: ticket(`tk-s${n}`, { dateStr: '2026-09-05', lots: [{ species: 'ヒノキ', lengthM: '3.00', minD: 14, maxD: 30, site: '', siteId: null, rows: [{ d: 24, n: 0, volNum: '0' }] }] }) });
+  }
+  const token = await e.login();
+  for (const mode of ['aggregate', 'records']) {
+    const r = (await e.p({ op: 'ops.export', token, mode, k: 3, refresh: true })).payload;
+    assert.ok(!JSON.stringify(r.rows).includes('ヒノキ'), `${mode}: 1社だけの値が出ている`);
+  }
+});
+
+test('【点検3】1社の寄与が8割を超える組み合わせは、k社そろっていても出さない（優位性ルール）', async () => {
+  const e = env();
+  const mk = async (n, count) => {
+    const c = await e.company(n);
+    await e.o({ op: 'ticket.put', code: c.code, ticket: ticket(`tk-${n}`, { dateStr: '2026-09-05', lots: [{ species: 'カラマツ', lengthM: '4.00', minD: 14, maxD: 30, site: '', siteId: null, rows: [{ d: 20, n: count, volNum: N(0.16 * count) }] }] }) });
+  };
+  await mk(1, 100); await mk(2, 5); await mk(3, 5);                                 // A社が 100/110 = 91%
+  const token = await e.login();
+  for (const mode of ['aggregate', 'records']) {
+    const r = (await e.p({ op: 'ops.export', token, mode, k: 3, refresh: true })).payload;
+    assert.equal(r.rows.length, 0, mode);
+    assert.equal(r.meta.suppressedGroups, 1);
+  }
+  // 偏りが小さければ出る（A社 40/50 = 80% ちょうどは出る）
+  const e2 = env();
+  const mk2 = async (n, count) => {
+    const c = await e2.company(n);
+    await e2.o({ op: 'ticket.put', code: c.code, ticket: ticket(`tk-${n}`, { dateStr: '2026-09-05', lots: [{ species: 'カラマツ', lengthM: '4.00', minD: 14, maxD: 30, site: '', siteId: null, rows: [{ d: 20, n: count, volNum: N(0.16 * count) }] }] }) });
+  };
+  await mk2(1, 40); await mk2(2, 5); await mk2(3, 5);
+  assert.equal((await e2.p({ op: 'ops.export', token: await e2.login(), mode: 'aggregate', k: 3 })).payload.rows.length, 1);
 });
 
 test('未知の操作・大きすぎる本体', async () => {
