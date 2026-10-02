@@ -18,6 +18,12 @@
  *   ライセンスコード（Stripeの顧客ID入り・署名付き）→ 事業体ID（事務所の初期設定で発行）。
  *   事業体IDごとにデータを分けて保存するので、他社のデータは構造上読めない。
  *
+ * 【基盤が先に事業体IDを発行する（entity.ensure）】
+ *   日報など、検収アプリより先に導入する会社にも、同じ事業体IDを渡すための操作。
+ *   呼べるのは別アプリのサーバー（サービス間の鍵 PLATFORM_SERVICE_KEY を持つもの）だけ。ブラウザや現場の端末からは呼べない。
+ *   Stripeの顧客IDを渡すと、事業体IDを返す（同じ顧客IDなら、何度呼んでも同じID）。
+ *   後からその会社が事務所の初期設定をすると、このIDをそのまま使う（別のIDを作らない）。
+ *
  * 【事務所コード】
  *   初期設定のとき一度だけ画面に出す12文字の合言葉。サーバーには「ハッシュ」しか残さない。
  *   ライセンスコードは運転手も持っているので、事務所の操作はライセンスコード＋事務所コードの両方が要る。
@@ -78,6 +84,8 @@ function safeEqualHex(a, b) {
 
 const sha = (s) => createHash('sha256').update(s).digest('hex');
 const licKey = (payload) => `lic:${sha(String(payload.c ?? payload.s)).slice(0, 32)}`;
+/** 基盤が先に発行した事業体ID（顧客ID→事業体ID）。事務所の初期設定が済むまでは licKey の側には書かない */
+const entKey = (customerId) => `ent:${sha(String(customerId)).slice(0, 32)}`;
 export const key = (cid, name) => `co:${cid}:${name}`;
 
 export const parseJson = (s, fallback = null) => { if (s == null) return fallback; try { return JSON.parse(s); } catch { return fallback; } };
@@ -175,8 +183,9 @@ export const isDateString = isRealDate;
  * @param {(subId:string) => Promise<boolean>} [deps.isSubscriptionActive]
  * @param {(payload:{s:string,c:string|null}) => Promise<string|null>} [deps.getCustomerEmail] 購入時のメールアドレス（本人確認用）
  * @param {{maxTickets?:number, putsPerMinute?:number, scan?:number, verifyVolume?:boolean}} [deps.limits] 上限（テストで小さくするため差し替え可能）
+ * @param {() => string|undefined} [deps.serviceKey] 別アプリのサーバーが使う鍵（既定は環境変数 PLATFORM_SERVICE_KEY。24文字未満なら無効）
  */
-export function createOffice({ store, now = () => Date.now(), isSubscriptionActive = defaultIsActive, getCustomerEmail = defaultCustomerEmail, limits = {} }) {
+export function createOffice({ store, now = () => Date.now(), isSubscriptionActive = defaultIsActive, getCustomerEmail = defaultCustomerEmail, limits = {}, serviceKey = () => process.env.PLATFORM_SERVICE_KEY }) {
   const LIM = { maxTickets: MAX_TICKETS_PER_COMPANY, putsPerMinute: MAX_PUTS_PER_MINUTE, scan: MAX_TICKETS_SCAN, verifyVolume: true, ...limits };
   /* ---------------- サブスクの確認（キャッシュつき） ---------------- */
   async function ensureSubscription(cid, subId) {
@@ -256,6 +265,27 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     if (!active) throw fail('subscription_inactive', {}, 402);
     await verifyOwnerEmail(payload, body.email);
 
+    // 基盤が先に発行した事業体ID（entity.ensure）があれば、それをそのまま使う。別のIDは作らない
+    const pre = payload.c ? await store.get(entKey(payload.c)) : null;
+    if (pre) {
+      // 先に契約との結びつきを取った1件だけが進める（同時に2か所から設定されても、事務所コードは1つだけ有効）
+      if (!(await store.setIfAbsent(licKey(payload), pre))) throw fail('already_setup');
+      const raw = randomChars(12);
+      const salt = randomBytes(16).toString('hex');
+      const auth = { salt, hash: hashCode(raw, salt), epoch: 1, createdAt: now() };
+      try {
+        await store.set(key(pre, 'auth'), JSON.stringify(auth));
+        await store.set(key(pre, 'primary'), JSON.stringify({ s: payload.s }));
+        await store.hset('companies', pre, JSON.stringify({ createdAt: now() }));
+        await store.set(key(pre, 'sub:' + payload.s), JSON.stringify({ active: true, checkedAt: now() }), 40 * 86400);
+        await store.set(key(pre, 'consent'), JSON.stringify({ version: CONSENT_VERSION, at: now() }));
+      } catch (err) {
+        await store.del(licKey(payload));      // 途中で失敗したら結びつきを外して、やり直せるようにする
+        throw err;
+      }
+      return { companyId: pre, officeCode: formatOfficeCode(raw), token: issueToken(pre, auth.epoch) };
+    }
+
     let cid = null;
     for (let i = 0; i < 10 && !cid; i += 1) {
       const candidate = randomChars(8);
@@ -276,10 +306,62 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       await store.hdel('companies', cid);
       throw fail('already_setup');
     }
+    // 同じ瞬間に基盤が別の事業体IDを発行していたら、IDが二つに割れるのでやり直してもらう
+    if (payload.c && !(await store.setIfAbsent(entKey(payload.c), cid))) {
+      await store.del(licKey(payload)); await store.del(key(cid, 'auth')); await store.del(key(cid, 'primary')); await store.del(key(cid, 'created'));
+      await store.hdel('companies', cid);
+      throw fail('server_busy', {}, 503);
+    }
     await store.set(key(cid, 'sub:' + payload.s), JSON.stringify({ active: true, checkedAt: now() }), 40 * 86400);
     const consent = { version: CONSENT_VERSION, at: now() };
     await store.set(key(cid, 'consent'), JSON.stringify(consent));
     return { companyId: cid, officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
+  }
+
+  /* ---------------- 別アプリのサーバーが呼ぶ操作（事業体IDの先行発行） ---------------- */
+  const SERVICE_LOCK_MAX = 20;
+  /** サービス間の鍵の確認。間違いはIPごとに先に数えて、規定回数でしばらく止める */
+  async function requireService(body, ctx) {
+    const configured = String(serviceKey() ?? '');
+    if (configured.length < 24) throw fail('service_not_configured', {}, 503);
+    const ipKey = `svc:fail:ip:${sha(String(ctx?.ip ?? 'unknown')).slice(0, 12)}`;
+    const n = await store.incr(ipKey, LOCK_SEC);
+    if (n > SERVICE_LOCK_MAX) throw fail('locked', { retryAfterSec: LOCK_SEC }, 429);
+    if (!safeEqualHex(sha(String(body.serviceKey ?? '')), sha(configured))) throw fail('unauthorized', {}, 401);
+    await store.del(ipKey);
+  }
+
+  /**
+   * Stripeの顧客ID → 事業体ID。無ければ発行し、あれば同じIDを返す（何度呼んでも同じ）。
+   * 事務所の初期設定は、ここで発行したIDをそのまま使う。
+   */
+  async function entityEnsure(body, ctx) {
+    await requireService(body, ctx);
+    const customerId = clean(body.stripeCustomerId);
+    if (!/^cus_[A-Za-z0-9]{6,64}$/.test(customerId)) throw fail('invalid', { field: 'stripeCustomerId' });
+    const setUp = await store.get(licKey({ c: customerId }));
+    if (setUp) {
+      await store.setIfAbsent(entKey(customerId), setUp);
+      return { entityId: setUp, created: false, officeSetUp: true };
+    }
+    const existing = await store.get(entKey(customerId));
+    if (existing) return { entityId: existing, created: false, officeSetUp: false };
+
+    let cid = null;
+    for (let i = 0; i < 10 && !cid; i += 1) {
+      const candidate = randomChars(8);
+      if (await store.setIfAbsent(key(candidate, 'created'), String(now()))) cid = candidate;
+    }
+    if (!cid) throw fail('server_busy', {}, 503);
+    await store.hset('entities', cid, JSON.stringify({ createdAt: now(), via: 'service' }));
+    if (!(await store.setIfAbsent(entKey(customerId), cid))) {
+      // 同時に別の呼び出しが先に結びつけた。作った分は捨てて、先に結びついたIDを返す
+      await store.del(key(cid, 'created')); await store.hdel('entities', cid);
+      const winner = await store.get(entKey(customerId));
+      const nowSetUp = await store.get(licKey({ c: customerId }));
+      return { entityId: nowSetUp ?? winner, created: false, officeSetUp: Boolean(nowSetUp) };
+    }
+    return { entityId: cid, created: true, officeSetUp: false };
   }
 
   /** 事務所の画面が、いまの同意の状態を知るため */
@@ -782,6 +864,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
 
   /* ---------------- 振り分け ---------------- */
   const OPS = {
+    'entity.ensure': entityEnsure,
     'office.setup': setup, 'office.recover': recover, 'office.status': status, 'office.consent': consent, 'office.login': login, 'office.link': link, 'office.resetCode': resetCode,
     'feed': feed, 'image.get': imageGet,
     'ticket.put': ticketPut, 'ticket.list': ticketList, 'ticket.setFactory': ticketSetFactory, 'ticket.delete': ticketDelete,
@@ -792,9 +875,10 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   };
 
   /**
+   * @param {{ip?:string}} [ctx] 接続元（サービス間の鍵の試行回数を数えるため）
    * @returns {Promise<{status:number, payload:object}>}
    */
-  async function handle(body) {
+  async function handle(body, ctx = {}) {
     if (!store) return { status: 200, payload: { ok: false, error: 'not_configured' } };
     const op = String(body?.op ?? '');
     const run = OPS[op];
@@ -802,7 +886,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const limit = op === 'inbox.put' ? 1_000_000 : 120_000;
     if (JSON.stringify(body).length > limit) return { status: 413, payload: { ok: false, error: 'too_large' } };
     try {
-      return { status: 200, payload: { ok: true, ...(await run(body)) } };
+      return { status: 200, payload: { ok: true, ...(await run(body, ctx)) } };
     } catch (err) {
       if (err instanceof Fail) return { status: err.status, payload: { ok: false, error: err.error, ...err.extra } };
       console.error('office error', op, err?.message ?? err);
