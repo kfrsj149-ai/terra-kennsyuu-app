@@ -695,3 +695,11 @@
   4. 訂正：以前「統合進捗管理」の役割名を「ロギングスコアラー」にしたのは誤解だった（Logging Scorer は別のアプリ）。役割名は「TERRA統合進捗管理」に戻した
 - 理由：claude.ai のチャットは GitHub に書き込めないものがあった。Drive はコード側から使いにくい。Notion は両方から使える
 - 他プロジェクトへの示唆：各アプリの CLAUDE.md の先頭ブロックを新しい版に差し替えること。Notion が使えない環境は最初に神田さんへ報告する
+
+### 2026-10-02 [log-truck-volume-app]（共通ノート運用の確認：受信箱の報告を取り込み）
+- 変更内容：
+  1. 3つのコード作業（LOG-RA／免税軽油PWA〈日報〉／林業アカデミー向け）が Notion に接続でき、読み書きを確認。4つのチャット（Logging Scorer／TERRAシステム開発／材積計算アプリ開発／林業技能検定対策）から、受信箱に報告が届いた
+  2. 受信箱の5ページを点検（秘密・個人情報の混入なし）し、terra-common に取り込んだ：`projects/Logging-Scorer.md`、`projects/AppSheet版TERRA.md`（AppSheet＋スプレッドシートの別系統）、決定「Logging Scorer の Lemon Squeezy は海外向けの例外として確定」、`infra/`（DNS は Cloudflare、メールは Cloudflare Email Routing で神田さんの Gmail へ）、`projects/LOG-RA.md` に回答。Notion 側の該当ページも更新し、受信箱の元ページに「取込済」を付けた
+  3. 材積計算アプリ開発のチャットからの連絡に回答：競合の「長尺材バグ」の主張は誤り（営業に出さない）、音声入力はオンライン時のみが仕様
+- 理由：チャットが書いた報告は、コード作業の Claude が点検して取り込む決まり
+- 他プロジェクトへの示唆：TERRA統合進捗管理は、AppSheet 版（NIPPO/SATEI/SHIN の別系統）を `overview/全体の進捗.md` で PWA 版と書き分けること。Logging Scorer の LP は `firebase deploy` が未実施の疑い（購入ボタン一時停止が本番に未反映の可能性）
