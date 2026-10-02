@@ -42,7 +42,8 @@
 
       <div class="field">
         <label for="in-species" data-i18n="setup.species">樹種</label>
-        <input type="text" id="in-species" autocomplete="off" data-i18n-placeholder="setup.speciesPlaceholder">
+        <input type="text" id="in-species" list="dl-species" autocomplete="off" data-i18n-placeholder="setup.speciesPlaceholder">
+        <datalist id="dl-species"></datalist>
       </div>
 
       <div class="field">
@@ -354,7 +355,7 @@
     <div class="dlg-title" id="lot-title"></div>
     <div class="field">
       <label for="lot-species" data-i18n="setup.species">樹種</label>
-      <input type="text" id="lot-species" autocomplete="off">
+      <input type="text" id="lot-species" list="dl-species" autocomplete="off">
     </div>
     <div class="field">
       <label for="lot-length" data-i18n="setup.length">規格長さ（m）</label>

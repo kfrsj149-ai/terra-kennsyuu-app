@@ -131,7 +131,7 @@ export async function refreshFeed({ force = false } = {}) {
     await setMeta({ error: r.error ?? 'unknown' });
     return getFeed();                                      // 取れなければ、前回のものを使い続ける
   }
-  const feed = { sites: r.sites, quotas: r.quotas, usage: r.usage, notices: r.notices, serverTime: r.serverTime, fetchedAt: Date.now() };
+  const feed = { sites: r.sites, quotas: r.quotas, usage: r.usage, notices: r.notices, masters: r.masters ?? { trucks: [], destinations: [], species: [] }, serverTime: r.serverTime, fetchedAt: Date.now() };
   await kvSet(FEED, feed);
   await setMeta({ feedAt: Date.now(), error: null });
   return feed;

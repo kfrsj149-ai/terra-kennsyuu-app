@@ -23,6 +23,7 @@ const state = {
   quotas: null, usage: {},
   notices: null,
   sites: null, unlinked: [],
+  masters: null,
   inbox: null,
 };
 
@@ -132,7 +133,8 @@ function explain(e) {
     case 'no_email': return '購入時のメールアドレスを確認できませんでした。サポートへご連絡ください。';
     case 'consent_required': return 'データの取り扱いへの同意が必要です。';
     case 'rate_limited': return '短い時間にたくさん送られたため、少し待ってからやり直してください。';
-    case 'limit_reached': return '保存できる便の数の上限に達しました。古い便を削除してください。';
+    case 'limit_reached': return e.info?.max ? `これ以上は登録できません（1種類あたり${e.info.max}件まで）。使わないものは「使わない」にしても数に含まれます。` : '保存できる便の数の上限に達しました。古い便を削除してください。';
+    case 'master_name_taken': return `その名前は、すでに${MASTER_LABEL[e.info.kind] ?? ''}「${e.info.with?.name ?? ''}」として登録されています（名前・別名のどちらかが同じです）。`;
     case 'in_use': return '枠かお知らせで使っている写真は消せません。';
     case 'not_found': return '見つかりませんでした。画面を開き直してください。';
     case 'invalid': return `${field}の入力を確認してください。`;
@@ -152,7 +154,7 @@ function loadLogin() {
   try { const v = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null'); if (v?.token) { state.token = v.token; state.code = v.code ?? ''; } } catch { /* 無視 */ }
 }
 function logout(message = '') {
-  state.token = ''; state.quotas = null; state.notices = null; state.sites = null; state.inbox = null; state.tickets = [];
+  state.token = ''; state.quotas = null; state.notices = null; state.sites = null; state.masters = null; state.inbox = null; state.tickets = [];
   try { localStorage.setItem(STORE_KEY, JSON.stringify({ token: '', code: state.code })); } catch { /* 無視 */ }
   showLogin(message);
 }
@@ -289,6 +291,7 @@ const ensureNotices = async (force = false) => { if (force || !state.notices) st
 const ensureSites = async (force = false) => {
   if (force || !state.sites) { const [a, b] = await Promise.all([api('site.list'), api('site.unlinked')]); state.sites = a.sites; state.unlinked = b.unlinked; }
 };
+const ensureMasters = async (force = false) => { if (force || !state.masters) state.masters = (await api('master.list')).masters; };
 const ensureInbox = async (force = false) => { if (force || !state.inbox) state.inbox = (await api('inbox.list')).items; };
 
 /** 候補（入力欄の予測変換）に使う工場名・樹種 */
@@ -297,6 +300,8 @@ function knownValues() {
   for (const t of state.tickets) { if (t.destination) dest.add(t.destination); for (const l of t.lots) species.add(l.species); }
   for (const q of state.quotas ?? []) { dest.add(q.destination); if (q.species) species.add(q.species); }
   for (const n of state.notices ?? []) if (n.destination) dest.add(n.destination);
+  for (const m of state.masters?.destination ?? []) if (!m.closed) dest.add(m.name);
+  for (const m of state.masters?.species ?? []) if (!m.closed) species.add(m.name);
   return { dest: [...dest], species: [...species] };
 }
 const datalist = (id, values) => h('datalist', { id }, values.map((v) => h('option', { value: v })));
@@ -526,7 +531,7 @@ function quotaCard(q) {
 }
 
 async function renderQuotas(force = false) {
-  await Promise.all([ensureQuotas(force), ensureNotices(), state.tickets.length ? null : loadTickets()]);
+  await Promise.all([ensureQuotas(force), ensureNotices(), ensureMasters().catch(() => {}), state.tickets.length ? null : loadTickets()]);
   const active = state.quotas.filter((q) => q.status === 'active');
   const archived = state.quotas.filter((q) => q.status !== 'active');
   setView('quotas', 
@@ -778,6 +783,69 @@ function siteDialog(existing, preset = {}) {
 }
 
 /* ==================================================================
+ * タブ：マスター（車番・納入先・樹種）
+ * ================================================================== */
+const MASTER_LABEL = { truck: '車番', destination: '納入先', species: '樹種' };
+const MASTER_HINT = {
+  truck: '現場アプリの「トラック車番」の選択肢になります。表記のゆれ（全角半角・空白）は同じものとして扱います。',
+  destination: '現場アプリの「納入先」の選択肢になります。納入枠の工場名もここから選べます。',
+  species: '現場アプリの樹種の入力欄に、候補として出ます（自由入力もできます）。',
+};
+
+async function renderMasters(force = false) {
+  await ensureMasters(force);
+  const section = (kind) => {
+    const list = state.masters[kind];
+    const open = list.filter((m) => !m.closed);
+    const closed = list.filter((m) => m.closed);
+    const card = (m) => h('div', { class: 'card' },
+      h('div', { class: 'row' }, h('b', { class: 'grow' }, m.name, m.closed ? h('span', { class: 'tag gray' }, '使わない') : null),
+        h('button', { type: 'button', class: 'btn sm', onclick: () => masterDialog(kind, m) }, '修正')),
+      m.aliases.length ? h('div', { class: 'muted' }, `別名：${m.aliases.join('、')}`) : null);
+    const row = (m) => h('tr', {},
+      h('td', {}, h('b', {}, m.name), m.closed ? h('span', { class: 'tag gray' }, '使わない') : null),
+      h('td', {}, m.aliases.join('、') || '—'),
+      h('td', {}, h('button', { type: 'button', class: 'btn sm', onclick: () => masterDialog(kind, m) }, '修正')));
+    const table = (items) => (narrow()
+      ? h('div', { class: 'cards' }, items.map(card))
+      : h('div', { class: 'table-wrap' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['名前', '別名', ''].map((x) => h('th', {}, x)))),
+        h('tbody', {}, items.map(row)))));
+    return h('section', { style: 'margin-bottom:28px' },
+      h('h3', {}, `${MASTER_LABEL[kind]}（${open.length}件）`),
+      h('div', { class: 'toolbar' },
+        h('button', { type: 'button', class: 'btn primary', onclick: () => masterDialog(kind) }, `＋ ${MASTER_LABEL[kind]}を追加`),
+        h('span', { class: 'hint' }, MASTER_HINT[kind])),
+      open.length ? table(open) : h('div', { class: 'empty' }, `${MASTER_LABEL[kind]}はまだ登録されていません。`),
+      closed.length ? h('details', {}, h('summary', {}, `使わなくなったもの（${closed.length}件）`), table(closed)) : null);
+  };
+  setView('masters',
+    h('h2', {}, 'マスター（車番・納入先・樹種）'),
+    h('p', { class: 'hint' }, 'ここに登録すると、事務所とデータを共有している全部の現場アプリに配られます。圏外でも、最後に受け取った内容で使えます。端末で個別に登録した名前も、そのまま使えます。消す代わりに「使わない」にすると、選択肢から隠れます（過去の記録は変わりません）。'),
+    ['truck', 'destination', 'species'].map(section));
+}
+
+function masterDialog(kind, existing) {
+  const m = existing ?? { name: '', aliases: [], closed: false };
+  const f = {
+    name: h('input', { type: 'text', value: m.name, required: true, maxlength: 30, autocomplete: 'off' }),
+    aliases: h('textarea', { rows: 3, placeholder: '1行に1つ' }, m.aliases.join('\n')),
+    closed: h('input', { type: 'checkbox', checked: m.closed }),
+  };
+  dialog(existing ? `${MASTER_LABEL[kind]}を修正` : `${MASTER_LABEL[kind]}を追加`, [
+    h('label', {}, `${MASTER_LABEL[kind]}（30文字まで）`, f.name),
+    h('label', {}, '別名（昔からの呼び名・書き間違いやすい名前）', f.aliases),
+    h('label', { class: 'row', style: 'font-weight:600' }, f.closed, '使わない（選択肢から隠す）'),
+  ], {
+    onOk: async () => {
+      await api('master.put', { master: { ...(existing ? { id: existing.id } : {}), kind, name: f.name.value, aliases: f.aliases.value.split('\n'), closed: f.closed.checked } });
+      await renderMasters(true);
+      toast('保存しました');
+    },
+  });
+}
+
+/* ==================================================================
  * タブ：受信箱（スマホで撮った写真）
  * ================================================================== */
 async function renderInbox(force = false) {
@@ -874,7 +942,7 @@ function renderSettings() {
  * 画面の切り替え
  * ================================================================== */
 // タブを開くたびに最新を読み直す（現場から便が届くと、枠の残りや名寄せ候補が変わるため）
-const TABS = { tickets: renderTickets, quotas: () => renderQuotas(true), notices: () => renderNotices(true), sites: () => renderSites(true), inbox: () => renderInbox(true), settings: renderSettings };
+const TABS = { tickets: renderTickets, quotas: () => renderQuotas(true), notices: () => renderNotices(true), sites: () => renderSites(true), masters: () => renderMasters(true), inbox: () => renderInbox(true), settings: renderSettings };
 
 async function openTab(name) {
   state.tab = name;
@@ -971,6 +1039,7 @@ async function boot() {
     if (!state.token) return;
     if (state.tab === 'tickets' && state.tickets.length) drawTickets();
     else if (state.tab === 'sites' && state.sites) guard(() => renderSites(false));
+    else if (state.tab === 'masters' && state.masters) guard(() => renderMasters(false));
   });
   loadLogin();
   // スマホ用のログインリンク（#t=…）。札はサーバーに送られない部分（#以降）に入れてある

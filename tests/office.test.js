@@ -719,3 +719,87 @@ test('【点検7】事務所の初期設定で、会社の一覧の索引が契�
   await env.err({ op: 'office.setup', consent: CONSENT, code: codeA, email: EMAILS.cus_A }, 'already_setup');
   assert.equal(Object.keys(await env.store.hgetall('companies')).length, 1);
 });
+
+/* ------------------------------------------------------------------
+ * 車番・納入先・樹種のマスター
+ * ------------------------------------------------------------------ */
+test('マスター：事務所が登録すると、現場の端末が feed で受け取る。使わないものは送らない', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const truck = (await env.ok({ op: 'master.put', token: a.token, master: { kind: 'truck', name: '岩手100あ1234' } })).master;
+  assert.match(truck.id, /^[0-9A-HJKMNP-TV-Z]{8}$/);
+  const dest = (await env.ok({ op: 'master.put', token: a.token, master: { kind: 'destination', name: '秋田プライウッド', aliases: ['秋田PW'] } })).master;
+  await env.ok({ op: 'master.put', token: a.token, master: { kind: 'species', name: 'カラマツ' } });
+  const old = (await env.ok({ op: 'master.put', token: a.token, master: { kind: 'truck', name: '岩手100あ9999' } })).master;
+  await env.ok({ op: 'master.put', token: a.token, master: { ...old, closed: true } });
+
+  const list = (await env.ok({ op: 'master.list', token: a.token })).masters;
+  assert.equal(list.truck.length, 2);                       // 事務所の一覧には「使わない」ものも出る
+  assert.equal(list.truck.find((m) => m.id === old.id).closed, true);
+
+  const feed = await env.ok({ op: 'feed', code: codeA });
+  assert.deepEqual(feed.masters.trucks.map((m) => m.name), ['岩手100あ1234']);
+  assert.deepEqual(feed.masters.destinations.map((m) => [m.id, m.name, m.aliases]), [[dest.id, '秋田プライウッド', ['秋田PW']]]);
+  assert.deepEqual(feed.masters.species.map((m) => m.name), ['カラマツ']);
+  assert.equal(truck.id, feed.masters.trucks[0].id);
+});
+
+test('マスター：名前は表記ゆれ（全角半角・空白・英字の大小）を吸収して、同じ種類の中では重ならない。種類が違えば同じ名前でもよい', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const put = (master) => ({ op: 'master.put', token: a.token, master });
+  await env.ok(put({ kind: 'truck', name: '岩手100あ1234' }));
+  const taken = await env.err(put({ kind: 'truck', name: '岩手 １００ あ １２３４' }), 'master_name_taken');
+  assert.equal(taken.with.name, '岩手100あ1234');
+  assert.equal(taken.kind, 'truck');
+  await env.ok(put({ kind: 'destination', name: 'ABC工場' }));
+  await env.err(put({ kind: 'destination', name: 'abc 工場' }), 'master_name_taken');
+  await env.err(put({ kind: 'destination', name: '別の工場', aliases: ['ａｂｃ工場'] }), 'master_name_taken');   // 別名が他とぶつかる
+  await env.ok(put({ kind: 'species', name: 'ABC工場' }));                                                          // 種類が違えばよい
+});
+
+test('マスター：名前を直してもIDは変わらない。入力は検査される', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const put = (master) => ({ op: 'master.put', token: a.token, master });
+  const m = (await env.ok(put({ kind: 'species', name: 'からまつ' }))).master;
+  const renamed = (await env.ok(put({ id: m.id, kind: 'species', name: 'カラマツ', aliases: ['唐松', '唐松', 'カラマツ', ''] }))).master;
+  assert.equal(renamed.id, m.id);
+  assert.equal(renamed.createdAt, m.createdAt);
+  assert.deepEqual(renamed.aliases, ['唐松']);                 // 重複・本名と同じ・空は除く
+  await env.err(put({ kind: 'bogus', name: 'x' }), 'invalid');
+  await env.err(put({ kind: 'species', name: '   ' }), 'invalid');
+  await env.err(put({ kind: 'species', name: 'あ'.repeat(31) }), 'too_long');
+  await env.err(put({ id: 'bad', kind: 'species', name: 'x' }), 'invalid');
+  await env.err(put({ id: 'ZZZZZZZZ', kind: 'species', name: 'x' }), 'not_found');
+  await env.err(put({ kind: 'species', name: 'あ', aliases: ['い'.repeat(31)] }), 'too_long');
+  // 種類をまたいだIDでは修正できない
+  const t = (await env.ok(put({ kind: 'truck', name: '岩手100あ1' }))).master;
+  await env.err(put({ id: t.id, kind: 'species', name: '何か' }), 'not_found');
+});
+
+test('マスター：他社のマスターは見えない・書けない。ライセンスコードだけでは登録できない', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const b = await companyWithOffice(env, codeB);
+  await env.ok({ op: 'master.put', token: a.token, master: { kind: 'destination', name: 'A社の工場' } });
+  assert.deepEqual((await env.ok({ op: 'feed', code: codeB })).masters.destinations, []);
+  assert.deepEqual((await env.ok({ op: 'master.list', token: b.token })).masters.destination, []);
+  await env.err({ op: 'master.put', code: codeA, master: { kind: 'truck', name: 'x' } }, 'unauthorized', 401);   // 運転手は登録できない
+  await env.err({ op: 'master.list', token: 'forged' }, 'unauthorized', 401);
+  // 同じ名前でも、会社が違えば別々に登録できる
+  await env.ok({ op: 'master.put', token: b.token, master: { kind: 'destination', name: 'A社の工場' } });
+});
+
+test('マスター：1種類あたりの登録数に上限がある（上限でも、既存の修正はできる）', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  let first = null;
+  for (let i = 0; i < 500; i += 1) {
+    const r = await env.ok({ op: 'master.put', token: a.token, master: { kind: 'truck', name: `車${i}` } });
+    first ??= r.master;
+  }
+  await env.err({ op: 'master.put', token: a.token, master: { kind: 'truck', name: '501台目' } }, 'limit_reached');
+  await env.ok({ op: 'master.put', token: a.token, master: { ...first, name: '車0改' } });
+  await env.ok({ op: 'master.put', token: a.token, master: { kind: 'species', name: '樹種は別枠' } });
+});

@@ -200,8 +200,11 @@ async function choicesFor(kind) {
   const local = (await db.listOptions(kind)).map((o) => o.value);
   const feed = state.settings.office ? state.feed : null;
   let fromOffice = [];
+  const masters = feed?.masters ?? {};
   if (kind === 'site') fromOffice = (feed?.sites ?? []).filter((x) => !x.closed).map((x) => x.name);
-  if (kind === 'destination') fromOffice = (feed?.quotas ?? []).filter((q) => q.status === 'active').map((q) => q.destination);
+  if (kind === 'destination') fromOffice = [...(masters.destinations ?? []).map((m) => m.name), ...(feed?.quotas ?? []).filter((q) => q.status === 'active').map((q) => q.destination)];
+  if (kind === 'truck') fromOffice = (masters.trucks ?? []).map((m) => m.name);
+  if (kind === 'species') fromOffice = (masters.species ?? []).map((m) => m.name);
   return uniqueNames([...fromOffice, ...local]);
 }
 
@@ -231,6 +234,16 @@ async function fillSelects() {
       el.appendChild(opt);
     }
     if (prev) el.value = prev;
+  }
+  // 樹種は自由入力のまま。事務所が登録した樹種を、入力の候補（予測変換）に出す
+  const dl = $('#dl-species');
+  if (dl) {
+    dl.innerHTML = '';
+    for (const value of await choicesFor('species')) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      dl.appendChild(opt);
+    }
   }
 }
 

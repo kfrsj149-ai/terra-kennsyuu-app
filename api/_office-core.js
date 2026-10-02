@@ -509,6 +509,71 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     return { site };
   }
 
+  /* ---------------- 車番・納入先・樹種のマスター（事務所が登録して、現場の端末に配る） ---------------- */
+  const MASTER_KINDS = ['truck', 'destination', 'species'];
+  const MASTER_MAX = 500;                  // 1種類あたりの登録数（共有の保存先を使い切らないため）
+
+  async function loadMasterKind(cid, kind) {
+    const all = await store.hgetall(key(cid, `m:${kind}`));
+    return Object.values(all).map((m) => parseJson(m)).filter(Boolean)
+      .sort((a, b) => (a.closed === b.closed ? a.name.localeCompare(b.name, 'ja') : a.closed ? 1 : -1));
+  }
+  async function loadMasters(cid) {
+    const [truck, destination, species] = await Promise.all(MASTER_KINDS.map((k) => loadMasterKind(cid, k)));
+    return { truck, destination, species };
+  }
+
+  async function masterList(body) {
+    const { cid } = await officeCtx(body);
+    return { masters: await loadMasters(cid) };
+  }
+
+  /**
+   * 登録・修正。名前は現場の台帳と同じ整え方（全角半角・空白のゆれを吸収）で、同じ種類の中で重ならない。
+   * 削除はせず「使わない」にして選択肢から隠す（過去の記録が、その名前を使っているため）。
+   */
+  async function masterPut(body) {
+    const { cid } = await officeCtx(body);
+    const input = body.master ?? {};
+    const kind = String(input.kind ?? '');
+    if (!MASTER_KINDS.includes(kind)) throw fail('invalid', { field: 'kind' });
+    const v = validateSiteName(input.name);
+    if (!v.ok) throw fail(v.error === 'empty' ? 'invalid' : 'too_long', { field: 'name', max: SITE_NAME_MAX });
+
+    const aliases = [];
+    for (const a of (Array.isArray(input.aliases) ? input.aliases : []).slice(0, 10)) {
+      const av = validateSiteName(a);
+      if (!av.ok) { if (av.error === 'too_long') throw fail('too_long', { field: 'aliases' }); continue; }
+      if (nameKey(av.name) !== nameKey(v.name) && !aliases.some((x) => nameKey(x) === nameKey(av.name))) aliases.push(av.name);
+    }
+
+    const items = await loadMasterKind(cid, kind);
+    let existing = null;
+    if (input.id) {
+      if (!isValidId(input.id)) throw fail('invalid', { field: 'id' });
+      existing = items.find((m) => m.id === input.id);
+      if (!existing) throw fail('not_found');
+    } else if (items.length >= MASTER_MAX) {
+      throw fail('limit_reached', { max: MASTER_MAX });
+    }
+    for (const candidate of [v.name, ...aliases]) {
+      const hit = findSiteByName(items, candidate, existing?.id);
+      if (hit) throw fail('master_name_taken', { name: candidate, kind, with: { id: hit.id, name: hit.name } });
+    }
+
+    let id = existing?.id;
+    if (!id) {
+      for (let i = 0; i < 10 && !id; i += 1) {
+        const c = randomChars(8);
+        if (!items.some((m) => m.id === c)) id = c;
+      }
+      if (!id) throw fail('server_busy', {}, 503);
+    }
+    const master = { id, kind, name: v.name, aliases, closed: Boolean(input.closed), createdAt: existing?.createdAt ?? now(), updatedAt: now() };
+    await store.hset(key(cid, `m:${kind}`), id, JSON.stringify(master));
+    return { master };
+  }
+
   /** まだ台帳で引けない現場名（現場の端末が自由入力したもの）。名寄せの候補 */
   async function siteUnlinked(body) {
     const { cid } = await officeCtx(body);
@@ -812,7 +877,11 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const usage = await computeUsage(cid, quotas);
     // 終わったお知らせは送らない（端末側でも期間を見て畳むが、無駄な通信を減らす）
     const notices = noticesAll.filter((n) => !n.to || (n.to.length === 10 ? n.to : n.to.slice(0, 10)) >= today);
-    return { serverTime: now(), sites, quotas, usage, notices };
+    // 車番・納入先・樹種のマスター。使わないことにしたものは送らない（現場の選択肢に出さないため）
+    const m = await loadMasters(cid);
+    const slim = (list) => list.filter((x) => !x.closed).map((x) => ({ id: x.id, name: x.name, aliases: x.aliases }));
+    const masters = { trucks: slim(m.truck), destinations: slim(m.destination), species: slim(m.species) };
+    return { serverTime: now(), sites, quotas, usage, notices, masters };
   }
 
   /* ---------------- 受信箱（スマホで撮った写真） ---------------- */
@@ -869,6 +938,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     'feed': feed, 'image.get': imageGet,
     'ticket.put': ticketPut, 'ticket.list': ticketList, 'ticket.setFactory': ticketSetFactory, 'ticket.delete': ticketDelete,
     'site.list': siteList, 'site.put': sitePut, 'site.unlinked': siteUnlinked,
+    'master.list': masterList, 'master.put': masterPut,
     'quota.list': quotaList, 'quota.put': quotaPut, 'quota.delete': quotaDelete,
     'notice.list': noticeList, 'notice.put': noticePut, 'notice.delete': noticeDelete,
     'inbox.put': inboxPut, 'inbox.list': inboxList, 'inbox.delete': inboxDelete,
