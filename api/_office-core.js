@@ -265,56 +265,47 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     if (!active) throw fail('subscription_inactive', {}, 402);
     await verifyOwnerEmail(payload, body.email);
 
-    // 基盤が先に発行した事業体ID（entity.ensure）があれば、それをそのまま使う。別のIDは作らない
-    const pre = payload.c ? await store.get(entKey(payload.c)) : null;
-    if (pre) {
-      // 先に契約との結びつきを取った1件だけが進める（同時に2か所から設定されても、事務所コードは1つだけ有効）
-      if (!(await store.setIfAbsent(licKey(payload), pre))) throw fail('already_setup');
-      const raw = randomChars(12);
-      const salt = randomBytes(16).toString('hex');
-      const auth = { salt, hash: hashCode(raw, salt), epoch: 1, createdAt: now() };
-      try {
-        await store.set(key(pre, 'auth'), JSON.stringify(auth));
-        await store.set(key(pre, 'primary'), JSON.stringify({ s: payload.s }));
-        await store.hset('companies', pre, JSON.stringify({ createdAt: now() }));
-        await store.set(key(pre, 'sub:' + payload.s), JSON.stringify({ active: true, checkedAt: now() }), 40 * 86400);
-        await store.set(key(pre, 'consent'), JSON.stringify({ version: CONSENT_VERSION, at: now() }));
-      } catch (err) {
-        await store.del(licKey(payload));      // 途中で失敗したら結びつきを外して、やり直せるようにする
-        throw err;
+    // 事業体IDを決める。基盤が先に発行したID（entity.ensure）があれば、それをそのまま使う（別のIDは作らない）。
+    // 顧客IDとの結びつき（ent）は、契約との結びつき（lic）より先に取る。
+    // 先に lic を取ると、同時に走った ensure が別のIDを返してしまい、IDが二つに割れるため
+    let cid = payload.c ? await store.get(entKey(payload.c)) : null;
+    if (!cid) {
+      for (let i = 0; i < 10 && !cid; i += 1) {
+        const candidate = randomChars(8);
+        if (await store.setIfAbsent(key(candidate, 'created'), String(now()))) cid = candidate;
       }
-      return { companyId: pre, officeCode: formatOfficeCode(raw), token: issueToken(pre, auth.epoch) };
+      if (!cid) throw fail('server_busy', {}, 503);
+      if (payload.c && !(await store.setIfAbsent(entKey(payload.c), cid))) {
+        // 同時に ensure が先に結びつけた。作った分は捨てて、先に結びついたIDを使う
+        await store.del(key(cid, 'created'));
+        cid = await store.get(entKey(payload.c));
+      }
     }
 
-    let cid = null;
-    for (let i = 0; i < 10 && !cid; i += 1) {
-      const candidate = randomChars(8);
-      if (await store.setIfAbsent(key(candidate, 'created'), String(now()))) cid = candidate;
-    }
-    if (!cid) throw fail('server_busy', {}, 503);
-
+    // 同じ事業体IDの初期設定が同時に走らないよう、短い錠をかける（失敗したら外して、すぐやり直せる）
+    const lockKey = key(cid, 'setup-lock');
+    if ((await store.incr(lockKey, 60)) !== 1) throw fail('already_setup');
     const raw = randomChars(12);
     const salt = randomBytes(16).toString('hex');
     const auth = { salt, hash: hashCode(raw, salt), epoch: 1, createdAt: now() };
-    await store.set(key(cid, 'auth'), JSON.stringify(auth));
-    await store.set(key(cid, 'primary'), JSON.stringify({ s: payload.s }));
-    // 運営者の会社一覧の索引は、契約との結びつきより先に書く（途中で失敗して一覧に載らない会社ができないように）
-    await store.hset('companies', cid, JSON.stringify({ createdAt: now() }));
-    // 同じ契約で同時に初期設定されても、先に結びついたほうだけを有効にする
-    if (!(await store.setIfAbsent(licKey(payload), cid))) {
-      await store.del(key(cid, 'auth')); await store.del(key(cid, 'primary')); await store.del(key(cid, 'created'));
-      await store.hdel('companies', cid);
-      throw fail('already_setup');
+    try {
+      await store.set(key(cid, 'auth'), JSON.stringify(auth));
+      await store.set(key(cid, 'primary'), JSON.stringify({ s: payload.s }));
+      // 運営者の会社一覧の索引は、契約との結びつきより先に書く（途中で失敗して一覧に載らない会社ができないように）
+      await store.hset('companies', cid, JSON.stringify({ createdAt: now() }));
+      await store.set(key(cid, 'sub:' + payload.s), JSON.stringify({ active: true, checkedAt: now() }), 40 * 86400);
+      await store.set(key(cid, 'consent'), JSON.stringify({ version: CONSENT_VERSION, at: now() }));
+      // 契約との結びつきは最後に取る。取れたら「設定済み」。途中で止まっても結びつきは無いので、やり直せる
+      // （やり直すと事務所コードが作り直される。止まった回の事務所コードは、誰にも渡っていない）
+      if (!(await store.setIfAbsent(licKey(payload), cid))) {
+        await store.del(key(cid, 'auth')); await store.del(key(cid, 'primary')); await store.del(key(cid, 'consent'));
+        await store.del(key(cid, 'sub:' + payload.s)); await store.hdel('companies', cid);
+        throw fail('already_setup');
+      }
+    } catch (err) {
+      await store.del(lockKey);
+      throw err;
     }
-    // 同じ瞬間に基盤が別の事業体IDを発行していたら、IDが二つに割れるのでやり直してもらう
-    if (payload.c && !(await store.setIfAbsent(entKey(payload.c), cid))) {
-      await store.del(licKey(payload)); await store.del(key(cid, 'auth')); await store.del(key(cid, 'primary')); await store.del(key(cid, 'created'));
-      await store.hdel('companies', cid);
-      throw fail('server_busy', {}, 503);
-    }
-    await store.set(key(cid, 'sub:' + payload.s), JSON.stringify({ active: true, checkedAt: now() }), 40 * 86400);
-    const consent = { version: CONSENT_VERSION, at: now() };
-    await store.set(key(cid, 'consent'), JSON.stringify(consent));
     return { companyId: cid, officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
   }
 
@@ -324,11 +315,11 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   async function requireService(body, ctx) {
     const configured = String(serviceKey() ?? '');
     if (configured.length < 24) throw fail('service_not_configured', {}, 503);
+    // 正しい鍵なら必ず通す（同じ出口IPの誰かに間違いを重ねられても、正規のサーバーは止まらない）。数えるのは失敗だけ
+    if (safeEqualHex(sha(String(body.serviceKey ?? '')), sha(configured))) return;
     const ipKey = `svc:fail:ip:${sha(String(ctx?.ip ?? 'unknown')).slice(0, 12)}`;
     const n = await store.incr(ipKey, LOCK_SEC);
-    if (n > SERVICE_LOCK_MAX) throw fail('locked', { retryAfterSec: LOCK_SEC }, 429);
-    if (!safeEqualHex(sha(String(body.serviceKey ?? '')), sha(configured))) throw fail('unauthorized', {}, 401);
-    await store.del(ipKey);
+    throw n > SERVICE_LOCK_MAX ? fail('locked', { retryAfterSec: LOCK_SEC }, 429) : fail('unauthorized', {}, 401);
   }
 
   /**
@@ -339,13 +330,11 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     await requireService(body, ctx);
     const customerId = clean(body.stripeCustomerId);
     if (!/^cus_[A-Za-z0-9]{6,64}$/.test(customerId)) throw fail('invalid', { field: 'stripeCustomerId' });
-    const setUp = await store.get(licKey({ c: customerId }));
-    if (setUp) {
-      await store.setIfAbsent(entKey(customerId), setUp);
-      return { entityId: setUp, created: false, officeSetUp: true };
-    }
+    // いったん返したIDは変えない（ent が正）。この改修より前に設定済みの会社は lic だけにあるので、それを ent に写す
+    const licHolder = await store.get(licKey({ c: customerId }));
+    if (licHolder) await store.setIfAbsent(entKey(customerId), licHolder);
     const existing = await store.get(entKey(customerId));
-    if (existing) return { entityId: existing, created: false, officeSetUp: false };
+    if (existing) return { entityId: existing, created: false, officeSetUp: licHolder === existing };
 
     let cid = null;
     for (let i = 0; i < 10 && !cid; i += 1) {
@@ -358,8 +347,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       // 同時に別の呼び出しが先に結びつけた。作った分は捨てて、先に結びついたIDを返す
       await store.del(key(cid, 'created')); await store.hdel('entities', cid);
       const winner = await store.get(entKey(customerId));
-      const nowSetUp = await store.get(licKey({ c: customerId }));
-      return { entityId: nowSetUp ?? winner, created: false, officeSetUp: Boolean(nowSetUp) };
+      return { entityId: winner, created: false, officeSetUp: (await store.get(licKey({ c: customerId }))) === winner };
     }
     return { entityId: cid, created: true, officeSetUp: false };
   }
@@ -427,10 +415,22 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     let active;
     try { active = await isSubscriptionActive(payload.s); } catch { throw fail('subscription_unverified', {}, 503); }
     if (!active) throw fail('subscription_inactive', {}, 402);
+    // 契約者本人だけがつなげられる（ライセンスコードは運転手も知っているので、コードだけで他社の契約を奪えないように）
+    await verifyOwnerEmail(payload, body.email);
     const lk = licKey(payload);
     const existing = await store.get(lk);
     if (existing && existing !== cid) throw fail('license_in_use');
-    if (!existing) await store.set(lk, cid);
+    // 別アプリが先に事業体IDを発行済みの契約は、そのIDの会社にしかつなげられない（IDを横取りさせない）
+    if (payload.c) {
+      const pre = await store.get(entKey(payload.c));
+      if (pre && pre !== cid) throw fail('license_in_use');
+      if (!pre && !(await store.setIfAbsent(entKey(payload.c), cid))) {
+        if ((await store.get(entKey(payload.c))) !== cid) throw fail('license_in_use');
+      }
+    }
+    if (!existing && !(await store.setIfAbsent(lk, cid))) {
+      if ((await store.get(lk)) !== cid) throw fail('license_in_use');
+    }
     return {};
   }
 
@@ -569,7 +569,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       }
       if (!id) throw fail('server_busy', {}, 503);
     }
-    const master = { id, kind, name: v.name, aliases, closed: Boolean(input.closed), createdAt: existing?.createdAt ?? now(), updatedAt: now() };
+    const master = { id, kind, name: v.name, aliases, closed: input.closed === true, createdAt: existing?.createdAt ?? now(), updatedAt: now() };
     await store.hset(key(cid, `m:${kind}`), id, JSON.stringify(master));
     return { master };
   }

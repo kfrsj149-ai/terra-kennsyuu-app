@@ -907,6 +907,7 @@ function showOfficeCode(code, title) {
 
 function renderSettings() {
   const linkCode = h('textarea', { rows: 3, spellcheck: 'false', placeholder: '別のアプリのライセンスコード' });
+  const linkEmail = h('input', { type: 'email', autocomplete: 'off' });
   setView('settings', 
     h('h2', {}, '設定'),
     h('div', { class: 'stack' },
@@ -932,8 +933,9 @@ function renderSettings() {
         h('h3', { style: 'margin-top:0' }, '別のアプリの契約をつなぐ'),
         h('p', { class: 'hint' }, '日報・造林など別のTERRAアプリを別々に契約した場合、そのライセンスコードをここで入れると、同じ現場の台帳を共有できます。'),
         linkCode,
+        h('label', {}, 'そのアプリを購入したときのメールアドレス（契約者ご本人の確認）', linkEmail),
         h('div', {}, h('button', { type: 'button', class: 'btn', onclick: () => guard(async () => {
-          await api('office.link', { code: linkCode.value.trim() }); linkCode.value = ''; toast('つなぎました');
+          await api('office.link', { code: linkCode.value.trim(), email: linkEmail.value.trim() }); linkCode.value = ''; linkEmail.value = ''; toast('つなぎました');
         }) }, 'つなぐ'))),
       h('div', {}, h('button', { type: 'button', class: 'btn', onclick: () => logout() }, 'この端末でログアウト'))));
 }

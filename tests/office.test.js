@@ -473,14 +473,16 @@ test('別のアプリの契約を、同じ事業体につなげる', async () =>
   const env = setupEnv();
   const a = await companyWithOffice(env, codeA);
   await env.err({ op: 'feed', code: codeB }, 'office_not_set_up');
-  await env.ok({ op: 'office.link', token: a.token, code: codeB });
+  await env.err({ op: 'office.link', token: a.token, code: codeB }, 'bad_email');                                 // メール無しでは、つなげられない
+  await env.err({ op: 'office.link', token: a.token, code: codeB, email: 'wrong@example.com' }, 'bad_email');       // 他人のメールでも
+  await env.ok({ op: 'office.link', token: a.token, code: codeB, email: EMAILS.cus_B });
   await env.ok({ op: 'site.put', token: a.token, site: { name: '本谷' } });
   assert.equal((await env.ok({ op: 'feed', code: codeB })).sites[0].name, '本谷');
   // すでに別の事業体につながっている契約は奪えない
   const other = lib.signToken({ s: 'sub_C', c: 'cus_C' });
   env.active.add('sub_C');
   const c = await companyWithOffice(env, other);
-  await env.err({ op: 'office.link', token: c.token, code: codeB }, 'license_in_use');
+  await env.err({ op: 'office.link', token: c.token, code: codeB, email: EMAILS.cus_B }, 'license_in_use');
 });
 
 test('入力に混じった制御文字は取り除かれる', async () => {
@@ -773,6 +775,8 @@ test('マスター：名前を直してもIDは変わらない。入力は検査
   await env.err(put({ id: 'bad', kind: 'species', name: 'x' }), 'invalid');
   await env.err(put({ id: 'ZZZZZZZZ', kind: 'species', name: 'x' }), 'not_found');
   await env.err(put({ kind: 'species', name: 'あ', aliases: ['い'.repeat(31)] }), 'too_long');
+  // 「使わない」は真偽値だけを受け付ける（文字列の "false" を「使わない」と取り違えない）
+  assert.equal((await env.ok(put({ id: m.id, kind: 'species', name: 'カラマツ', closed: 'false' }))).master.closed, false);
   // 種類をまたいだIDでは修正できない
   const t = (await env.ok(put({ kind: 'truck', name: '岩手100あ1' }))).master;
   await env.err(put({ id: t.id, kind: 'species', name: '何か' }), 'not_found');
