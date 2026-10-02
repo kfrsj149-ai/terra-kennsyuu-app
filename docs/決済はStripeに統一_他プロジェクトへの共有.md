@@ -1,5 +1,7 @@
 # 【TERRA共通方針】国内向けアプリの決済はStripeに統一します
 
+> **正本は `kfrsj149-ai/terra-common`（rules/決済はStripeに統一.md）。** このファイルはコピー。内容が食い違うときは terra-common を正とする（2026-10-02〜）。
+
 > 2026-09-28 決定 / 実証元：丸太検収PWA（terra-kennsyuu-app）
 > 他のTERRA系プロジェクトのCLAUDE.md・コード・法務ページに反映してください。
 

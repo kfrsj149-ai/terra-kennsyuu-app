@@ -675,3 +675,14 @@
   2. **機密性の違うデータは、同意の範囲も分ける。** 検収データへの同意に、単価・原価を含めない
   3. 単価は適用開始日つきの履歴にし、金額は便に保存せず表示時に計算する（過去の数字が変わらない）
 - 詳細：docs/構想_TERRA基盤とアプリの分け方.md
+
+### 2026-10-02 [log-truck-volume-app]（全アプリ共通の「黒板」terra-common を作成）
+- 変更内容：
+  1. 非公開リポジトリ `kfrsj149-ai/terra-common` を作成。rules（現場名とID／QR規格／Stripe統一／データの取り扱いと同意）、decisions（1決定1ファイル・11件）、contracts（事務所API v1）、
+     shared-code（office-rules.js の正本）、infra（ドメイン・サービス・環境変数の名前。値は置かない）、projects（LOG-RA／NIPPO-RA／SATEI-RA／SHIN-RA）、templates を収録
+  2. LOG-RA の CLAUDE.md の先頭に「作業の最初に terra-common を読む／終わりに自分の projects ファイルを更新」のブロックを追加。docs の共有用コピー5本に「正本は terra-common」の注記
+  3. 今後は **Google Drive の TERRA_進捗管理 は人が読むための写し**、正本は terra-common
+- 理由：アプリごとにClaudeのセッションが別で、決定事項を毎回説明し直す必要があった。Claude同士は直接話せないので、全員が読み書きする共通の置き場所を決めた
+- 他プロジェクトへの示唆：NIPPO-RA（免税軽油）側のリポジトリにも templates/各アプリのCLAUDE.mdに貼る文.md を貼ること。SATEI-RA・SHIN-RA は着手時に同じブロックを貼る。
+  つなぐ部分（contracts/・shared-code/）を変えたら、つながる全アプリのテストを流してからリリースする
+- 未記入：infra/ドメインとメール.md の登録事業者・DNS・メール転送（神田さんに確認待ち）
