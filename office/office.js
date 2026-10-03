@@ -24,6 +24,7 @@ const state = {
   notices: null,
   sites: null, unlinked: [],
   masters: null,
+  diff: null, diffFilter: null,
   inbox: null,
 };
 
@@ -154,7 +155,7 @@ function loadLogin() {
   try { const v = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null'); if (v?.token) { state.token = v.token; state.code = v.code ?? ''; } } catch { /* 無視 */ }
 }
 function logout(message = '') {
-  state.token = ''; state.quotas = null; state.notices = null; state.sites = null; state.masters = null; state.inbox = null; state.tickets = [];
+  state.token = ''; state.quotas = null; state.notices = null; state.sites = null; state.masters = null; state.diff = null; state.diffFilter = null; state.inbox = null; state.tickets = [];
   try { localStorage.setItem(STORE_KEY, JSON.stringify({ token: '', code: state.code })); } catch { /* 無視 */ }
   showLogin(message);
 }
@@ -783,6 +784,74 @@ function siteDialog(existing, preset = {}) {
 }
 
 /* ==================================================================
+ * タブ：工場との差（現場の検収値と、工場の検収値の違い）
+ * ================================================================== */
+const signed = (num) => { const n = BigInt(num); return `${n >= 0n ? '+' : '−'}${formatVolume(n < 0n ? -n : n)}`; };
+/** 差の率（%）。差÷現場の値。現場の値が0なら — */
+function diffRate(diffNum, oursNum) {
+  const o = BigInt(oursNum);
+  if (o <= 0n) return '—';
+  const r = Number((BigInt(diffNum) * 10000n) / o) / 100;
+  return `${r >= 0 ? '+' : '−'}${Math.abs(r).toFixed(1)}%`;
+}
+const dayAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return dateKey(d); };
+
+async function renderDiff(force = false) {
+  state.diffFilter ??= { from: dayAgo(90), to: '' };
+  if (force || !state.diff) state.diff = await api('analysis.diff', { from: state.diffFilter.from || undefined, to: state.diffFilter.to || undefined });
+  const r = state.diff;
+
+  const fromIn = h('input', { type: 'date', value: state.diffFilter.from });
+  const toIn = h('input', { type: 'date', value: state.diffFilter.to });
+  const apply = (from, to) => { state.diffFilter = { from, to }; state.diff = null; guard(() => renderDiff(true)); };
+
+  const groupTable = (title, list, hint) => (!list.length ? null : h('section', { style: 'margin-bottom:24px' },
+    h('h3', {}, title), hint ? h('p', { class: 'hint' }, hint) : null,
+    narrow()
+      ? h('div', { class: 'cards' }, list.map((g) => h('div', { class: 'card' },
+        h('div', { class: 'row' }, h('b', { class: 'grow' }, g.name), g.flagged ? h('span', { class: 'tag orange' }, `要確認 ${g.flagged}便`) : null),
+        h('div', { class: 'muted' }, `${g.n}便　現場 ${fmtVol(g.oursNum)} → 工場 ${fmtVol(g.factoryNum)} m³`),
+        h('div', {}, h('b', {}, `${signed(g.diffNum)} m³　${diffRate(g.diffNum, g.oursNum)}`)))))
+      : h('div', { class: 'table-wrap' }, h('table', {},
+        h('thead', {}, h('tr', {}, [['', ''], ['便', 'num'], ['現場 m³', 'num'], ['工場 m³', 'num'], ['差 m³', 'num'], ['差の率', 'num'], ['要確認', 'num']].map(([x, c]) => h('th', { class: c }, x)))),
+        h('tbody', {}, list.map((g) => h('tr', {},
+          h('td', {}, h('b', {}, g.name)), h('td', { class: 'num' }, g.n), h('td', { class: 'num' }, fmtVol(g.oursNum)), h('td', { class: 'num' }, fmtVol(g.factoryNum)),
+          h('td', { class: 'num' }, h('b', {}, signed(g.diffNum))), h('td', { class: 'num' }, diffRate(g.diffNum, g.oursNum)),
+          h('td', { class: 'num' }, g.flagged ? h('span', { class: 'tag orange' }, `${g.flagged}便`) : '—'))))))));
+
+  const flaggedBlock = r.flaggedTotal ? h('section', { style: 'margin-bottom:24px' },
+    h('h3', {}, `要確認の便（差が${r.flagPercent}%以上・${r.flaggedTotal}便${r.flaggedTotal > r.flagged.length ? `のうち差の大きい${r.flagged.length}便` : ''}）`),
+    h('p', { class: 'hint' }, '測り直しや規格外のはね、入力のまちがいの可能性があります。「便」タブで、この日付・伝票番号の便を開いて確かめられます。'),
+    h('div', { class: 'cards' }, r.flagged.map((f) => h('div', { class: 'card' },
+      h('div', { class: 'row' }, h('b', { class: 'grow' }, `${fmtDay(f.dateStr)}　伝票 ${f.ticketNo || '—'}`), h('span', { class: 'tag orange' }, diffRate(f.diffNum, f.oursNum))),
+      h('div', {}, [f.destination, f.species, f.truck].filter(Boolean).join(' / ')),
+      h('div', { class: 'muted' }, `現場 ${fmtVol(f.oursNum)} → 工場 ${fmtVol(f.factoryNum)} m³（差 ${signed(f.diffNum)}）`))))) : null;
+
+  setView('diff',
+    h('h2', {}, '工場との差'),
+    h('p', { class: 'hint' }, '「便」タブで入れた工場の検収値と、現場の検収値を比べます。差＝工場の値 − 現場の値。プラスは、工場のほうが多く検収した便です。工場との話し合いの材料になります。'),
+    h('div', { class: 'toolbar' },
+      h('label', { class: 'row' }, '期間', fromIn, '〜', toIn),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => apply(fromIn.value, toIn.value) }, '表示'),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => apply(dayAgo(90), '') }, '直近3か月'),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => apply(`${new Date().getFullYear()}-01-01`, '') }, '今年'),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => apply('', '') }, 'すべて')),
+    r.truncated ? h('p', { class: 'dlg-error' }, '便が多いため、新しい便の一部だけを集計しています。期間をせまくして見てください。') : null,
+    h('div', { class: 'card summary' },
+      r.total.n ? h('div', { class: 'big' },
+        h('div', {}, h('b', {}, r.total.n), h('span', {}, '便（工場の値あり）')),
+        h('div', {}, h('b', {}, fmtVol(r.total.oursNum)), h('span', {}, 'm³（現場の検収値）')),
+        h('div', {}, h('b', {}, fmtVol(r.total.factoryNum)), h('span', {}, 'm³（工場の検収値）')),
+        h('div', {}, h('b', {}, signed(r.total.diffNum)), h('span', {}, `m³（差 ${diffRate(r.total.diffNum, r.total.oursNum)}）`)))
+        : h('div', { class: 'empty' }, 'この期間に、工場の検収値が入っている便はありません。「便」タブの「工場の検収 m³」に入れると、ここに集計されます。'),
+      r.withoutFactory ? h('p', { class: 'hint' }, `工場の値が未入力の便が ${r.withoutFactory} 便あります（集計に入っていません）。`) : null),
+    flaggedBlock,
+    groupTable('納入先ごと', r.byDestination),
+    groupTable('樹種ごと', r.bySpecies, r.mixedSpecies ? `複数の樹種を積んだ便（${r.mixedSpecies}便）は、工場の値が便ぜんたいの値なので、樹種ごとには入れていません。` : null),
+    groupTable('月ごと', r.byMonth));
+}
+
+/* ==================================================================
  * タブ：マスター（車番・納入先・樹種）
  * ================================================================== */
 const MASTER_LABEL = { truck: '車番', destination: '納入先', species: '樹種' };
@@ -944,7 +1013,7 @@ function renderSettings() {
  * 画面の切り替え
  * ================================================================== */
 // タブを開くたびに最新を読み直す（現場から便が届くと、枠の残りや名寄せ候補が変わるため）
-const TABS = { tickets: renderTickets, quotas: () => renderQuotas(true), notices: () => renderNotices(true), sites: () => renderSites(true), masters: () => renderMasters(true), inbox: () => renderInbox(true), settings: renderSettings };
+const TABS = { tickets: renderTickets, quotas: () => renderQuotas(true), notices: () => renderNotices(true), sites: () => renderSites(true), diff: () => renderDiff(true), masters: () => renderMasters(true), inbox: () => renderInbox(true), settings: renderSettings };
 
 async function openTab(name) {
   state.tab = name;

@@ -807,3 +807,87 @@ test('マスター：1種類あたりの登録数に上限がある（上限で�
   await env.ok({ op: 'master.put', token: a.token, master: { ...first, name: '車0改' } });
   await env.ok({ op: 'master.put', token: a.token, master: { kind: 'species', name: '樹種は別枠' } });
 });
+
+/* ------------------------------------------------------------------
+ * 工場との差の分析
+ * ------------------------------------------------------------------ */
+const M3 = (x) => String(BigInt(Math.round(x * 1000)) * 40_000_000n);          // m³ → 内部単位
+const diffLot = (species, m3v, n = 1) => ({ species, lengthM: '4.00', minD: 14, maxD: 30, site: '本谷', siteId: null, rows: [{ d: 20, n, volNum: M3(m3v) }] });
+
+async function diffFixture() {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const put = async (id, dateStr, destination, lots, factory) => {
+    await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id, dateStr, destination, lots }) });
+    if (factory != null) await env.ok({ op: 'ticket.setFactory', token: a.token, id, volume: factory });
+  };
+  await put('tk-t1', '2026-10-05', '秋田プライウッド', [diffLot('カラマツ', 10)], '10.400');           // +4%  → 要確認
+  await put('tk-t2', '2026-10-06', '秋田　プライウッド', [diffLot('カラマツ', 5)], '5.000');            // ±0（全角空白のゆれ）
+  await put('tk-t3', '2026-11-02', '別の工場', [diffLot('スギ', 8)], '7.800');                          // −2.5% → 挙げない
+  await put('tk-t4', '2026-10-07', '秋田プライウッド', [diffLot('カラマツ', 3), diffLot('スギ', 3)], '6.600');   // 積み合わせ +10% → 要確認
+  await put('tk-t5', '2026-10-08', '秋田プライウッド', [diffLot('スギ', 2)], null);                     // 工場の値なし
+  await put('tk-t6', '2026-10-09', '秋田プライウッド', [diffLot('スギ', 0.05)], '0.060');               // +20% だが小さい便 → 挙げない
+  return { env, a };
+}
+
+test('差の分析：納入先別・樹種別・月別に、現場の値と工場の値と差を集計する（工場の値が入った便だけ）', async () => {
+  const { env, a } = await diffFixture();
+  const r = await env.ok({ op: 'analysis.diff', token: a.token });
+  assert.equal(r.total.n, 5);
+  assert.equal(r.total.oursNum, M3(29.05)); assert.equal(r.total.factoryNum, M3(29.86)); assert.equal(r.total.diffNum, M3(0.81));
+  assert.equal(r.withoutFactory, 1);
+  assert.equal(r.mixedSpecies, 1);
+
+  const dest = Object.fromEntries(r.byDestination.map((g) => [g.name, g]));
+  assert.equal(r.byDestination.length, 2);                                   // 全角空白のゆれは同じ納入先にまとまる
+  assert.deepEqual([dest['秋田プライウッド'].n, dest['秋田プライウッド'].diffNum], [4, M3(1.01)]);
+  assert.deepEqual([dest['別の工場'].n, dest['別の工場'].diffNum], [1, M3(-0.2)]);
+  assert.equal(r.byDestination[0].name, '秋田プライウッド');                  // 現場の値が大きい順
+
+  // 樹種別は「1つの樹種だけを積んだ便」だけ（積み合わせの便は入らない）
+  const sp = Object.fromEntries(r.bySpecies.map((g) => [g.name, g]));
+  assert.deepEqual([sp['カラマツ'].n, sp['カラマツ'].oursNum, sp['カラマツ'].factoryNum], [2, M3(15), M3(15.4)]);
+  assert.deepEqual([sp['スギ'].n, sp['スギ'].oursNum, sp['スギ'].factoryNum], [2, M3(8.05), M3(7.86)]);
+
+  assert.deepEqual(r.byMonth.map((g) => [g.name, g.n]), [['2026-11', 1], ['2026-10', 4]]);      // 新しい月が先
+});
+
+test('差の分析：割合が大きい便を「要確認」に挙げる（小さい便は挙げない。差の大きい順）', async () => {
+  const { env, a } = await diffFixture();
+  const r = await env.ok({ op: 'analysis.diff', token: a.token });
+  assert.equal(r.flagPercent, 3);
+  assert.equal(r.flaggedTotal, 2);
+  assert.deepEqual(r.flagged.map((f) => f.id), ['tk-t4', 'tk-t1']);
+  assert.equal(r.flagged[0].diffNum, M3(0.6));
+  assert.equal(r.flagged[0].species, 'カラマツ・スギ');
+  assert.equal(r.byDestination.find((g) => g.name === '秋田プライウッド').flagged, 2);
+  assert.ok(!r.flagged.some((f) => f.id === 'tk-t6' || f.id === 'tk-t3'));
+  assert.equal(r.flagged.every((f) => !('abs' in f)), true);                                        // 内部の値は返さない
+});
+
+test('差の分析：期間で絞れる。工場の値が1つも無ければ空', async () => {
+  const { env, a } = await diffFixture();
+  const nov = await env.ok({ op: 'analysis.diff', token: a.token, from: '2026-11-01', to: '2026-11-30' });
+  assert.equal(nov.total.n, 1); assert.equal(nov.byDestination[0].name, '別の工場'); assert.equal(nov.flaggedTotal, 0);
+  assert.deepEqual(nov.range, { from: '2026-11-01', to: '2026-11-30' });
+  const none = await env.ok({ op: 'analysis.diff', token: a.token, from: '2027-01-01' });
+  assert.equal(none.total.n, 0); assert.deepEqual(none.byDestination, []); assert.equal(none.total.diffNum, '0');
+});
+
+test('差の分析：事務所の札が要る。他社の便は混ざらない。日付の検査。読む便が多すぎるときは truncated', async () => {
+  const { env, a } = await diffFixture();
+  await env.err({ op: 'analysis.diff', code: codeA }, 'unauthorized', 401);                         // 運転手は見られない
+  const b = await companyWithOffice(env, codeB);
+  const rb = await env.ok({ op: 'analysis.diff', token: b.token });
+  assert.equal(rb.total.n, 0);
+  await env.err({ op: 'analysis.diff', token: a.token, from: '2026-02-31' }, 'invalid');
+  const small = setupEnv({ limits: { scan: 2 } });
+  const s = await companyWithOffice(small, codeA);
+  for (const [i, d] of ['2026-10-05', '2026-10-06', '2026-10-07'].entries()) {
+    await small.ok({ op: 'ticket.put', code: codeA, ticket: ticket({ id: `tk-s${i}`, dateStr: d, lots: [diffLot('カラマツ', 1)] }) });
+    await small.ok({ op: 'ticket.setFactory', token: s.token, id: `tk-s${i}`, volume: '1.000' });
+  }
+  const r = await small.ok({ op: 'analysis.diff', token: s.token });
+  assert.equal(r.truncated, true);
+  assert.equal(r.total.n, 2);
+});

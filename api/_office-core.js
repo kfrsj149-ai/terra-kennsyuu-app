@@ -720,6 +720,75 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     return {};
   }
 
+  /* ---------------- 工場との差の分析 ---------------- */
+  const DIFF_FLAG_PERCENT = 3n;             // 差がこの割合以上の便を「要確認」として挙げる
+  const DIFF_FLAG_MIN_NUM = 4_000_000_000n; // ごく小さい便（0.1m³未満）の差は、割合が大きく出るだけなので挙げない
+  const DIFF_OUTLIER_MAX = 20;
+
+  /**
+   * 工場の検収値が入っている便について、現場の値との差を集計する（納入先別・樹種別・月別）。
+   * 差＝工場の値 − 現場の値。プラスは「工場のほうが多く検収した」。
+   * 工場の値は便ぜんたいの値なので、樹種別は「1つの樹種だけを積んだ便」に限る（積み合わせの便は、納入先別・月別にだけ入れる）。
+   */
+  async function diffAnalysis(body) {
+    const { cid } = await officeCtx(body);
+    const from = body.from ? dateStr(body.from, 'from') : null;
+    const to = body.to ? dateStr(body.to, 'to') : null;
+    const { tickets, truncated } = await readTickets(cid, LIM.scan, {
+      fromKey: from ? dayKey(from) * 1_000_000 : 0,
+      toKey: to ? dayKey(to) * 1_000_000 + 999_999 : 99_999_999_999_999,
+    });
+
+    const newGroup = (name) => ({ name, n: 0, ours: 0n, factory: 0n, flagged: 0 });
+    const add = (map, k, name, ours, factory, flagged) => {
+      const g = map.get(k) ?? newGroup(name);
+      g.n += 1; g.ours += ours; g.factory += factory; if (flagged) g.flagged += 1;
+      map.set(k, g);
+    };
+    const byDest = new Map(); const bySpecies = new Map(); const byMonth = new Map();
+    const total = newGroup('');
+    const flaggedList = [];
+    let withoutFactory = 0; let mixedSpecies = 0;
+
+    for (const t of tickets) {
+      if (t.factoryNum == null) { withoutFactory += 1; continue; }
+      const ours = BigInt(t.totalVolNum);
+      const factory = BigInt(t.factoryNum);
+      if (ours <= 0n) continue;
+      const diff = factory - ours;
+      const abs = diff < 0n ? -diff : diff;
+      const flagged = abs >= DIFF_FLAG_MIN_NUM && abs * 100n >= ours * DIFF_FLAG_PERCENT;
+
+      add(byDest, nameKey(t.destination), t.destination || '（納入先なし）', ours, factory, flagged);
+      add(byMonth, String(t.dateStr).slice(0, 7), String(t.dateStr).slice(0, 7), ours, factory, flagged);
+      const kinds = new Map(t.lots.map((l) => [nameKey(l.species), l.species]));
+      if (kinds.size === 1) { const [[k, name]] = [...kinds]; add(bySpecies, k, name, ours, factory, flagged); } else mixedSpecies += 1;
+      total.n += 1; total.ours += ours; total.factory += factory; if (flagged) total.flagged += 1;
+      if (flagged) {
+        flaggedList.push({
+          id: t.id, dateStr: t.dateStr, ticketNo: t.ticketNo, destination: t.destination, truck: t.truck,
+          species: [...new Set(t.lots.map((l) => l.species))].join('・'),
+          oursNum: ours.toString(), factoryNum: factory.toString(), diffNum: diff.toString(), abs,
+        });
+      }
+    }
+    const out = (g) => ({ name: g.name, n: g.n, oursNum: g.ours.toString(), factoryNum: g.factory.toString(), diffNum: (g.factory - g.ours).toString(), flagged: g.flagged });
+    const list = (map, order) => [...map.values()].sort(order).map(out);
+    flaggedList.sort((a, b) => (a.abs < b.abs ? 1 : a.abs > b.abs ? -1 : 0));
+    return {
+      range: { from, to },
+      total: out(total),
+      byDestination: list(byDest, (a, b) => (a.ours < b.ours ? 1 : -1)),
+      bySpecies: list(bySpecies, (a, b) => (a.ours < b.ours ? 1 : -1)),
+      byMonth: list(byMonth, (a, b) => (a.name < b.name ? 1 : -1)),
+      flagged: flaggedList.slice(0, DIFF_OUTLIER_MAX).map(({ abs, ...rest }) => rest),
+      flaggedTotal: flaggedList.length,
+      flagPercent: Number(DIFF_FLAG_PERCENT),
+      withoutFactory, mixedSpecies,
+      truncated,                   // 便が多すぎて一部を数えていない（画面に警告を出す）
+    };
+  }
+
   /* ---------------- 納入枠 ---------------- */
   function cleanQuota(input) {
     if (!input || typeof input !== 'object') throw fail('invalid', { field: 'quota' });
@@ -939,6 +1008,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     'ticket.put': ticketPut, 'ticket.list': ticketList, 'ticket.setFactory': ticketSetFactory, 'ticket.delete': ticketDelete,
     'site.list': siteList, 'site.put': sitePut, 'site.unlinked': siteUnlinked,
     'master.list': masterList, 'master.put': masterPut,
+    'analysis.diff': diffAnalysis,
     'quota.list': quotaList, 'quota.put': quotaPut, 'quota.delete': quotaDelete,
     'notice.list': noticeList, 'notice.put': noticePut, 'notice.delete': noticeDelete,
     'inbox.put': inboxPut, 'inbox.list': inboxList, 'inbox.delete': inboxDelete,
