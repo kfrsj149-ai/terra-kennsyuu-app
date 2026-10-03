@@ -1038,6 +1038,20 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
 }
 
 /**
+ * 事務所のデータ（閲覧・書き出し）を見てよい契約か。契約の期間中だけ、見られる。
+ *   ・有効（active）／支払いの遅れ（past_due。すぐには止めない）／無料の試用期間中（trialing）は、見られる
+ *   ・解約の手続きをしていても、期間の終わりまでは見られる（払った期間は使える）
+ *   ・ただし**無料の試用期間中に解約の手続きをしたら、見られなくする**（払っていない期間のデータは残さない）
+ *   ・契約が終わったら（canceled など）、見られない
+ */
+export function officeAccessAllowed(sub) {
+  const d = describeSubscription(sub);
+  if (d.status !== 'active') return false;
+  if (d.rawStatus === 'trialing' && d.cancelAtPeriodEnd) return false;
+  return true;
+}
+
+/**
  * Stripeの返事を「有効／無効／確認できない」に分ける。
  *   404（その契約は存在しない）  → 無効。猶予は与えない
  *   401・403・400（鍵や設定の誤り）→ 確認できない（permanent）。待っても直らないので猶予も与えない
@@ -1046,7 +1060,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
 async function defaultIsActive(subId) {
   try {
     const sub = await stripeGet(`/subscriptions/${encodeURIComponent(subId)}`);
-    return describeSubscription(sub).status === 'active';
+    return officeAccessAllowed(sub);
   } catch (err) {
     const status = err?.httpStatus;
     if (status === 404) return false;

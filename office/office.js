@@ -974,6 +974,33 @@ function showOfficeCode(code, title) {
   ], { ok: '閉じる', cancel: null, onOk: async () => { if (!checked) throw new ApiError('invalid', { field: '「控えました」のチェック' }); } });
 }
 
+/* ---------------- 全データのダウンロード（契約の期間中だけ） ---------------- */
+/** 便を、新しい順に全部読む（200件ずつ） */
+async function fetchAllTickets(onProgress) {
+  const all = [];
+  for (let offset = 0; offset < 100_000; offset += 200) {
+    const r = await api('ticket.list', { limit: 200, offset });
+    all.push(...r.tickets);
+    onProgress?.(all.length);
+    if (!r.hasMore) break;
+  }
+  return all;
+}
+
+async function exportEverything(kind, setLabel) {
+  const tickets = await fetchAllTickets((n) => setLabel(`読み込み中… ${n}便`));
+  const stamp = `${today()}`;
+  if (kind === 'csv') { download(`terra-全便-${stamp}.csv`, csvOfTickets(tickets)); return tickets.length; }
+  setLabel('まとめています…');
+  const [sites, quotas, notices, masters] = await Promise.all([api('site.list'), api('quota.list'), api('notice.list'), api('master.list')]);
+  const bundle = {
+    app: 'TERRA 事務所', exportedAt: new Date().toISOString(), note: '契約の期間中だけ書き出せます。写真（受信箱）は含まれません。材積の数値（*Num）は内部単位で、1 m³ = 40,000,000,000 です。',
+    tickets, sites: sites.sites, quotas: quotas.quotas, notices: notices.notices, masters: masters.masters,
+  };
+  download(`terra-全データ-${stamp}.json`, JSON.stringify(bundle, null, 1), 'application/json;charset=utf-8');
+  return tickets.length;
+}
+
 function renderSettings() {
   const linkCode = h('textarea', { rows: 3, spellcheck: 'false', placeholder: '別のアプリのライセンスコード' });
   const linkEmail = h('input', { type: 'email', autocomplete: 'off' });
@@ -998,6 +1025,22 @@ function renderSettings() {
             showOfficeCode(r.officeCode, '新しい事務所コード');
           });
         } }, '事務所コードを作り直す'))),
+      h('div', { class: 'card stack' },
+        h('h3', { style: 'margin-top:0' }, '全データのダウンロード'),
+        h('p', { class: 'hint' }, '届いた便をすべて、お手元に保存できます。Excelで開く一覧（CSV）と、すべてをまとめたファイル（JSON：便・現場・納入枠・お知らせ・マスター）の2種類です。写真（受信箱）は含まれません。'),
+        h('p', { class: 'hint' }, '**契約の期間中だけ**使えます。解約して契約が終わると（無料の試用期間中に解約した場合も）、この画面のデータは見られなくなり、ダウンロードもできません。必要なデータは、契約が続いているうちに保存してください。'.replaceAll('**', '')),
+        (() => {
+          const mk = (label, kind) => {
+            const btn = h('button', { type: 'button', class: 'btn' }, label);
+            btn.addEventListener('click', () => guard(async () => {
+              btn.disabled = true;
+              try { const n = await exportEverything(kind, (t) => { btn.textContent = t; }); toast(`${n}便ぶんを保存しました`); }
+              finally { btn.disabled = false; btn.textContent = label; }
+            }));
+            return btn;
+          };
+          return h('div', { class: 'row' }, mk('全便をCSVでダウンロード（Excel用）', 'csv'), mk('全データをJSONでダウンロード', 'json'));
+        })()),
       h('div', { class: 'card stack' },
         h('h3', { style: 'margin-top:0' }, '別のアプリの契約をつなぐ'),
         h('p', { class: 'hint' }, '日報・造林など別のTERRAアプリを別々に契約した場合、そのライセンスコードをここで入れると、同じ現場の台帳を共有できます。'),

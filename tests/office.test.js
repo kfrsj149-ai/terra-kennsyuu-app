@@ -13,7 +13,7 @@ process.env.STRIPE_SECRET_KEY = 'sk_test_dummy';
 process.env.LICENSE_SECRET = 'テスト用の十分に長い署名鍵-0123456789';
 
 const lib = await import('../api/_lib.js');
-const { createOffice } = await import('../api/_office-core.js');
+const { createOffice, officeAccessAllowed } = await import('../api/_office-core.js');
 const { memoryStore } = await import('../api/_office-store.js');
 const { formatVolume } = await import('../src/js/jas.js');
 const { CONSENT_VERSION: CONSENT } = await import('../src/js/office-rules.js');
@@ -890,4 +890,38 @@ test('差の分析：事務所の札が要る。他社の便は混ざらない�
   const r = await small.ok({ op: 'analysis.diff', token: s.token });
   assert.equal(r.truncated, true);
   assert.equal(r.total.n, 2);
+});
+
+/* ------------------------------------------------------------------
+ * 契約の期間中だけ、データを見られる
+ * ------------------------------------------------------------------ */
+test('データを見られるのは契約の期間中だけ：有効・試用中は見られ、試用中の解約と契約の終了は見られない', () => {
+  const sub = (status, cancel = false) => ({ status, cancel_at_period_end: cancel, current_period_end: 4_000_000_000 });
+  assert.equal(officeAccessAllowed(sub('active')), true);
+  assert.equal(officeAccessAllowed(sub('active', true)), true);           // 解約の手続き済みでも、払った期間の終わりまでは見られる
+  assert.equal(officeAccessAllowed(sub('trialing')), true);               // 無料の試用期間中
+  assert.equal(officeAccessAllowed(sub('trialing', true)), false);        // 試用期間中に解約したら、見られない
+  assert.equal(officeAccessAllowed(sub('past_due')), true);               // 支払いの遅れはすぐには止めない（今までどおり）
+  for (const st of ['canceled', 'incomplete', 'incomplete_expired', 'unpaid', 'paused']) assert.equal(officeAccessAllowed(sub(st)), false, st);
+  assert.equal(officeAccessAllowed(null), false);
+});
+
+test('契約が終わると、データの閲覧・書き出しに使う操作は、すべて見られなくなる', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
+  await env.ok({ op: 'site.put', token: co.token, site: { name: '本谷' } });
+  for (const op of ['ticket.list', 'site.list', 'quota.list', 'notice.list', 'master.list', 'inbox.list', 'analysis.diff']) await env.ok({ op, token: co.token });
+
+  env.active.delete('sub_A');                       // 契約の終了
+  env.clock.t += 2 * 3600_000;                      // 確認結果の使い回し（1時間）が切れる
+  for (const op of ['ticket.list', 'site.list', 'quota.list', 'notice.list', 'master.list', 'inbox.list', 'analysis.diff']) {
+    await env.err({ op, token: co.token }, 'subscription_inactive', 402);
+  }
+  await env.err({ op: 'feed', code: codeA }, 'subscription_inactive', 402);
+  await env.err({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-0002' }) }, 'subscription_inactive', 402);
+
+  env.active.add('sub_A');                          // 再契約すれば、また見られる
+  env.clock.t += 2 * 3600_000;
+  assert.equal((await env.ok({ op: 'ticket.list', token: co.token })).tickets.length, 1);
 });
