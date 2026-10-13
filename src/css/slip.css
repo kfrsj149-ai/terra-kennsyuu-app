@@ -1,0 +1,120 @@
+/*
+ * 手書き伝票（印刷用の記入用紙）
+ * 用紙は A4 縦・余白 8mm。印刷できる内側は 194mm × 281mm。
+ * 色は印刷で潰れないよう、黒と白だけを使う（配色トークンは使わない）。
+ */
+
+/* 画面では隠す。印刷のときだけ出す */
+#print-area { display: none; }
+
+.slip {
+  position: relative;
+  box-sizing: border-box;
+  width: 194mm;
+  height: 280mm;               /* 281mm ぴったりだと、端数で空白の2枚目が出ることがある */
+  padding: 9mm;
+  background: #fff;
+  color: #000;
+  font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  font-size: 9pt;
+  line-height: 1.25;
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* 四隅の位置合わせの印（写真が斜めでも補正できるようにする） */
+.slip-mark {
+  position: absolute;
+  width: 6mm;
+  height: 6mm;
+  background: #000;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.slip-mark-tl { top: 0; left: 0; }
+.slip-mark-tr { top: 0; right: 0; }
+.slip-mark-bl { bottom: 0; left: 0; }
+.slip-mark-br { bottom: 0; right: 0; }
+
+/* ヘッダー */
+.slip-head { display: grid; grid-template-columns: 1fr 32mm; column-gap: 4mm; align-items: start; }
+.slip-title { grid-column: 1; font-size: 13pt; font-weight: 800; margin-bottom: 1.5mm; }
+.slip-meta { grid-column: 1; display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 3mm; row-gap: 1mm; }
+.slip-qr-slot { grid-column: 2; grid-row: 1 / span 2; width: 32mm; height: 32mm; }  /* QRを足す場所（いまは空き） */
+.slip-field { display: flex; align-items: flex-end; gap: 2mm; min-height: 8mm; border-bottom: 0.35mm solid #000; padding-bottom: 0.5mm; }
+.slip-w2 { grid-column: span 2; }
+.slip-w3 { grid-column: span 3; }
+.slip-w4 { grid-column: span 4; }
+.slip-label { font-size: 7.5pt; font-weight: 700; white-space: nowrap; }
+.slip-value { font-size: 11pt; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slip-date .slip-value { font-weight: 400; letter-spacing: 0.3mm; }
+
+/* 径級の表 */
+.slip-cols { flex: 1 1 auto; display: flex; gap: 6mm; align-items: flex-start; min-height: 0; }
+.slip-table { flex: 1 1 0; border-collapse: collapse; table-layout: fixed; }
+.slip-table th, .slip-table td { border: 0.3mm solid #000; padding: 0 1mm; }
+.slip-table th { height: var(--slip-row-h, 8mm); font-size: 7.5pt; font-weight: 700; background: #fff; }
+.slip-table th:nth-child(1) { width: 13mm; }
+.slip-table th:nth-child(2) { width: 20mm; }
+.slip-table th:nth-child(3) { width: 29mm; }
+.slip-double .slip-table th:nth-child(4) { width: auto; }
+.slip-single .slip-table th:nth-child(1) { width: 18mm; }
+.slip-single .slip-table th:nth-child(2) { width: 28mm; }
+.slip-single .slip-table th:nth-child(3) { width: 42mm; }
+.slip-table td { height: var(--slip-row-h, 8mm); }
+.slip-dia { text-align: center; font-size: 12pt; font-weight: 800; }
+.slip-unit { text-align: right; font-size: 9pt; font-variant-numeric: tabular-nums; }
+.slip-count { padding: 0 !important; }
+
+/* 本数の枠（1桁ずつ・4桁）。郵便番号の欄のような形 */
+.slip-comb {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.8mm;
+  width: 25mm;
+  height: calc(var(--slip-row-h, 8mm) - 1.8mm);
+  margin: 0 auto;
+}
+.slip-single .slip-comb { width: 36mm; }
+.slip-comb i { display: block; border: 0.4mm solid #000; }
+.slip-comb-total { grid-template-columns: repeat(5, 1fr); width: 40mm; height: 10mm; margin: 0; }
+
+/* フッター */
+.slip-foot { display: flex; flex-direction: column; gap: 2.5mm; }
+.slip-totals { display: flex; justify-content: space-between; align-items: flex-end; gap: 6mm; }
+.slip-total { display: flex; align-items: flex-end; gap: 2mm; }
+.slip-total .slip-label { font-size: 9pt; }
+.slip-vol-box { width: 46mm; height: 10mm; border: 0.4mm solid #000; }
+.slip-unit-mark { font-size: 9pt; font-weight: 700; }
+.slip-memo { display: flex; align-items: flex-end; gap: 2mm; height: 8mm; border-bottom: 0.35mm solid #000; }
+.slip-note { margin: 0; font-size: 6.5pt; line-height: 1.35; }
+
+/* ---------------- 画面のダイアログ ---------------- */
+/* 径級の▲▼。計測準備の .picker-btn と同じ見た目（あちらは別の処理が結びついているので、クラスを分けている） */
+.slip-picker-btn {
+  flex: 0 0 auto;
+  width: 56px;
+  height: var(--tap-min);
+  border-radius: var(--r-md);
+  background: var(--c-neutral);
+  color: var(--c-neutral-ink);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.slip-picker-btn:active { background: var(--c-tap-active); color: var(--c-tap-ink); }
+
+/* ---------------- 画面のプレビュー ---------------- */
+#slip-preview-wrap { position: relative; overflow: hidden; border: 2px solid var(--c-border); border-radius: var(--r-md); background: #fff; margin-top: 8px; }
+#slip-preview { transform-origin: top left; position: absolute; top: 0; left: 0; pointer-events: none; }
+
+/* ---------------- 印刷 ---------------- */
+@media print {
+  @page { size: A4 portrait; margin: 8mm; }
+  html, body { height: auto !important; background: #fff !important; overflow: visible !important; padding: 0 !important; display: block !important; }
+  body > *:not(#print-area) { display: none !important; }
+  #print-area { display: block !important; }
+  #print-area .slip { break-inside: avoid; page-break-inside: avoid; }
+}

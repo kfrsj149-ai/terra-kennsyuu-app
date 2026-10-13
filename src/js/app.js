@@ -17,6 +17,7 @@ import * as subscription from './subscription.js';
 import * as backup from './backup.js';
 import * as updater from './updater.js';
 import * as officeSync from './office-sync.js';
+import { validateSlip, renderSlip } from './slip.js';
 import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading, CONSENT_VERSION } from './office-rules.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -1200,6 +1201,118 @@ function closeDrawer() {
 }
 
 /* ==================================================================
+ * 手書き伝票（印刷用の記入用紙）
+ * 荷主・車番・長さ・径級の範囲を選ぶと、単材積入りの用紙ができる。QRは、ドメインが決まってから足す
+ * ================================================================== */
+const slipState = { minD: 14, maxD: 40 };
+
+function readSlipForm() {
+  return {
+    owner: $('#slip-owner').value.trim(),
+    truck: $('#slip-truck').value.trim(),
+    species: $('#slip-species').value.trim(),
+    site: $('#slip-site').value.trim(),
+    lengthRaw: $('#slip-length').value.trim(),
+    minD: slipState.minD,
+    maxD: slipState.maxD,
+  };
+}
+
+/** 画面のプレビューを、ダイアログの幅に合わせて縮小して見せる */
+function fitSlipPreview() {
+  const wrap = $('#slip-preview-wrap');
+  const slip = $('#slip-preview').firstElementChild;
+  if (!slip || !wrap.clientWidth) { wrap.style.height = '0'; return; }
+  const scale = wrap.clientWidth / slip.offsetWidth;
+  $('#slip-preview').style.transform = `scale(${scale})`;
+  wrap.style.height = `${Math.ceil(slip.offsetHeight * scale)}px`;
+}
+
+function renderSlipPreview() {
+  const form = readSlipForm();
+  $('#slip-val-min').textContent = slipState.minD;
+  $('#slip-val-max').textContent = slipState.maxD;
+  $('#slip-range-count').textContent = t('slip.rangeCount', { n: diameterRange(slipState.minD, slipState.maxD).length });
+  const host = $('#slip-preview');
+  host.replaceChildren();
+  const blank = form.lengthRaw === '';          // 長さ未入力のうちは、エラーではなく空のまま待つ
+  const v = blank ? {} : validateSlip(form);
+  $('#slip-error').textContent = v.error ? t(v.error, v.errorParams) : '';
+  const ready = !blank && !v.error;
+  $('#slip-print').disabled = !ready;
+  if (ready) host.appendChild(renderSlip(document, { ...form, lengthM: v.lengthM, rows: v.rows }, t));
+  fitSlipPreview();
+}
+
+async function saveSlipPrefs() {
+  const f = readSlipForm();
+  await db.kvSet('slipPrefs', { owner: f.owner, truck: f.truck, species: f.species, site: f.site, lengthRaw: f.lengthRaw, minD: f.minD, maxD: f.maxD });
+}
+
+async function fillDatalist(sel, kind) {
+  const dl = $(sel);
+  dl.innerHTML = '';
+  for (const value of await choicesFor(kind)) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    dl.appendChild(opt);
+  }
+}
+
+async function openSlipDialog() {
+  const prefs = await db.kvGet('slipPrefs', null);
+  if (prefs) {
+    $('#slip-owner').value = prefs.owner ?? '';
+    $('#slip-truck').value = prefs.truck ?? '';
+    $('#slip-species').value = prefs.species ?? '';
+    $('#slip-site').value = prefs.site ?? '';
+    $('#slip-length').value = prefs.lengthRaw ?? '';
+    slipState.minD = prefs.minD ?? slipState.minD;
+    slipState.maxD = prefs.maxD ?? slipState.maxD;
+  }
+  await Promise.all([
+    fillDatalist('#dl-slip-owner', 'company'),
+    fillDatalist('#dl-slip-truck', 'truck'),
+    fillDatalist('#dl-slip-site', 'site'),
+  ]);
+  closeDrawer();
+  $('#dlg-slip').showModal();
+  renderSlipPreview();         // 開いてから描く（幅が分からないと縮小率を決められないため）
+}
+
+async function printSlip() {
+  const form = readSlipForm();
+  const v = validateSlip(form);
+  if (v.error) return;
+  await saveSlipPrefs();
+  $('#print-area').replaceChildren(renderSlip(document, { ...form, lengthM: v.lengthM, rows: v.rows }, t));
+  window.print();
+}
+
+function wireSlip() {
+  $('#open-slip').addEventListener('click', openSlipDialog);
+  $('#slip-close').addEventListener('click', async () => { await saveSlipPrefs(); $('#dlg-slip').close(); });
+  $('#slip-print').addEventListener('click', printSlip);
+  for (const sel of ['#slip-owner', '#slip-truck', '#slip-species', '#slip-site', '#slip-length']) {
+    $(sel).addEventListener('input', renderSlipPreview);
+  }
+  $$('.slip-picker-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.sdia === 'min' ? 'minD' : 'maxD';
+      const next = Number(btn.dataset.dir) > 0 ? nextDiameter(slipState[key]) : prevDiameter(slipState[key]);
+      slipState[key] = normalizeDiameter(Math.max(1, Math.min(200, next)));
+      if (key === 'minD' && slipState.minD > slipState.maxD) slipState.maxD = slipState.minD;
+      if (key === 'maxD' && slipState.maxD < slipState.minD) slipState.minD = slipState.maxD;
+      renderSlipPreview();
+      beep('tap');
+    });
+  });
+  // 印刷が終わったら、印刷用の領域を空にする
+  window.addEventListener('afterprint', () => $('#print-area').replaceChildren());
+  window.addEventListener('resize', fitSlipPreview);
+}
+
+/* ==================================================================
  * イベント配線
  * ================================================================== */
 function wireEvents() {
@@ -1380,6 +1493,8 @@ function wireEvents() {
     if (!isVoiceAvailable()) { feedbackError(); toast(t('measure.voiceOffline')); return; }
     state.voice?.toggle();
   });
+
+  wireSlip();
 
   $('#open-history').addEventListener('click', openHistory);
   $('#history-close').addEventListener('click', () => $('#dlg-history').close());

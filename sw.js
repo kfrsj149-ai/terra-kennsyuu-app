@@ -45,7 +45,7 @@ async function toCacheable(response) {
     headers: response.headers,
   });
 }
-const VERSION = 'terra-kennsyuu-v15';
+const VERSION = 'terra-kennsyuu-v16';
 const CACHE = `${VERSION}`;
 
 const SHELL = [
@@ -60,6 +60,7 @@ const SHELL = [
   './legal/refund/index.html',
   './src/css/app.css',
   './src/css/tokens.css',
+  './src/css/slip.css',
   './src/js/app.js',
   './src/js/config.js',
   './src/js/jas.js',
@@ -67,6 +68,7 @@ const SHELL = [
   './src/js/i18n.js',
   './src/js/csv.js',
   './src/js/lots.js',
+  './src/js/slip.js',
   './src/js/office-rules.js',
   './src/js/feedback.js',
   './src/js/voice.js',
