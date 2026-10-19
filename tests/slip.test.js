@@ -138,6 +138,7 @@ test('印刷に必要なファイルが、オフラインで読めるようServi
   const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
   assert.match(sw, /\.\/src\/js\/slip\.js/);
   assert.match(sw, /\.\/src\/css\/slip\.css/);
+  assert.match(sw, /\.\/src\/js\/quick\.js/);
   assert.ok(existsSync(new URL('../src/js/slip.js', import.meta.url)));
   assert.ok(existsSync(new URL('../src/css/slip.css', import.meta.url)));
   // キャッシュ名は sw.js と config.js で一致している
@@ -148,7 +149,7 @@ test('印刷に必要なファイルが、オフラインで読めるようServi
 
 test('文言：手書き伝票で使うキーがすべての言語にそろっている', async () => {
   const keys = Object.keys(ja).filter((k) => k.startsWith('slip.'));
-  assert.ok(keys.length >= 25);
+  assert.ok(keys.length >= 24);
   for (const code of ['vi', 'tl', 'th', 'ms']) {
     const dict = (await import(`../src/js/locales/${code}.js`)).default;
     for (const k of keys) assert.ok(dict[k], `${code} に ${k} が無い`);

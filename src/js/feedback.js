@@ -116,3 +116,47 @@ export function initWakeLockAutoRenew(isActive) {
     if (document.visibilityState === 'visible' && isActive()) requestWakeLock();
   });
 }
+
+/* ------------------------------------------------------------------
+ * 押した瞬間のフィードバック（すべてのボタン共通）
+ * ------------------------------------------------------------------ */
+const PRESS_SELECTOR = 'button, .preset-chip, summary, label.switch, [role="button"]';
+
+/**
+ * 押した瞬間に、見た目（縮む・暗くなる）と触覚（短い振動）を返す。
+ * 計測の径級カードは専用の演出（光る・震える・鳴る）があるので対象外。
+ * iPhoneの Safari は :active の反応が遅いので、クラスを付けて確実に見せる。
+ */
+export function initPressFeedback(root = document) {
+  root.addEventListener('pointerdown', (e) => {
+    const el = e.target.closest?.(PRESS_SELECTOR);
+    if (!el || el.disabled || el.closest('.dia-card')) return;
+    el.classList.add('is-pressed');
+    vibrate(8);
+    const release = () => setTimeout(() => el.classList.remove('is-pressed'), 90);
+    for (const type of ['pointerup', 'pointercancel', 'pointerleave']) {
+      el.addEventListener(type, release, { once: true });
+    }
+  }, { passive: true });
+}
+
+/**
+ * 通信・保存を待つボタンに使う。押した瞬間に回転マークを出し、終わるまで押せなくする
+ * （連続タップでの二重実行も防ぐ）。
+ * @param {HTMLButtonElement} btn
+ * @param {() => Promise<unknown>} fn
+ */
+export async function withBusy(btn, fn) {
+  if (!btn || btn.classList.contains('is-busy')) return undefined;
+  const wasDisabled = btn.disabled;
+  btn.classList.add('is-busy');
+  btn.setAttribute('aria-busy', 'true');
+  btn.disabled = true;
+  try {
+    return await fn();
+  } finally {
+    btn.classList.remove('is-busy');
+    btn.removeAttribute('aria-busy');
+    btn.disabled = wasDisabled;
+  }
+}

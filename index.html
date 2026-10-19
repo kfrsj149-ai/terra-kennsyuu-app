@@ -45,11 +45,13 @@
         <label for="in-species" data-i18n="setup.species">樹種</label>
         <input type="text" id="in-species" list="dl-species" autocomplete="off" data-i18n-placeholder="setup.speciesPlaceholder">
         <datalist id="dl-species"></datalist>
+        <div class="chip-row" id="species-chips"></div>
       </div>
 
       <div class="field">
         <label for="in-length" data-i18n="setup.length">規格長さ（m）</label>
         <input type="text" id="in-length" inputmode="decimal" autocomplete="off" placeholder="4">
+        <div class="chip-row" id="length-chips"></div>
       </div>
 
       <!-- 径級は2cm刻み等の制約があるため▲▼ピッカーで選ぶ（自由入力させない） -->
@@ -238,7 +240,6 @@
 
     <div class="menu-section">
       <h3 data-i18n="slip.menu">手書き伝票を印刷</h3>
-      <p class="note" data-i18n="slip.menuHint"></p>
       <button type="button" class="btn btn-sm" id="open-slip" data-i18n="slip.menu">手書き伝票を印刷</button>
     </div>
 
@@ -414,26 +415,28 @@
   </div>
 </dialog>
 
-<!-- 手書き伝票（印刷用の記入用紙） -->
+<!-- 手書き伝票（印刷用の記入用紙）。説明文は置かない：プレビューがそのまま説明になる -->
 <dialog id="dlg-slip">
   <div class="dlg-body">
     <div class="dlg-title" data-i18n="slip.title">手書き伝票の印刷</div>
-    <p class="note" data-i18n="slip.hint"></p>
+    <!-- ① 誰の荷か：選ぶだけ。一覧に無いときだけ「手入力」 -->
     <div class="field">
       <label for="slip-owner" data-i18n="slip.owner">荷主（会社名）</label>
-      <input type="text" id="slip-owner" list="dl-slip-owner" autocomplete="off" data-i18n-placeholder="slip.blankHint">
-      <datalist id="dl-slip-owner"></datalist>
+      <select id="slip-owner"></select>
+      <input type="text" id="slip-owner-free" hidden autocomplete="off">
     </div>
     <div class="field">
       <label for="slip-truck" data-i18n="slip.truck">車番</label>
-      <input type="text" id="slip-truck" list="dl-slip-truck" autocomplete="off" data-i18n-placeholder="slip.blankHint">
-      <datalist id="dl-slip-truck"></datalist>
+      <select id="slip-truck"></select>
+      <input type="text" id="slip-truck-free" hidden autocomplete="off">
     </div>
+    <!-- ② 長さ：ボタンで選ぶ。無い長さだけ入力 -->
     <div class="field">
       <label for="slip-length" data-i18n="setup.length">規格長さ（m）</label>
-      <input type="text" id="slip-length" list="dl-slip-length" inputmode="decimal" autocomplete="off" placeholder="3">
-      <datalist id="dl-slip-length"><option value="2"><option value="3"><option value="3.65"><option value="4"><option value="5"><option value="6"><option value="8"><option value="10"><option value="12"></datalist>
+      <div class="chip-row" id="slip-length-chips"></div>
+      <input type="text" id="slip-length" inputmode="decimal" autocomplete="off" placeholder="3">
     </div>
+    <!-- ③ 径級の範囲：▲▼ -->
     <div class="field">
       <label data-i18n="setup.range">納入規格範囲（径級 cm）</label>
       <div class="picker">
@@ -456,18 +459,22 @@
       </div>
       <div class="picker-count" id="slip-range-count"></div>
     </div>
-    <div class="field">
-      <label for="slip-species" data-i18n="slip.species">樹種</label>
-      <input type="text" id="slip-species" list="dl-species" autocomplete="off" data-i18n-placeholder="slip.blankHint">
-    </div>
-    <div class="field">
-      <label for="slip-site" data-i18n="slip.site">現場名</label>
-      <input type="text" id="slip-site" list="dl-slip-site" autocomplete="off" data-i18n-placeholder="slip.blankHint">
-      <datalist id="dl-slip-site"></datalist>
-    </div>
+    <!-- 空欄なら手書き。たいていは開かない -->
+    <details id="slip-more" class="more">
+      <summary data-i18n="slip.more">樹種・現場（任意）</summary>
+      <div class="field">
+        <label for="slip-species" data-i18n="slip.species">樹種</label>
+        <div class="chip-row" id="slip-species-chips"></div>
+        <input type="text" id="slip-species" list="dl-species" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="slip-site" data-i18n="slip.site">現場名</label>
+        <select id="slip-site"></select>
+        <input type="text" id="slip-site-free" hidden autocomplete="off">
+      </div>
+    </details>
     <p class="note" id="slip-error" role="alert" style="color:var(--c-danger); font-weight:700"></p>
     <div id="slip-preview-wrap"><div id="slip-preview"></div></div>
-    <p class="note" data-i18n="slip.printHint"></p>
   </div>
   <div class="dlg-foot">
     <button type="button" class="btn btn-primary" id="slip-print" data-i18n="slip.print">印刷する</button>

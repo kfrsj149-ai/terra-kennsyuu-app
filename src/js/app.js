@@ -11,7 +11,8 @@ import { t, applyTranslations, setLocale, detectLocale, getLocale, LOCALES } fro
 import * as db from './db.js';
 import { aggregateTicket, ticketTotals, shareCsv } from './csv.js';
 import { newLot, normalizeTicket, indexOfSameLot, lotLabel, activeCount, clampRangeToEntries } from './lots.js';
-import { feedbackAdd, feedbackUndo, feedbackError, beep, vibrate, requestWakeLock, releaseWakeLock, initWakeLockAutoRenew } from './feedback.js';
+import { feedbackAdd, feedbackUndo, feedbackError, beep, vibrate, requestWakeLock, releaseWakeLock, initWakeLockAutoRenew, initPressFeedback, withBusy } from './feedback.js';
+import { recentValues, lengthChoices, speciesChoices } from './quick.js';
 import { VoiceInput, isVoiceSupported, isVoiceAvailable } from './voice.js';
 import * as subscription from './subscription.js';
 import * as backup from './backup.js';
@@ -326,6 +327,7 @@ function renderRange() {
   $('#val-max').textContent = state.setup.maxD;
   const list = diameterRange(state.setup.minD, state.setup.maxD);
   $('#range-count').textContent = `${list.length} ${t('measure.unitCount')}`.replace(/本$/, '径級');
+  syncQuickChips();
 }
 
 function readSetup() {
@@ -948,6 +950,7 @@ async function doOutput() {
   state.draft = null;
   showScreen('setup');
   $('#in-note').value = '';
+  renderQuickChips().catch(() => {});
   backup.runBackup().catch(() => {});
   // 事務所とデータを共有している端末は、通信できるとき事務所へ送る（失敗しても現場の操作は止めない）
   officeSync.enqueue(draft.id).then(() => syncOffice()).catch(() => {});
@@ -1201,17 +1204,108 @@ function closeDrawer() {
 }
 
 /* ==================================================================
+ * 選んで入れるボタン（樹種・規格長さ）
+ * 自由入力は残したまま、直近に使ったものと、よく使うものをボタンで並べる。タップだけで入る
+ * ================================================================== */
+function syncChips(container, input) {
+  if (!container || !input) return;
+  const now = input.value.trim();
+  container.querySelectorAll('button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(nameKey(b.dataset.v) === nameKey(now) && now !== ''));
+  });
+}
+
+function renderChips(container, input, values, label = (v) => v) {
+  if (!container || !input) return;
+  container.replaceChildren();
+  for (const v of values) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'quick-chip';
+    b.dataset.v = v;
+    b.textContent = label(v);
+    b.addEventListener('click', () => {
+      input.value = v;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      beep('tap');
+    });
+    container.appendChild(b);
+  }
+  syncChips(container, input);
+}
+
+/** 直近の伝票から、樹種・規格長さの候補を作る */
+async function recentChoices() {
+  const tickets = (await db.listTickets(60)).map(normalizeTicket);
+  return {
+    species: recentValues(tickets, 'species'),
+    lengths: recentValues(tickets, 'lengthM'),
+    sites: recentValues(tickets, 'site'),
+  };
+}
+
+async function renderQuickChips() {
+  const recent = await recentChoices();
+  const masters = await choicesFor('species');
+  const lengthLabel = (v) => `${v}m`;
+  renderChips($('#species-chips'), $('#in-species'), speciesChoices(recent.species, masters));
+  renderChips($('#length-chips'), $('#in-length'), lengthChoices(recent.lengths), lengthLabel);
+  renderChips($('#slip-species-chips'), $('#slip-species'), speciesChoices(recent.species, masters));
+  renderChips($('#slip-length-chips'), $('#slip-length'), lengthChoices(recent.lengths), lengthLabel);
+}
+
+function syncQuickChips() {
+  syncChips($('#species-chips'), $('#in-species'));
+  syncChips($('#length-chips'), $('#in-length'));
+  syncChips($('#slip-species-chips'), $('#slip-species'));
+  syncChips($('#slip-length-chips'), $('#slip-length'));
+}
+
+/* ==================================================================
  * 手書き伝票（印刷用の記入用紙）
  * 荷主・車番・長さ・径級の範囲を選ぶと、単材積入りの用紙ができる。QRは、ドメインが決まってから足す
+ * 荷主・車番・現場は「選ぶだけ」。一覧に無いときだけ「手入力…」を選んで書く
  * ================================================================== */
 const slipState = { minD: 14, maxD: 40 };
+const FREE = '__free__';                      // 「手入力…」を選んでいる印
+const SLIP_CHOICES = { owner: 'company', truck: 'truck', site: 'site' };
+
+/** 選択欄に、空欄（手書き）＋登録済みの候補＋手入力、を並べる */
+function fillChoice(name, values) {
+  const sel = $(`#slip-${name}`);
+  sel.replaceChildren();
+  const add = (value, text) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = text;
+    sel.appendChild(opt);
+  };
+  add('', t('slip.blankOpt'));
+  for (const v of values) add(v, v);
+  add(FREE, t('slip.free'));
+}
+
+function readChoice(name) {
+  const sel = $(`#slip-${name}`);
+  return sel.value === FREE ? $(`#slip-${name}-free`).value.trim() : sel.value;
+}
+
+function setChoice(name, value) {
+  const sel = $(`#slip-${name}`);
+  const free = $(`#slip-${name}-free`);
+  const known = Array.from(sel.options).some((o) => o.value === value && o.value !== FREE);
+  if (!value) sel.value = '';
+  else if (known) sel.value = value;
+  else { sel.value = FREE; free.value = value; }
+  free.hidden = sel.value !== FREE;
+}
 
 function readSlipForm() {
   return {
-    owner: $('#slip-owner').value.trim(),
-    truck: $('#slip-truck').value.trim(),
+    owner: readChoice('owner'),
+    truck: readChoice('truck'),
     species: $('#slip-species').value.trim(),
-    site: $('#slip-site').value.trim(),
+    site: readChoice('site'),
     lengthRaw: $('#slip-length').value.trim(),
     minD: slipState.minD,
     maxD: slipState.maxD,
@@ -1233,6 +1327,8 @@ function renderSlipPreview() {
   $('#slip-val-min').textContent = slipState.minD;
   $('#slip-val-max').textContent = slipState.maxD;
   $('#slip-range-count').textContent = t('slip.rangeCount', { n: diameterRange(slipState.minD, slipState.maxD).length });
+  syncChips($('#slip-length-chips'), $('#slip-length'));
+  syncChips($('#slip-species-chips'), $('#slip-species'));
   const host = $('#slip-preview');
   host.replaceChildren();
   const blank = form.lengthRaw === '';          // 長さ未入力のうちは、エラーではなく空のまま待つ
@@ -1249,32 +1345,19 @@ async function saveSlipPrefs() {
   await db.kvSet('slipPrefs', { owner: f.owner, truck: f.truck, species: f.species, site: f.site, lengthRaw: f.lengthRaw, minD: f.minD, maxD: f.maxD });
 }
 
-async function fillDatalist(sel, kind) {
-  const dl = $(sel);
-  dl.innerHTML = '';
-  for (const value of await choicesFor(kind)) {
-    const opt = document.createElement('option');
-    opt.value = value;
-    dl.appendChild(opt);
-  }
-}
-
 async function openSlipDialog() {
   const prefs = await db.kvGet('slipPrefs', null);
-  if (prefs) {
-    $('#slip-owner').value = prefs.owner ?? '';
-    $('#slip-truck').value = prefs.truck ?? '';
-    $('#slip-species').value = prefs.species ?? '';
-    $('#slip-site').value = prefs.site ?? '';
-    $('#slip-length').value = prefs.lengthRaw ?? '';
-    slipState.minD = prefs.minD ?? slipState.minD;
-    slipState.maxD = prefs.maxD ?? slipState.maxD;
-  }
-  await Promise.all([
-    fillDatalist('#dl-slip-owner', 'company'),
-    fillDatalist('#dl-slip-truck', 'truck'),
-    fillDatalist('#dl-slip-site', 'site'),
-  ]);
+  for (const [name, kind] of Object.entries(SLIP_CHOICES)) fillChoice(name, await choicesFor(kind));
+  setChoice('owner', prefs?.owner ?? '');
+  setChoice('truck', prefs?.truck ?? '');
+  setChoice('site', prefs?.site ?? '');
+  $('#slip-species').value = prefs?.species ?? '';
+  $('#slip-length').value = prefs?.lengthRaw ?? '';
+  slipState.minD = prefs?.minD ?? slipState.minD;
+  slipState.maxD = prefs?.maxD ?? slipState.maxD;
+  // 樹種・現場は任意。前回入れていたときだけ、最初から開いておく
+  $('#slip-more').open = Boolean(prefs?.species || prefs?.site);
+  await renderQuickChips();
   closeDrawer();
   $('#dlg-slip').showModal();
   renderSlipPreview();         // 開いてから描く（幅が分からないと縮小率を決められないため）
@@ -1293,9 +1376,16 @@ function wireSlip() {
   $('#open-slip').addEventListener('click', openSlipDialog);
   $('#slip-close').addEventListener('click', async () => { await saveSlipPrefs(); $('#dlg-slip').close(); });
   $('#slip-print').addEventListener('click', printSlip);
-  for (const sel of ['#slip-owner', '#slip-truck', '#slip-species', '#slip-site', '#slip-length']) {
-    $(sel).addEventListener('input', renderSlipPreview);
+  for (const name of Object.keys(SLIP_CHOICES)) {
+    $(`#slip-${name}`).addEventListener('change', () => {
+      const free = $(`#slip-${name}-free`);
+      free.hidden = $(`#slip-${name}`).value !== FREE;
+      if (!free.hidden) free.focus();
+      renderSlipPreview();
+    });
+    $(`#slip-${name}-free`).addEventListener('input', renderSlipPreview);
   }
+  for (const sel of ['#slip-species', '#slip-length']) $(sel).addEventListener('input', renderSlipPreview);
   $$('.slip-picker-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const key = btn.dataset.sdia === 'min' ? 'minD' : 'maxD';
@@ -1310,12 +1400,17 @@ function wireSlip() {
   // 印刷が終わったら、印刷用の領域を空にする
   window.addEventListener('afterprint', () => $('#print-area').replaceChildren());
   window.addEventListener('resize', fitSlipPreview);
+  // 開いたままのプレビューは、<details> の開閉で高さが変わる
+  $('#slip-more').addEventListener('toggle', fitSlipPreview);
 }
 
 /* ==================================================================
  * イベント配線
  * ================================================================== */
 function wireEvents() {
+  initPressFeedback();
+  $('#in-species').addEventListener('input', syncQuickChips);
+  $('#in-length').addEventListener('input', syncQuickChips);
   $('#menu-btn').addEventListener('click', openDrawer);
   $('#menu-btn-2').addEventListener('click', openDrawer);
 
@@ -1362,10 +1457,10 @@ function wireEvents() {
     renderOfficeStatus();
   });
   $('#consent-no').addEventListener('click', () => $('#dlg-consent').close());
-  $('#office-sync-now').addEventListener('click', async () => {
+  $('#office-sync-now').addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
     await syncOffice({ force: true });
     toast(t('office.syncNow'));
-  });
+  }));
   $('#notice-band').addEventListener('click', openNoticeList);
   $('#notices-close').addEventListener('click', () => $('#dlg-notices').close());
   $('#in-destination').addEventListener('change', renderOfficeInfo);
@@ -1486,7 +1581,7 @@ function wireEvents() {
 
   // データ出力（ボタンとポップアップを分離して誤出力を防ぐ）
   $('#export-btn').addEventListener('click', openOutputDialog);
-  $('#output-yes').addEventListener('click', doOutput);
+  $('#output-yes').addEventListener('click', (e) => withBusy(e.currentTarget, doOutput));
   $('#output-no').addEventListener('click', () => $('#dlg-output').close());
 
   $('#voice-btn').addEventListener('click', () => {
@@ -1499,7 +1594,7 @@ function wireEvents() {
   $('#open-history').addEventListener('click', openHistory);
   $('#history-close').addEventListener('click', () => $('#dlg-history').close());
 
-  $('#activate-btn').addEventListener('click', async () => {
+  $('#activate-btn').addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
     const input = $('#in-license').value.trim();
     if (!input) return;
     toast(t('license.checking'));
@@ -1512,15 +1607,15 @@ function wireEvents() {
       toast(res.error === 'offline' ? t('license.needOnline') : t('license.invalid'), 5000);
     }
     renderSubscription();
-  });
+  }));
 
   // 支払方法の変更・解約はStripeのカスタマーポータルで行う
-  $('#portal-link').addEventListener('click', async () => {
+  $('#portal-link').addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
     toast(t('license.checking'));
     const url = await subscription.portalUrl();
     if (url) window.open(url, '_blank', 'noopener');
     else { feedbackError(); toast(t('license.needOnline'), 5000); }
-  });
+  }));
 
   $('#copy-license').addEventListener('click', async () => {
     const code = $('#out-license').value;
@@ -1535,16 +1630,16 @@ function wireEvents() {
     }
   });
 
-  $('#drive-connect').addEventListener('click', async () => {
+  $('#drive-connect').addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
     const res = await backup.connect();
     if (res.ok) await backup.runBackup({ force: true });
     renderBackupStatus();
-  });
-  $('#drive-now').addEventListener('click', async () => {
+  }));
+  $('#drive-now').addEventListener('click', (e) => withBusy(e.currentTarget, async () => {
     const res = await backup.runBackup({ force: true });
     toast(res.ok ? t('common.ok') : t('backup.never'));
     renderBackupStatus();
-  });
+  }));
 
   // 通信状態の表示更新
   const updateNet = () => {
@@ -1586,6 +1681,7 @@ async function boot() {
   await renderLists();
   await fillSelects();
   await renderPresets();
+  await renderQuickChips();
   wireEvents();
   setupVoice();
   initWakeLockAutoRenew(() => state.screen === 'measure');

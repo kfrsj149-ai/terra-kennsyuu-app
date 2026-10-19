@@ -629,3 +629,44 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
 #notice-list .nl-head { font-weight: 800; }
 #notice-list .nl-body { white-space: pre-wrap; }
 #notice-list .nl-period { font-size: .8rem; color: var(--c-text-weak); }
+
+
+/* ---------------- 押した瞬間のフィードバック（0.1秒以内に見た目を変える） ---------------- */
+button { touch-action: manipulation; }
+button:not(.dia-card) { transition: transform .08s ease-out, filter .08s ease-out; }
+/* is-pressed は押した瞬間に feedback.js が付ける（iPhoneの :active は反応が遅いため、クラスでも出す） */
+button.is-pressed:not([disabled]):not(.dia-card),
+.switch.is-pressed { transform: scale(.96); filter: brightness(.86); }
+
+/* 処理中（通信・保存を待つボタン）：押した直後に回転マークを出し、連続タップを受けない */
+.is-busy { opacity: .75; pointer-events: none; }
+.is-busy::after {
+  content: '';
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-left: .5em;
+  vertical-align: -.15em;
+  border: 3px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: busy-spin .7s linear infinite;
+}
+@keyframes busy-spin { to { transform: rotate(360deg); } }
+
+/* ---------------- 選んで入れるボタン（樹種・規格長さ。入力欄の下に並べる） ---------------- */
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip-row:empty { display: none; }
+.quick-chip {
+  min-height: 52px;
+  min-width: 56px;
+  padding: 8px 14px;
+  border: 2px solid var(--c-brand);
+  border-radius: 999px;
+  background: var(--c-surface);
+  color: var(--c-brand-dark);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+.quick-chip[aria-pressed='true'] { background: var(--c-brand); color: var(--c-brand-ink); }
+details.more > summary { min-height: 52px; display: flex; align-items: center; font-weight: 800; cursor: pointer; }
