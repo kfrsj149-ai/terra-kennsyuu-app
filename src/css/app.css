@@ -302,7 +302,13 @@ main { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
   overflow: hidden;
   scroll-snap-align: start;
 }
-.dia-card[data-has-count='true'] { background: var(--c-tap-active); }
+/*
+ * 入れた径級がずっと色づいたままだと、積んでいない径級との色の差に、指が濃い色のほうへ引っ張られる。
+ * そこで色は「押した直後の1.5秒だけ」濃くして、すぐ元に戻す（光る・震える・鳴る・濃くなる の4つで押せたと分かる）。
+ * 入れたかどうかは、本数の数字の濃さで分かる（下の data-has-count='false' は薄い）。
+ */
+.dia-card { transition: background-color .35s ease-out; }
+.dia-card.is-recent { background: var(--c-tap-recent); transition: none; }   /* 押した瞬間は即座に濃く、戻るときだけゆっくり */
 /*
  * 数字の大きさはカードの寸法から決める。径級が多くてカードが横長になったときは
  * 高さが効き、少なくて正方形に近づくと幅の上限が効く。

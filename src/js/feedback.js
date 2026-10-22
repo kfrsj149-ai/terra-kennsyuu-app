@@ -1,7 +1,9 @@
 /**
  * 屋外・騒音・手袋前提の操作フィードバック。
- * 「光る／震える／鳴る」の3つを同時に出し、押せたことを必ず分からせる。
+ * 「光る／震える／鳴る」に、押した直後だけ「濃くなる」を加えた4つを同時に出し、押せたことを必ず分からせる。
  */
+
+import { CONFIG } from './config.js';
 
 let audioCtx = null;
 
@@ -68,9 +70,28 @@ export function glow(el) {
   setTimeout(() => el.classList.remove('is-hit'), 300);
 }
 
-/** 入力成功時のフィードバック一式 */
+const recentTimers = new WeakMap();
+
+/**
+ * 押した直後だけ、カードを濃い色にする（一定時間で自動的に戻る）。
+ * 続けて押したときは、最後に押した時点から数え直す。
+ * @param {HTMLElement} el
+ * @param {number} [ms] 濃い色のままでいる時間。既定は config.js の ui.recentMs
+ */
+export function markRecent(el, ms = CONFIG.ui.recentMs) {
+  if (!el) return;
+  clearTimeout(recentTimers.get(el));
+  el.classList.add('is-recent');
+  recentTimers.set(el, setTimeout(() => {
+    el.classList.remove('is-recent');
+    recentTimers.delete(el);
+  }, ms));
+}
+
+/** 入力成功時のフィードバック一式（光る・濃くなる・震える・鳴る） */
 export function feedbackAdd(el) {
   glow(el);
+  markRecent(el);
   vibrate(25);
   beep('tap');
 }
