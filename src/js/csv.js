@@ -157,13 +157,33 @@ export function csvFileName(ticket) {
 }
 
 /**
- * Web Share API でOS標準の共有ダイアログを開く。
- * 非対応環境では <a download> によるファイル保存にフォールバックする。
+ * 共有画面を経由せず、端末にそのまま保存する（ブラウザのダウンロード。Androidなら「ダウンロード」フォルダ）。
+ * @returns {'downloaded'}
+ */
+export function downloadCsv(ticket) {
+  const blob = csvBlob(buildCsv(ticket));
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = csvFileName(ticket);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return 'downloaded';
+}
+
+/**
+ * Web Share API でOS標準の共有画面を開く。
+ * 非対応環境では、端末への保存（<a download>）にフォールバックする。
+ * download: true のときは、共有画面を出さずに端末へ直接保存する。
+ * @param {object} ticket
+ * @param {{download?: boolean}} [opts]
  * @returns {Promise<'shared'|'downloaded'|'cancelled'>}
  */
-export async function shareCsv(ticket) {
-  const csv = buildCsv(ticket);
-  const blob = csvBlob(csv);
+export async function shareCsv(ticket, { download = false } = {}) {
+  if (download) return downloadCsv(ticket);
+  const blob = csvBlob(buildCsv(ticket));
   const name = csvFileName(ticket);
   const file = new File([blob], name, { type: 'text/csv' });
 
@@ -173,16 +193,8 @@ export async function shareCsv(ticket) {
       return 'shared';
     } catch (err) {
       if (err?.name === 'AbortError') return 'cancelled';
-      // 共有に失敗したらダウンロードへ落とす
+      // 共有に失敗したら端末への保存へ落とす
     }
   }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  return 'downloaded';
+  return downloadCsv(ticket);
 }

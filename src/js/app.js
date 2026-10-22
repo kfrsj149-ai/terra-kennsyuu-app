@@ -18,7 +18,8 @@ import * as subscription from './subscription.js';
 import * as backup from './backup.js';
 import * as updater from './updater.js';
 import * as officeSync from './office-sync.js';
-import { validateSlip, renderSlip } from './slip.js';
+import { validateSlip, renderSlip, ticketSlips } from './slip.js';
+import { initViewport } from './viewport.js';
 import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading, CONSENT_VERSION } from './office-rules.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -71,6 +72,7 @@ function showScreen(name) {
   state.screen = name;
   document.body.dataset.screen = name;
   $$('.screen').forEach((el) => el.classList.toggle('is-active', el.id === `screen-${name}`));
+  $('#home-section').hidden = name !== 'measure';   // 「ホームへ戻る」は計測中だけ出す
   if (name === 'measure') requestWakeLock();
   else releaseWakeLock();
   // 計測が終わって戻ってきたら、保留していたアプリ更新をここで反映する
@@ -926,7 +928,8 @@ async function openOutputDialog() {
   $('#dlg-output').showModal();
 }
 
-async function doOutput() {
+/** @param {{download?: boolean}} [opts] download: true なら共有画面を出さず、端末へ直接保存する */
+async function doOutput({ download = false } = {}) {
   const draft = state.draft;
   draft.ticketNo = ($('#out-ticket-no').value.trim() || '001').padStart(3, '0');
   draft.note = $('#out-note').value.trim();
@@ -939,10 +942,10 @@ async function doOutput() {
   await commitTicketNo(draft.dateStr, draft.ticketNo);
   $('#dlg-output').close();
 
-  const result = await shareCsv(draft);
+  const result = await shareCsv(draft, { download });
   if (result !== 'cancelled') {
     beep('done');
-    toast(t('output.done'));
+    toast(result === 'downloaded' ? t('output.saved') : t('output.done'));
   }
 
   // 出力済み。次の伝票へ備えて下書きを空にする
@@ -959,6 +962,74 @@ async function doOutput() {
 /* ==================================================================
  * 伝票履歴
  * ================================================================== */
+/* ==================================================================
+ * 紙伝票の形で見る（積んだ本数が入った紙伝票）
+ * 工場が紙伝票しか受け付けないとき、書き写しが楽になる。材が複数なら、材ごとに1枚
+ * ================================================================== */
+let paperZoom = false;
+
+/** 画面の幅に合わせて縮小する（拡大のときは、そのままの大きさで横にスクロール） */
+function fitPaper() {
+  for (const wrap of $$('#paper-list .paper-wrap')) {
+    const inner = wrap.firstElementChild;
+    const slip = inner?.firstElementChild;
+    if (!slip || !wrap.clientWidth) continue;
+    const scale = paperZoom ? 1 : wrap.clientWidth / slip.offsetWidth;
+    wrap.classList.toggle('is-zoom', paperZoom);
+    inner.style.transform = paperZoom ? 'none' : `scale(${scale})`;
+    wrap.style.height = paperZoom ? 'auto' : `${Math.ceil(slip.offsetHeight * scale)}px`;
+  }
+  $('#paper-zoom').textContent = t(paperZoom ? 'paper.fit' : 'paper.zoom');
+}
+
+function openPaperView(ticket) {
+  const slips = ticketSlips(ticket);
+  if (slips.length === 0) { feedbackError(); toast(t('output.empty')); return; }
+  const host = $('#paper-list');
+  host.replaceChildren();
+  for (const data of slips) {
+    const wrap = document.createElement('div');
+    wrap.className = 'paper-wrap';
+    const inner = document.createElement('div');
+    inner.className = 'paper-inner';
+    inner.appendChild(renderSlip(document, data, t));
+    wrap.appendChild(inner);
+    host.appendChild(wrap);
+  }
+  paperZoom = false;
+  $('#dlg-paper').showModal();
+  fitPaper();                  // 開いてから測る（幅が分からないと縮小率を決められないため）
+}
+
+function printPaper() {
+  const area = $('#print-area');
+  area.replaceChildren(...$$('#paper-list .slip').map((el) => el.cloneNode(true)));
+  window.print();
+}
+
+/* ==================================================================
+ * ホームへ戻る（計測をやめる）
+ * 入力が消えるので、必ず確認の画面を挟む。入力が1本もなければ、消えるものがないので確認なしで戻る
+ * ================================================================== */
+function askGoHome() {
+  const draft = state.draft;
+  const { count, volume } = draft ? ticketTotals(draft) : { count: 0, volume: 0n };
+  if (count === 0) { goHome(); return; }
+  $('#home-lose').textContent = t('home.lose', { count, volume: formatVolume(volume) });
+  $('#dlg-home').showModal();
+}
+
+async function goHome() {
+  state.voice?.stop?.();
+  await db.kvDelete('draft');
+  state.draft = null;
+  $('#dlg-home').open && $('#dlg-home').close();
+  closeDrawer();
+  showScreen('setup');
+  renderQuickChips().catch(() => {});
+  toast(t('home.done'));
+}
+
 async function openHistory() {
   const tickets = await db.listTickets();
   const box = $('#ticket-list');
@@ -977,13 +1048,21 @@ async function openHistory() {
       <div class="head"><span>${esc(ticket.dateStr)} No.${esc(ticket.ticketNo)}</span><span>${icon}</span></div>
       ${ticket.lots.map((lot) => `<div class="sub">${esc(lot.species)} / ${formatLength(toHundredths(lot.lengthM))}m / ${lot.minD}-${lot.maxD}cm${ticket.lots.length > 1 && lot.site ? ` / ${esc(lot.site)}` : ''}</div>`).join('')}
       <div class="sub">${totalCount} ${t('measure.unitCount')} / ${formatVolume(totalVolume)} m³ · ${syncLabel}</div>`;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn-sm';
-    btn.style.marginTop = '8px';
-    btn.textContent = t('history.reexport');
-    btn.addEventListener('click', () => shareCsv(ticket));
-    el.appendChild(btn);
+    // 再出力（共有画面）／端末に保存／紙伝票の形で見る
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const addBtn = (label, onClick) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-sm';
+      b.textContent = label;
+      b.addEventListener('click', onClick);
+      actions.appendChild(b);
+    };
+    addBtn(t('history.reexport'), () => shareCsv(ticket));
+    addBtn(t('history.save'), async () => { await shareCsv(ticket, { download: true }); toast(t('output.saved')); });
+    addBtn(t('history.paper'), () => openPaperView(ticket));
+    el.appendChild(actions);
     box.appendChild(el);
   }
   $('#dlg-history').showModal();
@@ -1590,6 +1669,15 @@ function wireEvents() {
   });
 
   wireSlip();
+  $('#output-save').addEventListener('click', (e) => withBusy(e.currentTarget, () => doOutput({ download: true })));
+  $('#output-paper').addEventListener('click', () => openPaperView(state.draft));
+  $('#paper-close').addEventListener('click', () => $('#dlg-paper').close());
+  $('#paper-print').addEventListener('click', printPaper);
+  $('#paper-zoom').addEventListener('click', () => { paperZoom = !paperZoom; fitPaper(); });
+  window.addEventListener('resize', fitPaper);
+  $('#go-home').addEventListener('click', askGoHome);
+  $('#home-yes').addEventListener('click', (e) => withBusy(e.currentTarget, goHome));
+  $('#home-no').addEventListener('click', () => $('#dlg-home').close());
 
   $('#open-history').addEventListener('click', openHistory);
   $('#history-close').addEventListener('click', () => $('#dlg-history').close());
@@ -1676,6 +1764,7 @@ function wireEvents() {
  * 起動
  * ================================================================== */
 async function boot() {
+  initViewport();            // 実際の高さを測り続ける（ホーム画面から開いたとき、下のボタンが隠れないように）
   await loadSettings();
   state.feed = state.settings.office ? await officeSync.getFeed() : null;   // 圏外でも、最後に受け取った事務所の情報で始める
   await renderLists();

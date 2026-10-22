@@ -45,7 +45,7 @@ async function toCacheable(response) {
     headers: response.headers,
   });
 }
-const VERSION = 'terra-kennsyuu-v18';
+const VERSION = 'terra-kennsyuu-v19';
 const CACHE = `${VERSION}`;
 
 const SHELL = [
@@ -70,6 +70,7 @@ const SHELL = [
   './src/js/lots.js',
   './src/js/slip.js',
   './src/js/quick.js',
+  './src/js/viewport.js',
   './src/js/office-rules.js',
   './src/js/feedback.js',
   './src/js/voice.js',

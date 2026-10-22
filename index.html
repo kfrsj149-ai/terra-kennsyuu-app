@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="theme-color" content="#1f6b2d">
+<!-- 描画の前に、実際に見えている高さを入れる（ホーム画面から開いたとき、下のボタンが一瞬隠れるのを防ぐ。詳しくは src/js/viewport.js） -->
+<script>(function () { var h = window.innerHeight; if (h > 0) document.documentElement.style.setProperty('--app-h', h + 'px'); })();</script>
 <meta name="description" content="TERRA 丸太検収 - JAS材積を正確に計算するオフライン対応の検収アプリ">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -159,6 +161,10 @@
     <button class="bar-btn" id="drawer-close" data-i18n-aria="common.close" aria-label="閉じる">✕</button>
   </div>
   <div class="drawer-body scroll">
+    <!-- 計測中だけ出る。押しても、すぐには戻らず、確認の画面を挟む -->
+    <div class="menu-section" id="home-section" hidden>
+      <button type="button" class="btn btn-sm btn-danger" id="go-home" data-i18n="home.menu">計測をやめてホームへ戻る</button>
+    </div>
     <div class="menu-section">
       <h3 data-i18n="menu.language">表示言語</h3>
       <select id="sel-language"></select>
@@ -336,6 +342,11 @@
       <label for="out-note" data-i18n="output.note">備考</label>
       <textarea id="out-note"></textarea>
     </div>
+    <!-- 工場が紙伝票しか受け付けないときの書き写し用／共有せずに端末へ保存 -->
+    <div class="out-actions">
+      <button type="button" class="btn btn-sm" id="output-paper" data-i18n="output.paper">紙伝票の形で見る</button>
+      <button type="button" class="btn btn-sm" id="output-save" data-i18n="output.save">端末に保存</button>
+    </div>
   </div>
   <!-- 確認文はスクロールの外。表を読んでいる途中でも必ず目に入る -->
   <p class="dlg-question dlg-confirm" data-i18n="output.confirm">本当によろしいですか？</p>
@@ -412,6 +423,31 @@
   </div>
   <div class="dlg-foot">
     <button type="button" class="btn" id="history-close" data-i18n="common.close">閉じる</button>
+  </div>
+</dialog>
+
+<!-- 紙伝票の形で見る：積んだ本数が入った紙伝票。工場が紙伝票しか受け付けないとき、書き写しやすい -->
+<dialog id="dlg-paper">
+  <div class="dlg-body">
+    <div class="dlg-title" data-i18n="paper.title">紙伝票の形で見る</div>
+    <div id="paper-list"></div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn" id="paper-zoom" data-i18n="paper.zoom">拡大</button>
+    <button type="button" class="btn btn-primary" id="paper-print" data-i18n="slip.print">印刷する</button>
+    <button type="button" class="btn" id="paper-close" data-i18n="common.close">閉じる</button>
+  </div>
+</dialog>
+
+<!-- ホームへ戻る：入力が消えるので、必ず確認する。「はい」は左、「戻る」は右 -->
+<dialog id="dlg-home">
+  <div class="dlg-body">
+    <p class="dlg-question" data-i18n="home.title">ホームへ戻りますか？</p>
+    <p id="home-lose"></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn btn-danger" id="home-yes" data-i18n="common.yes">はい</button>
+    <button type="button" class="btn" id="home-no" data-i18n="common.back">戻る</button>
   </div>
 </dialog>
 

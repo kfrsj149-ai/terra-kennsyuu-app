@@ -66,6 +66,7 @@
 .slip-single .slip-table th:nth-child(3) { width: 42mm; }
 .slip-table td { height: var(--slip-row-h, 8mm); }
 .slip-dia { text-align: center; font-size: 12pt; font-weight: 800; }
+.slip-sub { text-align: right; font-size: calc(var(--slip-row-h, 8mm) * .55); font-weight: 800; font-variant-numeric: tabular-nums; }
 .slip-unit { text-align: right; font-size: 9pt; font-variant-numeric: tabular-nums; }
 .slip-count { padding: 0 !important; }
 
@@ -79,18 +80,33 @@
   margin: 0 auto;
 }
 .slip-single .slip-comb { width: 36mm; }
-.slip-comb i { display: block; border: 0.4mm solid #000; }
+.slip-comb i {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0.4mm solid #000;
+  font-size: calc(var(--slip-row-h, 8mm) * .62);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+/* 枠に入りきらない桁数のときは、枠のかわりに数字をそのまま出す */
+.slip-comb-overflow { display: flex; align-items: center; justify-content: center; border: 0.4mm solid #000; font-size: calc(var(--slip-row-h, 8mm) * .62); }
 .slip-comb-total { grid-template-columns: repeat(5, 1fr); width: 40mm; height: 10mm; margin: 0; }
+.slip-comb-total i { font-size: 7mm; }
 
 /* フッター */
 .slip-foot { display: flex; flex-direction: column; gap: 2.5mm; }
 .slip-totals { display: flex; justify-content: space-between; align-items: flex-end; gap: 6mm; }
 .slip-total { display: flex; align-items: flex-end; gap: 2mm; }
 .slip-total .slip-label { font-size: 9pt; }
-.slip-vol-box { width: 46mm; height: 10mm; border: 0.4mm solid #000; }
+.slip-vol-box { width: 46mm; height: 10mm; border: 0.4mm solid #000; display: flex; align-items: center; justify-content: flex-end; padding: 0 2mm; font-size: 7mm; font-weight: 800; font-variant-numeric: tabular-nums; }
 .slip-unit-mark { font-size: 9pt; font-weight: 700; }
 .slip-memo { display: flex; align-items: flex-end; gap: 2mm; height: 8mm; border-bottom: 0.35mm solid #000; }
 .slip-note { margin: 0; font-size: 6.5pt; line-height: 1.35; }
+
+/* 積んだ本数が入っている行は、画面では薄く色をつけて、書き写す行を見つけやすくする（印刷では付けない） */
+@media screen { .slip-filled td { background: #fff3b0; } }
 
 /* ---------------- 画面のダイアログ ---------------- */
 /* 径級の▲▼。計測準備の .picker-btn と同じ見た目（あちらは別の処理が結びついているので、クラスを分けている） */
@@ -110,6 +126,14 @@
 #slip-preview-wrap { position: relative; overflow: hidden; border: 2px solid var(--c-border); border-radius: var(--r-md); background: #fff; margin-top: 8px; }
 #slip-preview { transform-origin: top left; position: absolute; top: 0; left: 0; pointer-events: none; }
 
+/* 紙伝票の形で見る：材ごとに1枚ずつ縦に並べる */
+#dlg-paper { width: min(98vw, 760px); }
+.paper-wrap { position: relative; overflow: hidden; border: 2px solid var(--c-border); border-radius: var(--r-md); background: #fff; margin-bottom: 10px; }
+.paper-wrap.is-zoom { overflow-x: auto; }
+.paper-inner { transform-origin: top left; position: absolute; top: 0; left: 0; }
+.paper-wrap.is-zoom .paper-inner { position: relative; }
+.paper-head { font-weight: 800; margin: 6px 0; }
+
 /* ---------------- 印刷 ---------------- */
 @media print {
   @page { size: A4 portrait; margin: 8mm; }
@@ -117,4 +141,5 @@
   body > *:not(#print-area) { display: none !important; }
   #print-area { display: block !important; }
   #print-area .slip { break-inside: avoid; page-break-inside: avoid; }
+  #print-area .slip + .slip { break-before: page; page-break-before: always; }   /* 材が複数のときは、1材1枚 */
 }

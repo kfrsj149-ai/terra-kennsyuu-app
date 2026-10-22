@@ -68,3 +68,31 @@ test('車番・現場・樹種がCSVの各行に入る', () => {
   const [, row] = buildCsv(t).trim().split('\r\n');
   assert.equal(row, '2026-09-20,001,岩手 100 あ 12-34,本谷,スギ,6-72,4,20,1,0.160,1,0.160,');
 });
+
+
+/* ---------------- 端末に直接保存 ---------------- */
+import { downloadCsv, shareCsv, csvFileName } from '../src/js/csv.js';
+
+test('端末に保存：共有画面を出さずに、ダウンロードとして保存する', async () => {
+  const clicks = [];
+  const made = [];
+  const realDoc = globalThis.document;
+  const realNav = globalThis.navigator;
+  globalThis.document = {
+    createElement: () => { const a = { click: () => clicks.push(a.download), remove() {} }; made.push(a); return a; },
+    body: { appendChild() {} },
+  };
+  let shared = 0;
+  Object.defineProperty(globalThis, 'navigator', { value: { canShare: () => true, share: async () => { shared++; } }, configurable: true });
+  try {
+    const ticket = { id: 't', dateStr: '2026-10-22', ticketNo: '002', truck: '21', note: '', lots: [{ id: 'l', species: 'スギ', lengthM: '4', minD: 20, maxD: 24, site: '', entries: [{ id: 'a', ts: 1, d: 20, source: 'tap', cancelled: false }] }] };
+    assert.equal(downloadCsv(ticket), 'downloaded');
+    assert.equal(await shareCsv(ticket, { download: true }), 'downloaded');
+    assert.deepEqual(clicks, [csvFileName(ticket), csvFileName(ticket)]);
+    assert.equal(shared, 0, 'download:true のときは、共有画面を呼ばない');
+    assert.equal(csvFileName(ticket), 'terra-20261022-002.csv');
+  } finally {
+    globalThis.document = realDoc;
+    Object.defineProperty(globalThis, 'navigator', { value: realNav, configurable: true });
+  }
+});

@@ -19,6 +19,8 @@
  * 刷ったあとで住所を変えられないため。QRを足す位置は、用紙の右上（ヘッダー内）に空けてある。
  */
 import { toHundredths, formatLength, volumeNumerator, formatVolume, diameterRange } from './jas.js';
+import { aggregate } from './csv.js';
+import { normalizeTicket } from './lots.js';
 
 /** 本数の枠の数（最大9999本） */
 export const COUNT_DIGITS = 4;
@@ -101,10 +103,20 @@ function el(doc, tag, cls, text) {
   return node;
 }
 
-/** 本数の枠（1桁ずつ） */
-function comb(doc, digits, cls = '') {
-  const wrap = el(doc, 'div', `slip-comb ${cls}`.trim());
-  for (let i = 0; i < digits; i++) wrap.appendChild(el(doc, 'i'));
+/**
+ * 本数の枠（1桁ずつ）。value があれば、右寄せで1桁ずつ枠に入れる（積んだ本数を書き写すための表示）。
+ * 枠に入りきらない桁数のときは、数字を割らずに、枠のかわりにそのまま出す。
+ */
+function comb(doc, digits, cls = '', value = '') {
+  const text = String(value ?? '');
+  const over = text.length > digits;
+  const wrap = el(doc, 'div', ['slip-comb', cls, over ? 'slip-comb-overflow' : ''].filter(Boolean).join(' '));
+  if (over) {
+    wrap.appendChild(el(doc, 'b', '', text));
+    return wrap;
+  }
+  const pad = digits - text.length;
+  for (let i = 0; i < digits; i++) wrap.appendChild(el(doc, 'i', '', i >= pad ? text[i - pad] : ''));
   return wrap;
 }
 
@@ -139,7 +151,10 @@ export function renderSlip(doc, data, tr) {
   meta.appendChild(field(doc, tr('slip.owner'), data.owner, 'slip-w2'));
   meta.appendChild(field(doc, tr('slip.truck'), data.truck));
   meta.appendChild(field(doc, tr('slip.sheetLength'), `${data.lengthM} m`));
-  const date = field(doc, tr('slip.date'), tr('slip.dateFmt'), 'slip-w4 slip-date');
+  // 書き込み済みの伝票は日付も入れる（空欄の用紙は、年月日の欄だけ）
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data.dateStr ?? '');
+  const dateText = m ? tr('slip.dateFilled', { y: m[1], m: String(Number(m[2])), d: String(Number(m[3])) }) : tr('slip.dateFmt');
+  const date = field(doc, tr('slip.date'), dateText, 'slip-w4 slip-date');
   meta.appendChild(date);
   meta.appendChild(field(doc, tr('slip.site'), data.site, 'slip-w3'));
   meta.appendChild(field(doc, tr('slip.species'), data.species));
@@ -159,13 +174,14 @@ export function renderSlip(doc, data, tr) {
     table.appendChild(thead);
     const tbody = el(doc, 'tbody');
     for (const row of rows) {
-      const r = el(doc, 'tr');
+      const filled = Number(row.count) > 0;
+      const r = el(doc, 'tr', filled ? 'slip-filled' : '');
       r.appendChild(el(doc, 'td', 'slip-dia', String(row.diameter)));
       r.appendChild(el(doc, 'td', 'slip-unit', row.unit));
       const countCell = el(doc, 'td', 'slip-count');
-      countCell.appendChild(comb(doc, COUNT_DIGITS));
+      countCell.appendChild(comb(doc, COUNT_DIGITS, '', filled ? String(row.count) : ''));
       r.appendChild(countCell);
-      r.appendChild(el(doc, 'td', 'slip-sub'));
+      r.appendChild(el(doc, 'td', 'slip-sub', filled ? row.subtotal : ''));
       tbody.appendChild(r);
     }
     table.appendChild(tbody);
@@ -178,12 +194,12 @@ export function renderSlip(doc, data, tr) {
   const totals = el(doc, 'div', 'slip-totals');
   const tc = el(doc, 'div', 'slip-total');
   tc.appendChild(el(doc, 'span', 'slip-label', tr('slip.totalCount')));
-  tc.appendChild(comb(doc, TOTAL_DIGITS, 'slip-comb-total'));
+  tc.appendChild(comb(doc, TOTAL_DIGITS, 'slip-comb-total', data.totalCount ?? ''));
   tc.appendChild(el(doc, 'span', 'slip-unit-mark', tr('slip.countUnit')));
   totals.appendChild(tc);
   const tv = el(doc, 'div', 'slip-total');
   tv.appendChild(el(doc, 'span', 'slip-label', tr('slip.totalVol')));
-  tv.appendChild(el(doc, 'div', 'slip-vol-box'));
+  tv.appendChild(el(doc, 'div', 'slip-vol-box', data.totalVolume ?? ''));
   totals.appendChild(tv);
   foot.appendChild(totals);
   const memo = el(doc, 'div', 'slip-memo');
@@ -193,4 +209,44 @@ export function renderSlip(doc, data, tr) {
   slip.appendChild(foot);
 
   return slip;
+}
+
+/**
+ * 積み込んだ伝票を、紙伝票の形（径級ごとの本数・小計・合計）にする。便に複数の材があれば、材ごとに1枚。
+ * 本数が入っていない材は出さない。範囲が広すぎて1枚に収まらないときは、入力のある径級だけにする。
+ * @param {object} ticket 保存済みの伝票または計測中の下書き（古い形でも可）
+ * @returns {object[]} renderSlip に渡せる形（rows に count・subtotal が入る）
+ */
+export function ticketSlips(ticket) {
+  const norm = normalizeTicket(ticket);
+  const slips = [];
+  for (const lot of norm.lots) {
+    const agg = aggregate(lot);
+    if (agg.totalCount === 0) continue;
+    const byD = new Map(agg.rows.map((r) => [r.d, r]));
+    let diameters = diameterRange(lot.minD, lot.maxD);
+    for (const d of byD.keys()) if (!diameters.includes(d)) diameters.push(d);
+    diameters.sort((a, b) => a - b);
+    if (diameters.length > SLIP_MAX_ROWS) diameters = diameters.filter((d) => byD.has(d));
+    slips.push({
+      owner: norm.ownCompany ?? '',
+      truck: norm.truck ?? '',
+      species: lot.species,
+      site: lot.site ?? '',
+      dateStr: norm.dateStr,
+      lengthM: formatLength(toHundredths(lot.lengthM)),
+      rows: diameters.map((d) => {
+        const r = byD.get(d);
+        return {
+          diameter: d,
+          unit: formatVolume(volumeNumerator(lot.lengthM, d), 4),
+          count: r ? r.count : 0,
+          subtotal: r ? formatVolume(r.subtotal) : '',
+        };
+      }),
+      totalCount: String(agg.totalCount),
+      totalVolume: formatVolume(agg.totalVolume),
+    });
+  }
+  return slips;
 }

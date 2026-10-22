@@ -21,7 +21,7 @@ function fakeDoc() {
 }
 const walk = (node, fn) => { fn(node); node.children.forEach((c) => walk(c, fn)); };
 const find = (node, pred) => { const out = []; walk(node, (n) => { if (pred(n)) out.push(n); }); return out; };
-const tr = (key) => ja[key] ?? key;
+const tr = (key, params = {}) => Object.entries(params).reduce((v, [k, x]) => v.replace(`{${k}}`, x), ja[key] ?? key);
 
 test('径級の行は、径級の刻み（14cm未満は1cm、以上は2cm）どおりで、12m材6〜72cmは38段', () => {
   const rows = slipRows('12', 6, 72);
@@ -139,6 +139,7 @@ test('印刷に必要なファイルが、オフラインで読めるようServi
   assert.match(sw, /\.\/src\/js\/slip\.js/);
   assert.match(sw, /\.\/src\/css\/slip\.css/);
   assert.match(sw, /\.\/src\/js\/quick\.js/);
+  assert.match(sw, /\.\/src\/js\/viewport\.js/);
   assert.ok(existsSync(new URL('../src/js/slip.js', import.meta.url)));
   assert.ok(existsSync(new URL('../src/css/slip.css', import.meta.url)));
   // キャッシュ名は sw.js と config.js で一致している
@@ -154,4 +155,111 @@ test('文言：手書き伝票で使うキーがすべての言語にそろっ�
     const dict = (await import(`../src/js/locales/${code}.js`)).default;
     for (const k of keys) assert.ok(dict[k], `${code} に ${k} が無い`);
   }
+});
+
+/* ---------------- 積んだ伝票を紙伝票の形で見る ---------------- */
+import { ticketSlips } from '../src/js/slip.js';
+import { buildCsv } from '../src/js/csv.js';
+
+const COUNTS = { 18: 15, 20: 31, 22: 30, 24: 16, 26: 14, 28: 10, 30: 3, 32: 3 };
+const lotOfCounts = (counts, extra = {}) => ({
+  id: 'l', species: 'カラマツ', lengthM: '2.00', minD: 18, maxD: 56, site: 'テスト1', siteId: null,
+  entries: Object.entries(counts).flatMap(([d, n]) => Array.from({ length: n }, (_, i) => ({ id: `${d}-${i}`, ts: 1, d: Number(d), source: 'tap', cancelled: false }))),
+  ...extra,
+});
+const ticketOf = (...lots) => ({ id: 't', dateStr: '2026-10-22', ticketNo: '002', truck: '21', ownCompany: '丸々林業', note: '', lots, activeLot: 0 });
+
+test('紙伝票の形：本数・小計・合計が、実際に出力するCSVと同じ数字になる', () => {
+  const ticket = ticketOf(lotOfCounts(COUNTS));
+  const [slip] = ticketSlips(ticket);
+  assert.equal(slip.totalCount, '122');
+  assert.equal(slip.totalVolume, '12.814');
+  assert.equal(slip.lengthM, '2');
+  assert.equal(slip.owner, '丸々林業');
+  assert.equal(slip.truck, '21');
+  assert.equal(slip.dateStr, '2026-10-22');
+  const row = (d) => slip.rows.find((r) => r.diameter === d);
+  assert.equal(row(20).count, 31);
+  assert.equal(row(20).subtotal, '2.480');
+  assert.equal(row(20).unit, '0.0800');
+  assert.equal(row(32).subtotal, '0.614');
+  // 入れていない径級（範囲の中）は、本数0・小計は空欄のまま残る
+  assert.equal(row(34).count, 0);
+  assert.equal(row(34).subtotal, '');
+  // CSVの小計と、1行ずつ一致する
+  const csv = buildCsv(ticket).trim().split('\r\n').slice(1).map((l) => l.split(','));
+  for (const c of csv) {
+    const d = Number(c[7]);
+    assert.equal(String(row(d).count), c[8], `${d}cm 本数`);
+    assert.equal(row(d).subtotal, c[9], `${d}cm 小計`);
+  }
+});
+
+test('紙伝票の形：取消した入力は含まない', () => {
+  const lot = lotOfCounts({ 20: 5 });
+  lot.entries[0].cancelled = true;
+  lot.entries[1].cancelled = true;
+  const [slip] = ticketSlips(ticketOf(lot));
+  assert.equal(slip.rows.find((r) => r.diameter === 20).count, 3);
+  assert.equal(slip.totalCount, '3');
+});
+
+test('紙伝票の形：材が複数なら1材1枚、本数のない材は出さない', () => {
+  const a = lotOfCounts({ 20: 4 });
+  const b = lotOfCounts({ 24: 2 }, { id: 'b', species: 'スギ', lengthM: '4.00', site: '向かいの沢' });
+  const empty = lotOfCounts({}, { id: 'c', species: 'ヒノキ', lengthM: '3.00' });
+  const slips = ticketSlips(ticketOf(a, b, empty));
+  assert.equal(slips.length, 2);
+  assert.deepEqual(slips.map((s) => [s.species, s.lengthM, s.site]), [['カラマツ', '2', 'テスト1'], ['スギ', '4', '向かいの沢']]);
+  assert.equal(ticketSlips(ticketOf(empty)).length, 0);
+});
+
+test('紙伝票の形：範囲外の入力が混じっても落ちない／範囲が広すぎるときは入力のある径級だけにする', () => {
+  const out = lotOfCounts({ 16: 2, 20: 3 }, { minD: 18, maxD: 30 });   // 16cm は範囲の外
+  const [slip] = ticketSlips(ticketOf(out));
+  assert.ok(slip.rows.some((r) => r.diameter === 16 && r.count === 2));
+  assert.deepEqual(slip.rows.map((r) => r.diameter), [...slip.rows.map((r) => r.diameter)].sort((x, y) => x - y));
+  const wide = lotOfCounts({ 20: 3, 90: 1 }, { minD: 4, maxD: 120 });
+  const [w] = ticketSlips(ticketOf(wide));
+  assert.ok(w.rows.length <= SLIP_MAX_ROWS);
+  assert.deepEqual(w.rows.map((r) => r.diameter), [20, 90]);
+});
+
+test('描画：本数は右寄せで1桁ずつ枠に入り、合計・日付・小計も入る', () => {
+  const [data] = ticketSlips(ticketOf(lotOfCounts(COUNTS)));
+  const slip = renderSlip(fakeDoc(), data, tr);
+  const rows = find(slip, (n) => n.tag === 'tr' && n.children[0]?.className === 'slip-dia');
+  const row20 = rows.find((r) => r.children[0].textContent === '20');
+  const digits = find(row20, (n) => n.tag === 'i').map((n) => n.textContent);
+  assert.deepEqual(digits, ['', '', '3', '1'], '31本は、右の2つの枠に入る');
+  assert.equal(find(row20, (n) => n.className === 'slip-sub')[0].textContent, '2.480');
+  assert.match(row20.className, /slip-filled/);
+  // 入れていない行は空欄で、色もつかない
+  const row34 = rows.find((r) => r.children[0].textContent === '34');
+  assert.deepEqual(find(row34, (n) => n.tag === 'i').map((n) => n.textContent), ['', '', '', '']);
+  assert.doesNotMatch(row34.className, /slip-filled/);
+  // 合計
+  const total = find(slip, (n) => n.className.includes('slip-comb-total'))[0];
+  assert.deepEqual(total.children.map((n) => n.textContent), ['', '', '1', '2', '2']);
+  assert.equal(find(slip, (n) => n.className === 'slip-vol-box')[0].textContent, '12.814');
+  // 日付（日本語）
+  assert.ok(find(slip, (n) => n.className === 'slip-value').some((n) => n.textContent === '2026年10月22日'));
+});
+
+test('描画：本数が枠（4桁）に入りきらないときは、数字を割らずにそのまま出す', () => {
+  const lot = lotOfCounts({ 20: 1 });
+  const [data] = ticketSlips(ticketOf(lot));
+  data.rows.find((r) => r.diameter === 20).count = 12345;
+  const slip = renderSlip(fakeDoc(), data, tr);
+  const overflow = find(slip, (n) => n.className.includes('slip-comb-overflow'));
+  assert.equal(overflow.length, 1);
+  assert.equal(overflow[0].children[0].textContent, '12345');
+});
+
+test('空欄の用紙は、これまでどおり本数・小計が空欄のまま', () => {
+  const v = validateSlip({ lengthRaw: '3', minD: 14, maxD: 16 });
+  const slip = renderSlip(fakeDoc(), { lengthM: v.lengthM, rows: v.rows }, tr);
+  assert.equal(find(slip, (n) => n.className.includes('slip-filled')).length, 0);
+  assert.ok(find(slip, (n) => n.tag === 'i' && !n.className).every((n) => n.textContent === ''));
+  assert.ok(find(slip, (n) => n.className === 'slip-value').some((n) => n.textContent === ja['slip.dateFmt']));
 });
