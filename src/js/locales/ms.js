@@ -215,4 +215,11 @@ export default {
   'home.title': 'Kembali ke Utama?',
   'home.lose': '{count} batang ({volume}m³) yang dimasukkan akan dipadam.',
   'home.done': 'Telah kembali ke Utama',
+  'fleet.active': 'Digunakan',
+  'fleet.resting': 'Rehat',
+  'fleet.swapTitle': 'Tukar kenderaan',
+  'fleet.swapBody': 'Akan guna "{name}". Pilih kenderaan yang direhatkan sebagai ganti.',
+  'fleet.swapped': '"{on}" digunakan, "{off}" direhatkan',
+  'fleet.addedResting': 'Bilangan kenderaan kontrak sudah penuh, jadi didaftarkan sebagai "Rehat" (tukar apabila hendak guna).',
+  'fleet.limitNote': 'Kenderaan kontrak {seats} / digunakan {active}',
 };

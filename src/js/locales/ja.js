@@ -215,4 +215,11 @@ export default {
   'home.title': 'ホームへ戻りますか？',
   'home.lose': '入力した{count}本（{volume}m³）は消えます。',
   'home.done': 'ホームへ戻りました',
+  'fleet.active': '使用中',
+  'fleet.resting': '休み',
+  'fleet.swapTitle': '車を入れ替える',
+  'fleet.swapBody': '「{name}」を使います。代わりに休ませる車を選んでください',
+  'fleet.swapped': '「{on}」を使用中、「{off}」を休みにしました',
+  'fleet.addedResting': '契約台数がいっぱいなので「休み」で登録しました（使うときは入れ替えます）',
+  'fleet.limitNote': '契約台数 {seats}台／使用中 {active}台',
 };

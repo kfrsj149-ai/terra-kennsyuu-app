@@ -215,4 +215,11 @@ export default {
   'home.title': 'Về trang chủ?',
   'home.lose': '{count} cây ({volume}m³) đã nhập sẽ bị xóa.',
   'home.done': 'Đã về trang chủ',
+  'fleet.active': 'Đang dùng',
+  'fleet.resting': 'Nghỉ',
+  'fleet.swapTitle': 'Đổi xe',
+  'fleet.swapBody': 'Sẽ dùng "{name}". Hãy chọn xe cho nghỉ thay thế.',
+  'fleet.swapped': 'Đã dùng "{on}", cho "{off}" nghỉ',
+  'fleet.addedResting': 'Số xe trong hợp đồng đã đủ nên đăng ký ở trạng thái "Nghỉ" (khi cần sẽ đổi xe).',
+  'fleet.limitNote': 'Số xe hợp đồng {seats} / đang dùng {active}',
 };

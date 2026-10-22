@@ -20,6 +20,7 @@ import * as updater from './updater.js';
 import * as officeSync from './office-sync.js';
 import { validateSlip, renderSlip, ticketSlips } from './slip.js';
 import { initViewport } from './viewport.js';
+import { activeOf, isResting, planActivate, registerAsResting } from './fleet.js';
 import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading, CONSENT_VERSION } from './office-rules.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -165,10 +166,22 @@ async function renderLists() {
       empty.textContent = t('common.none');
       wrap.appendChild(empty);
     }
+    if (kind === 'truck') await renderFleetNote(items);
     for (const item of items) {
       const chip = document.createElement('span');
       chip.className = 'chip';
-      chip.textContent = item.value;
+      chip.append(item.value);
+      if (kind === 'truck') {
+        // 使用中／休み。休みの車は、計測準備の選択肢に出ない（契約台数には、使用中の車だけを数える）
+        const resting = isResting(item);
+        chip.classList.toggle('is-resting', resting);
+        const stateBtn = document.createElement('button');
+        stateBtn.type = 'button';
+        stateBtn.className = 'chip-state';
+        stateBtn.textContent = t(resting ? 'fleet.resting' : 'fleet.active');
+        stateBtn.addEventListener('click', () => toggleTruck(item));
+        chip.appendChild(stateBtn);
+      }
       const del = document.createElement('button');
       del.type = 'button';
       del.textContent = '×';
@@ -182,6 +195,51 @@ async function renderLists() {
       wrap.appendChild(chip);
     }
   }
+}
+
+/** 契約台数と使用中の台数の表示（契約台数が分かるときだけ） */
+async function renderFleetNote(items) {
+  const note = $('#fleet-note');
+  const seats = await subscription.seats();
+  note.hidden = seats === null;
+  if (seats !== null) note.textContent = t('fleet.limitNote', { seats, active: activeOf(items).length });
+}
+
+/** 使用中⇔休みを切り替える。休ませるのはいつでもできる。使うときに満員なら、入れ替える車を選んでもらう */
+async function toggleTruck(item) {
+  if (!isResting(item)) {
+    await db.setOptionResting('truck', item.id, true);
+  } else {
+    const items = await db.listOptions('truck');
+    const plan = planActivate(items, item.id, await subscription.seats());
+    if (plan.kind === 'swap') { openSwap(item, plan.candidates); return; }
+    if (plan.kind === 'activate') await db.setOptionResting('truck', item.id, false);
+  }
+  await renderLists();
+  await fillSelects();
+}
+
+/** 車を入れ替える：使いたい車（休み）と、代わりに休ませる車（使用中）を1回の操作で入れ替える */
+function openSwap(item, candidates) {
+  $('#swap-body').textContent = t('fleet.swapBody', { name: item.value });
+  const list = $('#swap-list');
+  list.innerHTML = '';
+  for (const c of candidates) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn';
+    btn.textContent = c.value;
+    btn.addEventListener('click', async () => {
+      await db.setOptionResting('truck', c.id, true);
+      await db.setOptionResting('truck', item.id, false);
+      $('#dlg-swap').close();
+      await renderLists();
+      await fillSelects();
+      toast(t('fleet.swapped', { on: item.value, off: c.value }));
+    });
+    list.appendChild(btn);
+  }
+  $('#dlg-swap').showModal();
 }
 
 /** 名前の表記ゆれ（空白・全角半角）で重複しないようにまとめる */
@@ -201,7 +259,8 @@ function uniqueNames(values) {
  * （台帳に無い名前でも記録を止めない）。
  */
 async function choicesFor(kind) {
-  const local = (await db.listOptions(kind)).map((o) => o.value);
+  const options = await db.listOptions(kind);
+  const local = (kind === 'truck' ? activeOf(options) : options).map((o) => o.value);
   const feed = state.settings.office ? state.feed : null;
   let fromOffice = [];
   const masters = feed?.masters ?? {};
@@ -1551,7 +1610,17 @@ function wireEvents() {
     const add = async () => {
       const value = input.value.trim();
       if (!value) return;
-      await db.addOption(kind, value);
+      if (kind === 'truck') {
+        // 登録は止めない。契約台数がいっぱいなら「休み」で登録する（使うときに入れ替える）。登録済みの名前は変えない
+        const items = await db.listOptions('truck');
+        if (!items.some((o) => o.value === value)) {
+          const resting = registerAsResting(items, await subscription.seats());
+          await db.addOption(kind, value, resting ? { resting: true } : {});
+          if (resting) toast(t('fleet.addedResting'), 5000);
+        }
+      } else {
+        await db.addOption(kind, value);
+      }
       input.value = '';
       await renderLists();
       await fillSelects();
@@ -1678,6 +1747,7 @@ function wireEvents() {
   $('#go-home').addEventListener('click', askGoHome);
   $('#home-yes').addEventListener('click', (e) => withBusy(e.currentTarget, goHome));
   $('#home-no').addEventListener('click', () => $('#dlg-home').close());
+  $('#swap-no').addEventListener('click', () => $('#dlg-swap').close());
 
   $('#open-history').addEventListener('click', openHistory);
   $('#history-close').addEventListener('click', () => $('#dlg-history').close());

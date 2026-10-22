@@ -86,6 +86,8 @@ function applyResponse(json) {
     status: json?.status === 'active' ? 'active' : (json?.status ?? 'invalid'),
     expiresAt: typeof json?.expiresAt === 'number' ? json.expiresAt : null,
     cancelAtPeriodEnd: Boolean(json?.cancelAtPeriodEnd),
+    // 契約台数（頭の数）。サーバーが返さないうちは null＝制限しない
+    seats: Number.isInteger(json?.seats) && json.seats > 0 ? json.seats : null,
     lastCheckedAt: Date.now(),
   };
 }
@@ -161,6 +163,12 @@ export async function portalUrl() {
   } catch {
     return null;
   }
+}
+
+/** 契約台数（頭の数）。試用中・未購入・サーバーが返さないときは null（制限しない） */
+export async function seats() {
+  const s = await loadState();
+  return s.code ? (s.seats ?? null) : null;
 }
 
 /** 他の端末に貼り付けるためのライセンスコード（未購入なら null） */

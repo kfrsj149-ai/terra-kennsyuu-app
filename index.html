@@ -188,6 +188,7 @@
     </div>
     <div class="menu-section" data-list="truck">
       <h3 data-i18n="menu.trucks">トラック車番</h3>
+      <p class="note" id="fleet-note" hidden></p>
       <div class="chip-list"></div>
       <div class="inline-add">
         <input type="text" autocomplete="off">
@@ -323,6 +324,18 @@
   <div class="dlg-foot">
     <button type="button" class="btn btn-primary" id="start-yes" data-i18n="common.yes">はい</button>
     <button type="button" class="btn" id="start-no" data-i18n="common.back">戻る</button>
+  </div>
+</dialog>
+
+<!-- ========== 車を入れ替える（契約台数がいっぱいのとき、休みの車を使う） ========== -->
+<dialog id="dlg-swap">
+  <div class="dlg-body">
+    <div class="dlg-title" data-i18n="fleet.swapTitle">車を入れ替える</div>
+    <p class="dlg-question" id="swap-body"></p>
+    <div id="swap-list"></div>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn" id="swap-no" data-i18n="common.back">戻る</button>
   </div>
 </dialog>
 

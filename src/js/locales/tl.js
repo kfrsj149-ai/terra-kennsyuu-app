@@ -215,4 +215,11 @@ export default {
   'home.title': 'Bumalik sa Home?',
   'home.lose': 'Mabubura ang {count} piraso ({volume}m³) na naipasok.',
   'home.done': 'Nakabalik na sa Home',
+  'fleet.active': 'Ginagamit',
+  'fleet.resting': 'Pahinga',
+  'fleet.swapTitle': 'Magpalit ng sasakyan',
+  'fleet.swapBody': 'Gagamitin ang "{name}". Piliin ang sasakyang ipapahinga bilang kapalit.',
+  'fleet.swapped': 'Ginagamit na ang "{on}", pinahinga ang "{off}"',
+  'fleet.addedResting': 'Puno na ang bilang ng sasakyan sa kontrata kaya nairehistro bilang "Pahinga" (magpapalit kapag gagamitin).',
+  'fleet.limitNote': 'Sasakyan sa kontrata {seats} / ginagamit {active}',
 };

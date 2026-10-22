@@ -133,10 +133,19 @@ export async function listOptions(kind) {
   return all.sort((a, b) => a.value.localeCompare(b.value, 'ja'));
 }
 
-export async function addOption(kind, value) {
-  const item = { id: `${kind}:${value}`, kind, value };
+export async function addOption(kind, value, extra = {}) {
+  const item = { id: `${kind}:${value}`, kind, value, ...extra };
   await write('options', (s) => s.put(item), () => memory.options.set(item.id, item));
   return item;
+}
+
+/** 車番の「休み」を切り替える。名前や登録済みの値は変えない */
+export async function setOptionResting(kind, id, resting) {
+  const item = (await listOptions(kind)).find((o) => o.id === id);
+  if (!item) return null;
+  const next = { ...item, resting: Boolean(resting) };
+  await write('options', (s) => s.put(next), () => memory.options.set(next.id, next));
+  return next;
 }
 
 export async function removeOption(id) {

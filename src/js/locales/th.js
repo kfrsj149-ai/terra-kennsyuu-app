@@ -215,4 +215,11 @@ export default {
   'home.title': 'กลับหน้าหลักหรือไม่?',
   'home.lose': '{count} ท่อน ({volume} ลบ.ม.) ที่ป้อนไว้จะถูกลบ',
   'home.done': 'กลับหน้าหลักแล้ว',
+  'fleet.active': 'ใช้งานอยู่',
+  'fleet.resting': 'พัก',
+  'fleet.swapTitle': 'สลับรถ',
+  'fleet.swapBody': 'จะใช้ "{name}" เลือกรถที่จะพักแทน',
+  'fleet.swapped': 'ใช้ "{on}" แล้ว และให้ "{off}" พัก',
+  'fleet.addedResting': 'จำนวนรถตามสัญญาเต็มแล้ว จึงลงทะเบียนเป็น "พัก" (สลับรถเมื่อจะใช้งาน)',
+  'fleet.limitNote': 'รถตามสัญญา {seats} คัน / ใช้งานอยู่ {active} คัน',
 };
