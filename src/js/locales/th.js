@@ -222,4 +222,7 @@ export default {
   'fleet.swapped': 'ใช้ "{on}" แล้ว และให้ "{off}" พัก',
   'fleet.addedResting': 'จำนวนรถตามสัญญาเต็มแล้ว จึงลงทะเบียนเป็น "พัก" (สลับรถเมื่อจะใช้งาน)',
   'fleet.limitNote': 'รถตามสัญญา {seats} คัน / ใช้งานอยู่ {active} คัน',
+  'measure.voiceBatch': 'ป้อน {count} ท่อนแล้ว: {list}',
+  'measure.voiceSkipped': 'ป้อน {count} ท่อนแล้ว: {list} (ไม่ได้ป้อน: {skipped})',
+  'setup.prefilled': 'ใส่ค่าที่ตั้งไว้ครั้งก่อนให้แล้ว แก้เฉพาะส่วนที่ต่างไป',
 };

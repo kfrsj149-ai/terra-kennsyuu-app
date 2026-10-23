@@ -222,4 +222,7 @@ export default {
   'fleet.swapped': '"{on}" digunakan, "{off}" direhatkan',
   'fleet.addedResting': 'Bilangan kenderaan kontrak sudah penuh, jadi didaftarkan sebagai "Rehat" (tukar apabila hendak guna).',
   'fleet.limitNote': 'Kenderaan kontrak {seats} / digunakan {active}',
+  'measure.voiceBatch': '{count} batang dimasukkan: {list}',
+  'measure.voiceSkipped': '{count} batang dimasukkan: {list} (tidak dimasukkan: {skipped})',
+  'setup.prefilled': 'Tetapan kali lepas telah diisi. Ubah bahagian yang berbeza sahaja.',
 };

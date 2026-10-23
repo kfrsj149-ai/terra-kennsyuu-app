@@ -222,4 +222,7 @@ export default {
   'fleet.swapped': '「{on}」を使用中、「{off}」を休みにしました',
   'fleet.addedResting': '契約台数がいっぱいなので「休み」で登録しました（使うときは入れ替えます）',
   'fleet.limitNote': '契約台数 {seats}台／使用中 {active}台',
+  'measure.voiceBatch': '{count}本を入れました：{list}',
+  'measure.voiceSkipped': '{count}本を入れました：{list}（入れなかった数：{skipped}）',
+  'setup.prefilled': '前回の設定を入れてあります。違うところだけ変えてください',
 };

@@ -36,6 +36,7 @@
   <section id="screen-setup" class="screen is-active">
     <div class="scroll">
       <h2 class="dlg-title" data-i18n="setup.title">検収の準備</h2>
+      <p class="note prefill-note" id="prefill-note" data-i18n="setup.prefilled" hidden>前回の設定を入れてあります。違うところだけ変えてください</p>
 
       <!-- よく使う設定ショートカット（最上部） -->
       <div class="field">
@@ -320,6 +321,7 @@
 <dialog id="dlg-start">
   <div class="dlg-body">
     <p class="dlg-question" id="start-question"></p>
+    <div class="start-detail" id="start-detail"></div>
   </div>
   <div class="dlg-foot">
     <button type="button" class="btn btn-primary" id="start-yes" data-i18n="common.yes">はい</button>

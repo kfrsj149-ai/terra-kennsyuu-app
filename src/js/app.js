@@ -21,6 +21,7 @@ import * as officeSync from './office-sync.js';
 import { validateSlip, renderSlip, ticketSlips } from './slip.js';
 import { initViewport } from './viewport.js';
 import { activeOf, isResting, planActivate, registerAsResting } from './fleet.js';
+import { LAST_SETUP_KEY, lastSetupOf, restorableLastSetup } from './lastsetup.js';
 import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading, CONSENT_VERSION } from './office-rules.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -28,6 +29,7 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 const LIST_KINDS = ['company', 'truck', 'site', 'destination'];
 const LONG_PRESS_MS = 2000; // 誤操作対策：-1 は2秒長押し
+const VOICE_STAGGER_MS = 180; // 音声で複数の径級を一度に入れるとき、1本ごとの間隔（音・振動が重ならないように）
 
 /** アプリ全体の状態 */
 const state = {
@@ -421,6 +423,37 @@ function readSetup() {
     ownCompany: $('#in-own').value,
     note: $('#in-note').value.trim(),
   };
+}
+
+/* ==================================================================
+ * 前回の設定（準備画面の初期入力）
+ * 計測を始めたときの設定を覚えておき、次に準備画面を開いたときに入れておく。違うところだけ選び直す。
+ * 備考は、その伝票だけの内容なので毎回空欄にする。
+ * ================================================================== */
+async function saveLastSetup(setup) {
+  await db.kvSet(LAST_SETUP_KEY, lastSetupOf(setup));
+}
+
+async function applyLastSetup() {
+  const optionsOf = (sel) => [...$(sel).options].map((o) => o.value).filter(Boolean);
+  const r = restorableLastSetup(await db.kvGet(LAST_SETUP_KEY, null), {
+    truck: optionsOf('#in-truck'),
+    site: optionsOf('#in-site'),
+    destination: optionsOf('#in-destination'),
+    ownCompany: optionsOf('#in-own'),
+  });
+  $('#in-note').value = '';
+  $('#prefill-note').hidden = !r.any;
+  if (!r.any) return;
+  $('#in-species').value = r.species;
+  $('#in-length').value = r.lengthM;
+  if (r.minD !== null) { state.setup.minD = r.minD; state.setup.maxD = r.maxD; }
+  $('#in-truck').value = r.truck;
+  $('#in-site').value = r.site;
+  $('#in-destination').value = r.destination;
+  $('#in-own').value = r.ownCompany;
+  renderRange();
+  renderOfficeInfo();
 }
 
 /* ==================================================================
@@ -914,7 +947,16 @@ function setupVoice() {
   state.voice = new VoiceInput({
     lang: langMap[getLocale()] ?? 'ja-JP',
     getAllowed: () => state.diameters,
-    onResult: (d) => addOne(d, 'voice'),
+    // 「18、22、22、24」のように続けて読み上げた分を、順番に全部入れる（音と振動が重ならないよう少しずつずらす）
+    onBatch: ({ hits, misses }) => {
+      hits.forEach((d, i) => setTimeout(() => addOne(d, 'voice'), i * VOICE_STAGGER_MS));
+      if (hits.length > 1 || misses.length > 0) {
+        const list = hits.join('・');
+        toast(misses.length
+          ? t('measure.voiceSkipped', { count: hits.length, list, skipped: misses.map((m) => m ?? '?').join('・') })
+          : t('measure.voiceBatch', { count: hits.length, list }), 4000);
+      }
+    },
     onMiss: () => { feedbackError(); },
     onStateChange: (listening) => {
       $('#voice-btn').classList.toggle('is-listening', listening);
@@ -1011,7 +1053,7 @@ async function doOutput({ download = false } = {}) {
   await db.kvDelete('draft');
   state.draft = null;
   showScreen('setup');
-  $('#in-note').value = '';
+  await applyLastSetup();               // 次の伝票は、前回の設定を入れておく（備考は空欄に戻る）
   renderQuickChips().catch(() => {});
   backup.runBackup().catch(() => {});
   // 事務所とデータを共有している端末は、通信できるとき事務所へ送る（失敗しても現場の操作は止めない）
@@ -1085,6 +1127,7 @@ async function goHome() {
   $('#dlg-home').open && $('#dlg-home').close();
   closeDrawer();
   showScreen('setup');
+  await applyLastSetup();
   renderQuickChips().catch(() => {});
   toast(t('home.done'));
 }
@@ -1693,12 +1736,16 @@ function wireEvents() {
       min: setup.minD,
       max: setup.maxD,
     });
+    // 前回の設定が入っていると、車番や現場の変え忘れに気づきにくいので、車番と現場もここで見せる
+    const detail = [[t('setup.truck'), setup.truck], ...(setup.site ? [[t('setup.site'), setup.site]] : [])];
+    $('#start-detail').innerHTML = detail.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
     $('#dlg-start').dataset.payload = JSON.stringify(setup);
     $('#dlg-start').showModal();
   });
   $('#start-yes').addEventListener('click', () => {
     const setup = JSON.parse($('#dlg-start').dataset.payload);
     $('#dlg-start').close();
+    saveLastSetup(setup).catch(() => {});   // 次の準備画面の初期入力のために覚えておく
     startMeasure(setup);
   });
   $('#start-no').addEventListener('click', () => $('#dlg-start').close());
@@ -1856,10 +1903,11 @@ async function boot() {
     state.setup.maxD = lot.maxD;
     startMeasure(null, { resume: true });
   } else {
+    await applyLastSetup();            // 前回の設定を入れておく（renderRange もここで行われる）
     renderRange();
   }
 
-  syncOffice();                       // 待たない。通信できれば事務所と同期する
+  syncOffice();                     // 待たない。通信できれば事務所と同期する
   setInterval(renderOfficeInfo, 60_000);   // 時間の経過で、お知らせの期限や荷下ろしできる時間が変わるため
 
   await handleCheckoutReturn();

@@ -222,4 +222,7 @@ export default {
   'fleet.swapped': 'Ginagamit na ang "{on}", pinahinga ang "{off}"',
   'fleet.addedResting': 'Puno na ang bilang ng sasakyan sa kontrata kaya nairehistro bilang "Pahinga" (magpapalit kapag gagamitin).',
   'fleet.limitNote': 'Sasakyan sa kontrata {seats} / ginagamit {active}',
+  'measure.voiceBatch': 'Naipasok ang {count} piraso: {list}',
+  'measure.voiceSkipped': 'Naipasok ang {count} piraso: {list} (hindi naipasok: {skipped})',
+  'setup.prefilled': 'Inilagay na ang mga setting noong huli. Baguhin lang ang kakaiba.',
 };

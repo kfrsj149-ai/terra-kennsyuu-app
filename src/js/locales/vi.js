@@ -222,4 +222,7 @@ export default {
   'fleet.swapped': 'Đã dùng "{on}", cho "{off}" nghỉ',
   'fleet.addedResting': 'Số xe trong hợp đồng đã đủ nên đăng ký ở trạng thái "Nghỉ" (khi cần sẽ đổi xe).',
   'fleet.limitNote': 'Số xe hợp đồng {seats} / đang dùng {active}',
+  'measure.voiceBatch': 'Đã nhập {count} cây: {list}',
+  'measure.voiceSkipped': 'Đã nhập {count} cây: {list} (không nhập: {skipped})',
+  'setup.prefilled': 'Đã điền sẵn cài đặt lần trước. Chỉ cần sửa chỗ khác.',
 };

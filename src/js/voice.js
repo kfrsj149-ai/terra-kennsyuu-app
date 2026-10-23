@@ -1,8 +1,11 @@
 /**
  * 音声入力（Web Speech API）
  * オンライン前提の補助機能。圏外ではボタンを無効化し、タップ入力を促す。
+ * 認識結果から径級を取り出す部分は voice-parse.js（「18、22、22、24」のように続けて読み上げた分も全部入れる）。
  */
-import { normalizeDiameter } from './jas.js';
+import { bestReading, parseDiameter, matchDiameter } from './voice-parse.js';
+
+export { parseDiameter, matchDiameter };
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -15,60 +18,14 @@ export function isVoiceAvailable() {
   return isVoiceSupported() && navigator.onLine;
 }
 
-const KANJI_DIGITS = { 〇: 0, 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
-
-/**
- * 認識結果の表記揺れを吸収して数値を取り出す。
- * 「にじゅうよん」「24」「二十四」「24センチ」などをすべて 24 にする。
- * @param {string} text
- * @returns {number|null}
- */
-export function parseDiameter(text) {
-  if (!text) return null;
-  let s = String(text).trim();
-  // 全角数字→半角
-  s = s.replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
-  // 単位・助詞などのノイズを除去
-  s = s.replace(/(センチ|せんち|cm|ｃｍ|の|本|ほん|ミリ)/gi, '');
-
-  const direct = s.match(/\d+/);
-  if (direct) return Number(direct[0]);
-
-  // 漢数字（十の位まで対応すれば径級6〜99cmは網羅できる）
-  const kanji = s.match(/[〇零一二三四五六七八九十]+/);
-  if (kanji) {
-    const k = kanji[0];
-    if (k.includes('十')) {
-      const [tens, ones] = k.split('十');
-      const t = tens === '' ? 1 : KANJI_DIGITS[tens] ?? 0;
-      const o = ones ? KANJI_DIGITS[ones] ?? 0 : 0;
-      return t * 10 + o;
-    }
-    let n = 0;
-    for (const ch of k) n = n * 10 + (KANJI_DIGITS[ch] ?? 0);
-    return n || null;
-  }
-  return null;
-}
-
-/**
- * 認識した数値を、対象範囲内の有効な径級へ寄せる。範囲外は null。
- * @param {number|null} value
- * @param {number[]} allowed 表示中の径級一覧
- */
-export function matchDiameter(value, allowed) {
-  if (value == null || !allowed.length) return null;
-  const n = normalizeDiameter(value);
-  if (allowed.includes(n)) return n;
-  return null;
-}
-
 /**
  * 連続音声認識を管理する。
  */
 export class VoiceInput {
   /**
-   * @param {{lang: string, onResult: (d: number, raw: string) => void, onMiss: (raw: string) => void, onStateChange: (listening: boolean) => void, getAllowed: () => number[]}} opts
+   * @param {{lang: string, onBatch: (r: {hits:number[], misses:Array<number|null>, raw:string}) => void, onMiss: (raw: string) => void, onStateChange: (listening: boolean) => void, getAllowed: () => number[]}} opts
+   *   onBatch … 1回の読み上げで入れられる径級（hits、読み上げた順）と、入れられなかった数（misses）
+   *   onMiss  … 入れられる径級が1つもなかったとき
    */
   constructor(opts) {
     this.opts = opts;
@@ -89,16 +46,11 @@ export class VoiceInput {
       for (let i = ev.resultIndex; i < ev.results.length; i++) {
         const result = ev.results[i];
         if (!result.isFinal) continue;
-        const allowed = this.opts.getAllowed();
-        let hit = null;
-        let raw = '';
-        for (let a = 0; a < result.length; a++) {
-          raw = result[a].transcript;
-          hit = matchDiameter(parseDiameter(raw), allowed);
-          if (hit != null) break;
-        }
-        if (hit != null) this.opts.onResult(hit, raw);
-        else this.opts.onMiss(raw);
+        const transcripts = [];
+        for (let a = 0; a < result.length; a++) transcripts.push(result[a].transcript);
+        const best = bestReading(transcripts, this.opts.getAllowed());
+        if (best.hits.length > 0) this.opts.onBatch(best);
+        else this.opts.onMiss(best.raw);
       }
     };
     rec.onend = () => {
