@@ -264,3 +264,44 @@ test('空欄の用紙は、これまでどおり本数・小計が空欄のま�
   assert.ok(find(slip, (n) => n.tag === 'i' && !n.className).every((n) => n.textContent === ''));
   assert.ok(find(slip, (n) => n.className === 'slip-value').some((n) => n.textContent === ja['slip.dateFmt']));
 });
+
+/* ---------------- 単材積4桁：どの画面も同じ数字になる ---------------- */
+import { aggregate } from '../src/js/csv.js';
+
+/** JASエンジンとは別に、整数だけで単材積を出す（4桁・第5位を四捨五入）。V=(D+p)²·L/10000、p=max(0,(L'-4)/2)（L≥6のとき） */
+function independentUnit4(lengthStr, d) {
+  const L = Number(lengthStr);
+  const Lh = BigInt(Math.round(L * 100));
+  const q = BigInt(L >= 6 ? Math.max(0, Math.floor(L) - 4) : 0);   // 2p
+  const num = (2n * BigInt(d) + q) ** 2n * Lh;                       // (2(D+p))² · L·100
+  const den = 4_000_000n;                                            // 4 · 10000 · 100
+  const units = (num * 10000n * 2n + den) / (2n * den);              // 小数第5位を四捨五入
+  return `${units / 10000n}.${String(units % 10000n).padStart(4, '0')}`;
+}
+
+test('単材積4桁：紙伝票・紙伝票の形（積んだ伝票）・出力確認の集計が、全組み合わせで別計算と一致する', () => {
+  const lengths = ['1.9', '2', '2.1', '2.7', '3', '3.3', '3.65', '4', '4.3', '5', '5.99', '6', '6.5', '7', '8', '9', '10', '11', '12'];
+  let checked = 0;
+  for (const L of lengths) {
+    const blank = slipRows(L, 6, 72);                                 // 空欄の用紙
+    const lot = lotOfCounts(Object.fromEntries(diameterRange(6, 72).map((d) => [d, 1])), { lengthM: L, minD: 6, maxD: 72 });
+    const filled = ticketSlips(ticketOf(lot))[0].rows;                // 積んだ伝票
+    const agg = aggregate(lot).rows;                                  // 出力確認・CSVの集計
+    assert.equal(blank.length, 38, L);
+    assert.equal(agg.length, 38, L);
+    for (const row of blank) {
+      const want = independentUnit4(L, row.diameter);
+      assert.equal(row.unit, want, `空欄の用紙 ${L}m ${row.diameter}cm`);
+      assert.equal(filled.find((r) => r.diameter === row.diameter).unit, want, `積んだ伝票 ${L}m ${row.diameter}cm`);
+      assert.equal(formatVolume(agg.find((r) => r.d === row.diameter).perLog, 4), want, `出力確認 ${L}m ${row.diameter}cm`);
+      checked++;
+    }
+  }
+  assert.equal(checked, lengths.length * 38);
+});
+
+test('単材積4桁の例：3.65m・18cm は 0.11826 → 0.1183（第5位を四捨五入）。2m・18cm は 0.0648', () => {
+  assert.equal(independentUnit4('3.65', 18), '0.1183');
+  assert.equal(slipRows('3.65', 18, 18)[0].unit, '0.1183');
+  assert.equal(slipRows('2', 18, 18)[0].unit, '0.0648');
+});
