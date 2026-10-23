@@ -10,27 +10,27 @@ const fakeEl = () => {
   return { classList: { add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c) } };
 };
 
-test('押した直後は濃くなり、1.5秒たつと元に戻る', (t) => {
+test('押した直後は濃くなり、0.7秒たつと元に戻る', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const el = fakeEl();
-  assert.equal(CONFIG.ui.recentMs, 1500);
+  assert.equal(CONFIG.ui.recentMs, 700);
   markRecent(el);
   assert.equal(el.classList.contains('is-recent'), true, '押した瞬間に濃くなる');
-  t.mock.timers.tick(1499);
-  assert.equal(el.classList.contains('is-recent'), true, '1.5秒の手前ではまだ濃い');
+  t.mock.timers.tick(699);
+  assert.equal(el.classList.contains('is-recent'), true, '0.7秒の手前ではまだ濃い');
   t.mock.timers.tick(1);
-  assert.equal(el.classList.contains('is-recent'), false, '1.5秒たつと戻る');
+  assert.equal(el.classList.contains('is-recent'), false, '0.7秒たつと戻る');
 });
 
 test('続けて押したときは、最後に押した時点から数え直す', (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const el = fakeEl();
   markRecent(el);
-  t.mock.timers.tick(1000);
-  markRecent(el);                       // 1.0秒後にもう一度押す
-  t.mock.timers.tick(1000);             // 最初の押下から2.0秒 ＝ 2回目から1.0秒
-  assert.equal(el.classList.contains('is-recent'), true, '2回目の押下から1.5秒はまだ濃い');
-  t.mock.timers.tick(500);
+  t.mock.timers.tick(400);
+  markRecent(el);                       // 0.4秒後にもう一度押す
+  t.mock.timers.tick(400);              // 最初の押下から0.8秒 ＝ 2回目から0.4秒
+  assert.equal(el.classList.contains('is-recent'), true, '2回目の押下から0.7秒まではまだ濃い');
+  t.mock.timers.tick(300);
   assert.equal(el.classList.contains('is-recent'), false);
 });
 
@@ -39,10 +39,10 @@ test('カードごとに独立している（別のカードの時間に影響�
   const a = fakeEl();
   const b = fakeEl();
   markRecent(a);
-  t.mock.timers.tick(1000);
+  t.mock.timers.tick(400);
   markRecent(b);
-  t.mock.timers.tick(500);
-  assert.equal(a.classList.contains('is-recent'), false, 'aは1.5秒で戻る');
+  t.mock.timers.tick(300);
+  assert.equal(a.classList.contains('is-recent'), false, 'aは0.7秒で戻る');
   assert.equal(b.classList.contains('is-recent'), true, 'bはまだ濃い');
 });
 

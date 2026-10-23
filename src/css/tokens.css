@@ -20,7 +20,7 @@
   /* 操作系（高コントラスト・高彩度） */
   --c-tap: #ffd400;        /* 径級カード（未入力） */
   --c-tap-active: #ff8a00; /* ▲▼ピッカーを押している間 */
-  --c-tap-recent: #ff6d00; /* 径級カード：押した直後の1.5秒だけ濃くなる色（長さは config.js の ui.recentMs） */
+  --c-tap-recent: #ff6d00; /* 径級カード：押した直後の0.7秒だけ濃くなる色（長さは config.js の ui.recentMs） */
   --c-tap-ink: #1a1400;
   --c-glow: #ffffff;       /* タップ時の発光色 */
 
