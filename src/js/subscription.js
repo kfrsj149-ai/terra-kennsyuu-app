@@ -105,7 +105,8 @@ async function activateWith(payload) {
   if (!navigator.onLine) return { ok: false, error: 'offline' };
   try {
     const json = await callApi(CONFIG.api.activate, payload);
-    if (!json?.ok || !json?.code) return { ok: false, error: json?.error ?? 'invalid' };
+    // 失敗の理由（サーバーが返したコードとメッセージ）も渡す。画面に出して、原因を切り分けられるようにする
+    if (!json?.ok || !json?.code) return { ok: false, error: json?.error ?? 'invalid', message: json?.message ?? null };
     await saveState({ code: json.code, ...applyResponse(json) });
     return { ok: true, state: await loadState() };
   } catch (err) {

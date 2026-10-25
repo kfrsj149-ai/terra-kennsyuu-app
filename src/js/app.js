@@ -1179,13 +1179,20 @@ async function openHistory() {
  * 利用者はコードを入力しなくても、そのまま使えるようになる。
  * 処理後はURLを元に戻す（履歴に session_id を残さない）。
  */
+/** 有効化に失敗したときの文言。理由（サーバーが返したコードとメッセージ）を括弧で添える（原因の切り分けのため） */
+function licenseFailText(res) {
+  if (res.error === 'offline') return t('license.needOnline');
+  const detail = [res.error, res.message].filter(Boolean).join(': ').slice(0, 140);
+  return detail ? `${t('license.invalid')}（${detail}）` : t('license.invalid');
+}
+
 async function handleCheckoutReturn() {
   const params = new URLSearchParams(location.search);
   const sessionId = params.get('session_id');
   if (!sessionId) return;
   toast(t('license.checking'));
   const res = await subscription.activateFromCheckout(sessionId);
-  toast(res.ok ? t('license.activated') : t('license.invalid'), 6000);
+  toast(res.ok ? t('license.activated') : licenseFailText(res), 9000);
   if (!res.ok) feedbackError();
   history.replaceState(null, '', location.pathname);
 }
@@ -1809,7 +1816,7 @@ function wireEvents() {
       $('#in-license').value = '';
     } else {
       feedbackError();
-      toast(res.error === 'offline' ? t('license.needOnline') : t('license.invalid'), 5000);
+      toast(licenseFailText(res), 9000);
     }
     renderSubscription();
   }));
