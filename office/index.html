@@ -19,14 +19,19 @@
     <p class="lead">現場から届いた検収データを見る・納入枠やお知らせを現場に送る、事務所用の画面です。</p>
 
     <form id="login-form" class="stack">
-      <label>ライセンスコード
-        <textarea id="in-code" rows="3" autocomplete="off" spellcheck="false" required></textarea>
-      </label>
-      <p class="hint">現場アプリの ☰ メニュー →「サブスクリプション」の「ライセンスコード」でコピーできます。</p>
       <label>事務所コード（12文字）
         <input id="in-office-code" type="text" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" required>
       </label>
+      <p class="hint">事務所の初期設定のときに表示された12文字です。小文字やハイフンなしでも大丈夫です。</p>
       <button type="submit" class="btn primary">ログイン</button>
+      <details class="first-time">
+        <summary>前に設定した会社で、入れないとき</summary>
+        <p class="hint">以前の方法（ライセンスコード＋事務所コード）で設定した会社は、一度だけ、ライセンスコードも入れてログインしてください。次からは、事務所コードだけで入れます。</p>
+        <label>ライセンスコード（上の事務所コードと一緒に送られます）
+          <textarea id="in-code" rows="3" autocomplete="off" spellcheck="false"></textarea>
+        </label>
+        <p class="hint">現場アプリの ☰ メニュー →「サブスクリプション」の「ライセンスコード」でコピーできます。</p>
+      </details>
     </form>
 
     <details class="first-time">

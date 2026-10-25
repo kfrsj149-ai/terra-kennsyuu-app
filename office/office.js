@@ -122,7 +122,7 @@ function explain(e) {
     case 'office_not_set_up': return 'この契約では、事務所の初期設定がまだ行われていません。「はじめて使う」から設定してください。';
     case 'already_setup': return 'この契約は、すでに事務所の初期設定が済んでいます。事務所コードでログインしてください。';
     case 'invalid_code': return 'ライセンスコードが正しくありません。コピーし直してください。';
-    case 'bad_office_code': return `事務所コードが違います（あと${e.info.triesLeft}回でロックされます）。`;
+    case 'bad_office_code': return `事務所コードが違います（あと${e.info.triesLeft}回でロックされます）。前に設定した会社は、下の「前に設定した会社で、入れないとき」から、ライセンスコードも入れてログインしてください。`;
     case 'locked': return '間違いが続いたため、15分間ログインできません。事務所コードをなくした場合は、メールアドレスでの復旧もお試しください。';
     case 'subscription_inactive': return 'サブスクリプションが有効ではありません。';
     case 'subscription_unverified': return '契約の状態を確認できませんでした。少し待ってからやり直してください。';
@@ -1071,7 +1071,8 @@ function showLogin(message = '') {
   $('#app').hidden = true;
   $('#login').hidden = false;
   $('#login-error').textContent = message;
-  if (state.code) $('#in-code').value = state.code;
+  // ライセンスコードは、以前の方法で設定した会社だけが使う欄。事務所コードだけでのログインに切り替わるよう、自動では入れない
+  $('#in-code').value = '';
 }
 
 /**
@@ -1109,9 +1110,11 @@ function wireLogin() {
     const btn = ev.submitter; btn.disabled = true;
     $('#login-error').textContent = '';
     try {
+      // ライセンスコードは空でよい（事務所コードだけでログインする）。前に設定した会社が入れないときだけ、一度入れる
       const code = $('#in-code').value.trim();
       const r = await api('office.login', { code, officeCode: $('#in-office-code').value }, { as: 'none' });
-      state.token = r.token; state.code = code; saveLogin();
+      state.token = r.token; if (code) state.code = code; saveLogin();
+      $('#in-code').value = '';
       $('#in-office-code').value = '';
       await showApp();
     } catch (e) { $('#login-error').textContent = explain(e); } finally { btn.disabled = false; }

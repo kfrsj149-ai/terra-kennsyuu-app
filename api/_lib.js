@@ -103,6 +103,15 @@ export function verifyToken(token) {
  */
 const purposeKey = (purpose) => createHmac('sha256', licenseSecret()).update(`purpose:${purpose}`).digest();
 
+/**
+ * 用途ごとの鍵で、文字列から決まった長さの印（HMAC）を作る。
+ * 事務所コードから「どの会社か」を引く索引に使う。保存先の中身だけが漏れても、
+ * 鍵（LICENSE_SECRET）が無ければ、事務所コードを逆算できないようにするため。
+ */
+export function hmacHex(purpose, text) {
+  return createHmac('sha256', purposeKey(purpose)).update(String(text)).digest('hex');
+}
+
 export function signPayload(purpose, payload) {
   const body = b64url(JSON.stringify(payload));
   const mac = b64url(createHmac('sha256', purposeKey(purpose)).update(body).digest());

@@ -925,3 +925,98 @@ test('契約が終わると、データの閲覧・書き出しに使う操作�
   env.clock.t += 2 * 3600_000;
   assert.equal((await env.ok({ op: 'ticket.list', token: co.token })).tickets.length, 1);
 });
+
+/* ------------------------------------------------------------------
+ * 事務所コードだけでのログイン（2026-10-25）
+ *   ライセンスコードを入れなくても、事務所コードだけで入れる。運転手はライセンスコードしか持たないので、
+ *   事務所の画面には入れない。事務所コードから会社を引く索引は、鍵つきのハッシュで持つ。
+ * ------------------------------------------------------------------ */
+test('事務所コードだけでログインできる（小文字・ハイフンなし・空白入りでも）', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  const compact = co.officeCode.toLowerCase().replaceAll('-', '');
+  for (const input of [co.officeCode, compact, compact.replace(/(.{4})/g, '$1 ').trim()]) {
+    const l = await env.ok({ op: 'office.login', officeCode: input });
+    assert.equal(l.companyId, co.cid);
+    await env.ok({ op: 'site.list', token: l.token });
+  }
+});
+
+test('事務所コードだけのログイン：会社ごとに別の会社に入る。他社のコードでは入れない', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const b = await companyWithOffice(env, codeB);
+  assert.notEqual(a.officeCode, b.officeCode);
+  assert.equal((await env.ok({ op: 'office.login', officeCode: a.officeCode })).companyId, a.cid);
+  assert.equal((await env.ok({ op: 'office.login', officeCode: b.officeCode })).companyId, b.cid);
+});
+
+test('事務所コードだけのログイン：間違いは接続元ごとに数え、規定回数でロック。正しいコードでもロック中は入れず、15分で解ける', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  const first = await env.err({ op: 'office.login', officeCode: 'AAAA-AAAA-AAAA' }, 'bad_office_code');
+  assert.equal(first.triesLeft, 11);
+  for (let i = 0; i < 10; i += 1) await env.err({ op: 'office.login', officeCode: 'AAAA-AAAA-AAAA' }, 'bad_office_code');
+  await env.err({ op: 'office.login', officeCode: 'AAAA-AAAA-AAAA' }, 'locked', 429);
+  await env.err({ op: 'office.login', officeCode: co.officeCode }, 'locked', 429);
+  env.clock.t += 16 * 60 * 1000;
+  await env.ok({ op: 'office.login', officeCode: co.officeCode });
+});
+
+test('事務所コードだけのログイン：桁が違う・空・でたらめも、間違いとして数える（落ちない）', async () => {
+  const env = setupEnv();
+  await companyWithOffice(env, codeA);
+  for (const bad of ['', '   ', 'ABC', 'AAAA-AAAA-AAAA-AAAA', '日本語のコード', null, undefined]) {
+    await env.err({ op: 'office.login', officeCode: bad }, 'bad_office_code');
+  }
+});
+
+test('ライセンスコードだけでは、事務所コードだけのログインに入れない（運転手は入れない）', async () => {
+  const env = setupEnv();
+  await companyWithOffice(env, codeA);
+  await env.err({ op: 'office.login', officeCode: codeA }, 'bad_office_code');
+  await env.err({ op: 'office.login' }, 'bad_office_code');
+});
+
+test('事務所コードの再発行・復旧：古いコードは事務所コードだけでも入れなくなり、新しいコードで入れる', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  const re = await env.ok({ op: 'office.resetCode', token: co.token });
+  await env.err({ op: 'office.login', officeCode: co.officeCode }, 'bad_office_code');
+  assert.equal((await env.ok({ op: 'office.login', officeCode: re.officeCode })).companyId, co.cid);
+  const rec = await env.ok({ op: 'office.recover', code: codeA, email: EMAILS.cus_A });
+  await env.err({ op: 'office.login', officeCode: re.officeCode }, 'bad_office_code');
+  assert.equal((await env.ok({ op: 'office.login', officeCode: rec.officeCode })).companyId, co.cid);
+});
+
+test('古い設定の会社（索引なし）：事務所コードだけでは入れないが、ライセンスコードも添えて一度ログインすると、以後は事務所コードだけで入れる', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  // 索引ができる前の設定を再現する
+  const authKey = `co:${co.cid}:auth`;
+  const auth = JSON.parse(await env.store.get(authKey));
+  assert.match(auth.idx, /^oc:[0-9a-f]{40}$/);
+  await env.store.del(auth.idx);
+  delete auth.idx;
+  await env.store.set(authKey, JSON.stringify(auth));
+  await env.err({ op: 'office.login', officeCode: co.officeCode }, 'bad_office_code');
+  await env.ok({ op: 'office.login', code: codeA, officeCode: co.officeCode });
+  assert.equal((await env.ok({ op: 'office.login', officeCode: co.officeCode })).companyId, co.cid);
+});
+
+test('事務所コードだけのログインでも、契約が切れていれば入れない', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'office.login', officeCode: co.officeCode });
+  env.active.delete('sub_A');
+  env.clock.t += 2 * 3600 * 1000;           // 契約の確認結果を使い回す時間（1時間）を過ぎる
+  await env.err({ op: 'office.login', officeCode: co.officeCode }, 'subscription_inactive', 402);
+});
+
+test('サーバーに事務所コードの平文を残さない（索引は鍵つきのハッシュ）', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  const auth = JSON.parse(await env.store.get(`co:${co.cid}:auth`));
+  assert.ok(!auth.idx.includes(co.officeCode.replaceAll('-', '')));
+  assert.equal(await env.store.get(auth.idx), co.cid);
+});

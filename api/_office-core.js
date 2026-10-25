@@ -26,11 +26,14 @@
  *
  * 【事務所コード】
  *   初期設定のとき一度だけ画面に出す12文字の合言葉。サーバーには「ハッシュ」しか残さない。
- *   ライセンスコードは運転手も持っているので、事務所の操作はライセンスコード＋事務所コードの両方が要る。
+ *   ライセンスコードは運転手も持っているので、事務所の画面には、運転手が知らない事務所コードで入る。
+ *   ログインは事務所コードだけでできる（2026-10-25）。事務所コードのHMAC（鍵つきの印）から会社を引く索引
+ *   （oc:…）を持ち、入力の間違いは接続元IPごとに数えて止める。
+ *   索引が無い古い設定の会社は、ライセンスコードも添えて一度ログインすると、索引が作られる。
  */
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 import { volumeNumerator } from '../src/js/jas.js';
-import { verifyToken, signPayload, verifyPayload, stripeGet, describeSubscription } from './_lib.js';
+import { verifyToken, signPayload, verifyPayload, hmacHex, stripeGet, describeSubscription } from './_lib.js';
 import {
   ID_ALPHABET, isValidId, normalizeName, validateSiteName, findSiteByName, nameKey,
   parseM3, parseHm, SITE_NAME_MAX, CONSENT_VERSION,
@@ -43,6 +46,7 @@ const SUB_STALE_OK_MS = 30 * DAY_MS;     // Stripeに繋がらないとき、最
 const SESSION_MS = 30 * DAY_MS;          // 事務所端末のログインが続く期間
 const LOCK_MAX = 8;                      // 事務所コードを間違えてよい回数
 const LOCK_SEC = 15 * 60;
+const OC_IP_MAX = 12;                    // 事務所コードだけでのログインで、同じ接続元が間違えてよい回数（事務所の同じ回線の人どうしの打ち間違いも考えて、やや多め）
 const USAGE_CACHE_SEC = 60;
 const MAX_TICKETS_SCAN = 2000;           // 1つの枠の集計で読む便の上限（超えたら「一部が含まれていません」と知らせる）
 const MGET_CHUNK = 200;
@@ -75,6 +79,9 @@ function normalizeOfficeCode(input) {
 }
 
 const hashCode = (code, salt) => scryptSync(normalizeOfficeCode(code), salt, 32).toString('hex');
+
+/** 事務所コード → 会社を引く索引のキー。鍵つき（HMAC）なので、保存先の中身だけでは、コードを逆算できない */
+const codeIndexKey = (code) => `oc:${hmacHex('office-code', normalizeOfficeCode(code)).slice(0, 40)}`;
 
 function safeEqualHex(a, b) {
   const x = Buffer.from(String(a), 'hex');
@@ -232,6 +239,19 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
 
   const issueToken = (cid, epoch) => signPayload('office', { cid, ep: epoch, x: now() + SESSION_MS });
 
+  /**
+   * 新しい事務所コードを作る。事務所コードから会社を引く索引も、ここで新しく作る。
+   * 古い索引は、新しいコードを保存し終えてから dropCodeIndex で消す（途中で止まっても、入れなくならないように）。
+   */
+  async function newOfficeAuth(cid, old) {
+    const raw = randomChars(12);
+    const salt = randomBytes(16).toString('hex');
+    const idx = codeIndexKey(raw);
+    await store.set(idx, cid);
+    return { raw, auth: { salt, hash: hashCode(raw, salt), epoch: (old?.epoch ?? 0) + 1, createdAt: now(), idx } };
+  }
+  const dropCodeIndex = async (old) => { if (old?.idx) await store.del(old.idx); };
+
   /* ---------------- 初期設定・ログイン ---------------- */
   /**
    * 契約者本人であることの確認。ライセンスコードは運転手も持っているので、それだけでは
@@ -285,9 +305,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     // 同じ事業体IDの初期設定が同時に走らないよう、短い錠をかける（失敗したら外して、すぐやり直せる）
     const lockKey = key(cid, 'setup-lock');
     if ((await store.incr(lockKey, 60)) !== 1) throw fail('already_setup');
-    const raw = randomChars(12);
-    const salt = randomBytes(16).toString('hex');
-    const auth = { salt, hash: hashCode(raw, salt), epoch: 1, createdAt: now() };
+    const { raw, auth } = await newOfficeAuth(cid, null);
     try {
       await store.set(key(cid, 'auth'), JSON.stringify(auth));
       await store.set(key(cid, 'primary'), JSON.stringify({ s: payload.s }));
@@ -304,6 +322,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       }
     } catch (err) {
       await store.del(lockKey);
+      await dropCodeIndex(auth);          // 作った索引も消す（このコードは誰にも渡っていない）
       throw err;
     }
     return { companyId: cid, officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
@@ -380,15 +399,20 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     await ensureSubscription(cid, payload.s);
     await verifyOwnerEmail(payload, body.email);
     const old = parseJson(await store.get(key(cid, 'auth')));
-    const raw = randomChars(12);
-    const salt = randomBytes(16).toString('hex');
-    const auth = { salt, hash: hashCode(raw, salt), epoch: (old?.epoch ?? 0) + 1, createdAt: now() };
+    const { raw, auth } = await newOfficeAuth(cid, old);
     await store.set(key(cid, 'auth'), JSON.stringify(auth));
+    await dropCodeIndex(old);
     await store.del(key(cid, 'fail'));
     return { companyId: cid, officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
   }
 
-  async function login(body) {
+  /**
+   * ログイン。
+   *   ・事務所コードだけ（ライセンスコードなし）… 通常のログイン。事務所コードから会社を引く
+   *   ・ライセンスコード＋事務所コード … 古い設定の会社が、一度だけ使う。成功すると、事務所コードだけで入れるようになる
+   */
+  async function login(body, ctx = {}) {
+    if (!String(body.code ?? '').trim()) return loginByOfficeCode(body, ctx);
     const payload = verifyToken(String(body.code ?? '').trim());
     if (!payload) throw fail('invalid_code');
     const cid = await store.get(licKey(payload));
@@ -404,6 +428,33 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     }
     await store.del(failKey);
     await ensureSubscription(cid, payload.s);
+    // 古い設定（索引なし）の会社は、ここで索引を作る。以後は事務所コードだけで入れる
+    if (!auth.idx) {
+      const idx = codeIndexKey(body.officeCode);
+      await store.set(idx, cid);
+      await store.set(key(cid, 'auth'), JSON.stringify({ ...auth, idx }));
+    }
+    return { companyId: cid, token: issueToken(cid, auth.epoch) };
+  }
+
+  /** 事務所コードだけでのログイン。間違いは接続元IPごとに数えて、規定回数でしばらく止める */
+  async function loginByOfficeCode(body, ctx) {
+    const ipKey = `ocfail:ip:${sha(String(ctx?.ip ?? 'unknown')).slice(0, 12)}`;
+    if (Number(await store.get(ipKey) ?? 0) >= OC_IP_MAX) throw fail('locked', { retryAfterSec: LOCK_SEC }, 429);
+    const missed = async () => {
+      const n = await store.incr(ipKey, LOCK_SEC);
+      throw fail(n >= OC_IP_MAX ? 'locked' : 'bad_office_code', n >= OC_IP_MAX ? { retryAfterSec: LOCK_SEC } : { triesLeft: OC_IP_MAX - n }, n >= OC_IP_MAX ? 429 : 200);
+    };
+    const norm = normalizeOfficeCode(body.officeCode);
+    if (!/^[0-9A-Z]{12}$/.test(norm)) return missed();
+    const cid = await store.get(codeIndexKey(norm));
+    if (!cid) return missed();
+    // 索引で見つけたあと、会社に保存してあるハッシュとも突き合わせる（二重の確認。重い計算は、索引が当たったときだけ）
+    const auth = parseJson(await store.get(key(cid, 'auth')));
+    if (!auth || !safeEqualHex(hashCode(norm, auth.salt), auth.hash)) return missed();
+    const primary = parseJson(await store.get(key(cid, 'primary')));
+    if (!primary?.s) throw fail('office_not_set_up');
+    await ensureSubscription(cid, primary.s);
     return { companyId: cid, token: issueToken(cid, auth.epoch) };
   }
 
@@ -438,10 +489,9 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   async function resetCode(body) {
     const { cid } = await officeCtx(body);
     const old = parseJson(await store.get(key(cid, 'auth')));
-    const raw = randomChars(12);
-    const salt = randomBytes(16).toString('hex');
-    const auth = { salt, hash: hashCode(raw, salt), epoch: (old?.epoch ?? 0) + 1, createdAt: now() };
+    const { raw, auth } = await newOfficeAuth(cid, old);
     await store.set(key(cid, 'auth'), JSON.stringify(auth));
+    await dropCodeIndex(old);
     return { officeCode: formatOfficeCode(raw), token: issueToken(cid, auth.epoch) };
   }
 
