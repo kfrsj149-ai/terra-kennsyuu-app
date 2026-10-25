@@ -221,6 +221,12 @@
 - 内部の識別子（端末内DB名・バックアップのファイル名・Driveのフォルダ名）は、保存済みのデータを壊さないので変えていない
 - **未実施：URLの変更**（Vercelのプロジェクト名 `terra-kennsyuu-app`、独自ドメイン `kennsyuu.terra-tx-jp.com`）。パソコンでの作業。オリジンが変わると端末内のデータは引き継がれないので、利用者が増える前に実施する
 
+### 2026-10-25 URLの変更（神田さんが実施・「すべて完了」と報告。ここからは接続できず未確認）
+- Vercelのプロジェクト名を log-ra に変更、独自ドメイン `log-ra.terra-tx-jp.com` を追加（Cloudflareに CNAME を追加）、ホーム画面のアイコンを入れ直し
+- Stripe（サンドボックス）：既存の決済リンクは「編集」が灰色で直せなかったため、新しい決済リンクを作る手順を案内。**新しいリンクのURL（`https://buy.stripe.com/test_…`）はまだ受け取っていない**ので、`src/js/config.js` の `stripe.checkoutUrl` は旧リンクのまま。新リンクは「確認ページを表示しない→ `https://log-ra.terra-tx-jp.com/?checkout=success&session_id={CHECKOUT_SESSION_ID}`」「プロモーションコードの使用を許可する」にする
+- 残り：旧ドメイン `kennsyuu.terra-tx-jp.com`（Vercel と Cloudflare）の削除（新ドメインが開くことを確認してから）、`q.terra-tx-jp.com` の転送ルール（転送先は log-ra.terra-tx-jp.com）、旧決済リンクの無効化
+- 決済手段（PayPay・銀行振込など）：本番にするときに、年額サブスク対応を確認してから決める。いまはカードのみ
+
 ## ローンチ後の実績
 - 利用者数: -
 - 売上: -
