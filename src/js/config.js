@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'LOG-RA',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v23',
+  cacheVersion: 'terra-kennsyuu-v24',
 
   /** 見た目・操作感の調整値 */
   ui: {
@@ -39,7 +39,7 @@ export const CONFIG = {
    */
   stripe: {
     /** 購入ページ（Stripe Payment Link）。テスト用リンクは test_ を含む */
-    checkoutUrl: 'https://buy.stripe.com/test_5kQ00jaRO8yg88a08ofjG00',
+    checkoutUrl: 'https://buy.stripe.com/test_14A4gzf849Ck2NQ8EUfjG01',
     /** 表示用の価格。特商法表記・アプリ内表示と必ず一致させる */
     priceLabel: '年額 9,800円（税込）',
   },
