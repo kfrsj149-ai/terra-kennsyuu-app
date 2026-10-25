@@ -236,6 +236,11 @@
 ### 2026-10-25 カスタマーポータル（サンドボックス）
 - 設定・動作を確認済み。**利用規約・プライバシーポリシーのリンクは、本番環境でないと保存できなかった**ので、**本番に移るときに入れる**（`docs/売り込み前の宿題_手順書.md` の1-5に追記済み。URLは log-ra.terra-tx-jp.com/legal/terms/ と /legal/privacy/）
 
+### 2026-10-25 事務所端末の保存先（Upstash）
+- Vercel の Storage に Upstash for Redis（Free）を作り、log-ra につないだ。環境変数 `KV_REST_API_URL`・`KV_REST_API_TOKEN` などは自動で入っている
+- 事務所の初期設定で「データの保存先がまだ設定されていません」と出た原因：再デプロイしたのが、作業用ブランチ（`claude/…`）の Preview で、本番（main）は作り直されていなかった。**本番を再デプロイするときは、Overview の「Production Deployment」から行うか、main に変更を push する**（Deployments の一覧の一番上は、ブランチの Preview のことがある）
+- 本番の作り直しのため、main に更新を push した（この記録）
+
 ## ローンチ後の実績
 - 利用者数: -
 - 売上: -
