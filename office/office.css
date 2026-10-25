@@ -189,7 +189,9 @@ table.wide td:nth-child(2) { white-space: nowrap; }
   .factory-input { min-height: 44px; }
   .checks label { min-height: 44px; }
 }
-input[type="checkbox"], input[type="radio"] { min-height: 0 !important; }
+/* チェックボックスは、文字入力欄のように横幅いっぱいにしない（「控えました」などが、下の行に押し出されるのを防ぐ） */
+input[type="checkbox"], input[type="radio"] { min-height: 0 !important; width: 22px; height: 22px; flex: none; margin: 0; }
+label.row > input[type="checkbox"] { margin-right: 2px; }
 
 .consent { border: 2px solid var(--c-border); border-radius: var(--r-md); padding: 10px 12px; background: var(--c-bg); }
 .consent-check { font-weight: 800; }
