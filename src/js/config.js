@@ -3,10 +3,10 @@
  */
 export const CONFIG = {
   /** アプリ表示名 */
-  appName: 'TERRA 検収',
+  appName: 'LOG-RA',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v22',
+  cacheVersion: 'terra-kennsyuu-v23',
 
   /** 見た目・操作感の調整値 */
   ui: {

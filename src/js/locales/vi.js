@@ -1,5 +1,5 @@
 export default {
-  'app.name': 'TERRA Nghiệm thu',
+  'app.name': 'LOG-RA',
   'common.yes': 'Đồng ý',
   'common.back': 'Quay lại',
   'common.add': 'Thêm',

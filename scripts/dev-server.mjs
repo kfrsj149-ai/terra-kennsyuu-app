@@ -96,5 +96,5 @@ createServer(async (req, res) => {
     }
   }
 }).listen(PORT, () => {
-  console.log(`TERRA 検収PWA: http://localhost:${PORT}`);
+  console.log(`LOG-RA PWA: http://localhost:${PORT}`);
 });

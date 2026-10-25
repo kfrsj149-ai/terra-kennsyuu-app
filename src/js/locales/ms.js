@@ -1,5 +1,5 @@
 export default {
-  'app.name': 'TERRA Pemeriksaan',
+  'app.name': 'LOG-RA',
   'common.yes': 'Ya',
   'common.back': 'Kembali',
   'common.add': 'Tambah',

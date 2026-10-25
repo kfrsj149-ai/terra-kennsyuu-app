@@ -1,5 +1,5 @@
 export default {
-  'app.name': 'TERRA Inspeksyon',
+  'app.name': 'LOG-RA',
   'common.yes': 'Oo',
   'common.back': 'Bumalik',
   'common.add': 'Idagdag',

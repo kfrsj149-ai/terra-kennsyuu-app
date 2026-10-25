@@ -1,6 +1,6 @@
 {
-  "name": "TERRA 検収",
-  "short_name": "TERRA検収",
+  "name": "LOG-RA",
+  "short_name": "LOG-RA",
   "description": "山林・製材工場での丸太検収に特化した、オフラインファーストのJAS材積計算アプリ",
   "id": "/?source=pwa",
   "start_url": "./?source=pwa",

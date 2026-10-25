@@ -1,5 +1,5 @@
 export default {
-  'app.name': 'TERRA 検収',
+  'app.name': 'LOG-RA',
   'common.yes': 'はい',
   'common.back': '戻る',
   'common.add': '追加',

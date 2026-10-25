@@ -1,5 +1,5 @@
 /**
- * TERRA 検収PWA - 画面制御
+ * LOG-RA PWA - 画面制御
  * 炎天下・手袋・重機騒音下で、説明文を読まずに使えることを最優先に設計している。
  */
 import { CONFIG } from './config.js';

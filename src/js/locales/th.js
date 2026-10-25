@@ -1,5 +1,5 @@
 export default {
-  'app.name': 'TERRA ตรวจรับไม้',
+  'app.name': 'LOG-RA',
   'common.yes': 'ใช่',
   'common.back': 'ย้อนกลับ',
   'common.add': 'เพิ่ม',
