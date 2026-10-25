@@ -227,6 +227,12 @@
 - 残り：旧ドメイン `kennsyuu.terra-tx-jp.com`（Vercel と Cloudflare）の削除（新ドメインが開くことを確認してから）、`q.terra-tx-jp.com` の転送ルール（転送先は log-ra.terra-tx-jp.com）、旧決済リンクの無効化
 - 決済手段（PayPay・銀行振込など）：本番にするときに、年額サブスク対応を確認してから決める。いまはカードのみ
 
+### 2026-10-25 サンドボックスでの購入〜有効化が通った（神田さんが実施）
+- Vercel に `STRIPE_SECRET_KEY`（サンドボックスの `sk_test_…`）と `LICENSE_SECRET` を登録して再デプロイ。購入時のメールアドレスで「有効化しました」を確認。それまでは「STRIPE_SECRET_KEY が未設定です」で失敗していた（有効化に失敗したとき、理由を括弧で画面に出すようにした）
+- `LICENSE_SECRET` は一度決めたら変えない（変えると全員のコードが無効）。本番にするときは `STRIPE_SECRET_KEY` を `sk_live_…` に差し替える
+- 未確認：「支払い・プラン管理」（カスタマーポータル。サンドボックスで設定が要る）、事務所端末（`/office/`。Upstash Redis と `OPERATOR_KEY` などが要る）
+- 残り：旧ドメイン `kennsyuu.terra-tx-jp.com` の削除、旧決済リンク `…jG00` の無効化、`q.terra-tx-jp.com` の転送ルール
+
 ## ローンチ後の実績
 - 利用者数: -
 - 売上: -
