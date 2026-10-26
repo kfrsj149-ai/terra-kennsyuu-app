@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'LOG-RA',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v25',
+  cacheVersion: 'terra-kennsyuu-v26',
 
   /** 見た目・操作感の調整値 */
   ui: {
@@ -63,7 +63,7 @@ export const CONFIG = {
     /** 最後にオンライン確認できてから、圏外のまま動作を継続できる日数 */
     offlineGraceDays: 30,
     /** オンライン時に再検証する間隔（日） */
-    revalidateIntervalDays: 3,
+    revalidateIntervalDays: 1,
   },
 
   /** Googleドライブ自動バックアップ（未設定なら機能は自動的に無効表示になる） */

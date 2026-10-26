@@ -124,7 +124,8 @@ function explain(e) {
     case 'invalid_code': return 'ライセンスコードが正しくありません。コピーし直してください。';
     case 'bad_office_code': return `事務所コードが違います（あと${e.info.triesLeft}回でロックされます）。前に設定した会社は、下の「前に設定した会社で、入れないとき」から、ライセンスコードも入れてログインしてください。`;
     case 'locked': return '間違いが続いたため、15分間ログインできません。事務所コードをなくした場合は、メールアドレスでの復旧もお試しください。';
-    case 'subscription_inactive': return 'サブスクリプションが有効ではありません。';
+    case 'subscription_inactive': return '契約が終了しているため、事務所の画面は見られません。データは削除されていません。再契約したあと、ログイン画面の「前に設定した会社で、入れないとき」から、新しいライセンスコードも添えてログインすると、元のとおり使えます。';
+    case 'read_only': return `契約が終了しているため、変更はできません。${e.info?.until ? dateJa(e.info.until) + ' まで、' : ''}閲覧とダウンロードはできます。再契約すると、元のとおり使えます。`;
     case 'subscription_unverified': return '契約の状態を確認できませんでした。少し待ってからやり直してください。';
     case 'license_in_use': return 'そのライセンスコードは、別の事業体につながっています。';
     case 'name_taken': return `その名前は、すでに現場「${e.info.with?.name ?? ''}」として登録されています（名前・別名のどちらかが同じです）。`;
@@ -1028,7 +1029,7 @@ function renderSettings() {
       h('div', { class: 'card stack' },
         h('h3', { style: 'margin-top:0' }, '全データのダウンロード'),
         h('p', { class: 'hint' }, '届いた便をすべて、お手元に保存できます。Excelで開く一覧（CSV）と、すべてをまとめたファイル（JSON：便・現場・納入枠・お知らせ・マスター）の2種類です。写真（受信箱）は含まれません。'),
-        h('p', { class: 'hint' }, '**契約の期間中だけ**使えます。解約して契約が終わると（無料の試用期間中に解約した場合も）、この画面のデータは見られなくなり、ダウンロードもできません。必要なデータは、契約が続いているうちに保存してください。'.replaceAll('**', '')),
+        h('p', { class: 'hint' }, '契約が終わったあとも、**30日間**は、この画面で閲覧とダウンロードができます（変更はできません）。30日を過ぎると見られなくなりますが、データは削除されず、再契約すると元のとおり使えます。ただし、無料の試用期間中に解約した場合は、すぐに見られなくなるので、必要なデータは先に保存してください。'.replaceAll('**', '')),
         (() => {
           const mk = (label, kind) => {
             const btn = h('button', { type: 'button', class: 'btn' }, label);
@@ -1081,6 +1082,7 @@ function showLogin(message = '') {
  */
 async function ensureConsent() {
   const st = await api('office.status');
+  showReadOnlyBanner(st);
   if (st.consentOk) return true;
   return new Promise((resolve) => {
     const dlg = dialog('データの取り扱いへの同意', [
@@ -1095,6 +1097,18 @@ async function ensureConsent() {
     });
     dlg.addEventListener('close', () => resolve(false));
   });
+}
+
+/** 契約が終わって「閲覧とダウンロードだけ」の期間は、画面の上に、いつまで見られるかを出す */
+function dateJa(ms) {
+  return new Date(ms).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+function showReadOnlyBanner(st) {
+  const el = $('#ro-banner');
+  el.hidden = !st?.readOnly;
+  if (st?.readOnly) {
+    el.textContent = `契約が終了しています。${st.readOnlyUntil ? dateJa(st.readOnlyUntil) + ' まで、' : ''}閲覧とダウンロードだけできます（変更はできません）。データは削除されません。再契約すると、元のとおり使えます。`;
+  }
 }
 
 async function showApp() {

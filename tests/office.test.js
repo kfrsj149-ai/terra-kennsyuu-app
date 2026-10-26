@@ -24,10 +24,15 @@ function setupEnv({ active = new Set(['sub_A', 'sub_B']), limits } = {}) {
   const clock = { t: Date.UTC(2026, 9, 5, 0, 0, 0) };     // 2026-10-05 09:00 JST
   const store = memoryStore(() => clock.t);
   const stripeDown = { v: false };
+  const ended = new Map();                                 // 契約が終わった時刻（ミリ秒）。入れた契約は、終わった日つきで「無効」と返る
   const office = createOffice({
     store,
     now: () => clock.t,
-    isSubscriptionActive: async (id) => { if (stripeDown.v) throw new Error('down'); return active.has(id); },
+    isSubscriptionActive: async (id) => {
+      if (stripeDown.v) throw new Error('down');
+      if (ended.has(id)) return { active: false, endedAt: ended.get(id) };
+      return active.has(id);
+    },
     getCustomerEmail: async (p) => EMAILS[p.c] ?? null,
     limits: { verifyVolume: false, ...limits },        // 既存テストは材積に適当な整数を使うため、検算は専用のテストで確かめる
   });
@@ -44,7 +49,7 @@ function setupEnv({ active = new Set(['sub_A', 'sub_B']), limits } = {}) {
     if (status) assert.equal(r.status, status);
     return r.payload;
   };
-  return { office, store, clock, stripeDown, active, call, ok, err };
+  return { office, store, clock, stripeDown, active, ended, call, ok, err };
 }
 
 const codeA = lib.signToken({ s: 'sub_A', c: 'cus_A' });
@@ -1019,4 +1024,142 @@ test('サーバーに事務所コードの平文を残さない（索引は鍵�
   const auth = JSON.parse(await env.store.get(`co:${co.cid}:auth`));
   assert.ok(!auth.idx.includes(co.officeCode.replaceAll('-', '')));
   assert.equal(await env.store.get(auth.idx), co.cid);
+});
+
+/* ------------------------------------------------------------------
+ * 契約が終わったとき（2026-10-26）
+ *   ・現場の端末からの便の受信・現場アプリの feed は、すぐ止まる
+ *   ・事務所の画面は、終わってから30日間は「閲覧とダウンロードだけ」。変更はできない
+ *   ・30日を過ぎたら見られない。ただしデータは消さず、再契約すれば元に戻る
+ * ------------------------------------------------------------------ */
+const DAY = 86_400_000;
+const endContract = (env, subId, atMs = env.clock.t) => { env.active.delete(subId); env.ended.set(subId, atMs); env.clock.t += 2 * 3600 * 1000; };
+
+test('契約が終わって30日以内：事務所の画面は閲覧とダウンロードだけ。変更と、現場からの便の受信は止まる', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
+  const endedAt = env.clock.t;
+  endContract(env, 'sub_A', endedAt);
+
+  // 現場の端末は、すぐ止まる
+  await env.err({ op: 'ticket.put', code: codeA, ticket: ticket({ id: 'tk-0002' }) }, 'subscription_inactive', 402);
+  await env.err({ op: 'feed', code: codeA }, 'subscription_inactive', 402);
+
+  // 事務所はログインでき、見られる
+  const l = await env.ok({ op: 'office.login', officeCode: co.officeCode });
+  assert.equal((await env.ok({ op: 'ticket.list', token: l.token })).tickets.length, 1);
+  await env.ok({ op: 'site.list', token: l.token });
+  await env.ok({ op: 'quota.list', token: l.token });
+  await env.ok({ op: 'notice.list', token: l.token });
+  const st = await env.ok({ op: 'office.status', token: l.token });
+  assert.equal(st.readOnly, true);
+  assert.equal(st.readOnlyUntil, endedAt + 30 * DAY);
+
+  // 変更は、すべて止まる
+  const until = endedAt + 30 * DAY;
+  for (const body of [
+    { op: 'site.put', site: { name: '本谷' } },
+    { op: 'quota.put', quota: { destination: '秋田プライウッド', amount: '400', from: '2026-10-01', to: '2026-10-31' } },
+    { op: 'notice.put', notice: { kind: 'closed', body: 'x' } },
+    { op: 'ticket.setFactory', id: 'tk-0001', factoryNum: '1' },
+    { op: 'ticket.delete', id: 'tk-0001' },
+    { op: 'master.put', master: { kind: 'truck', name: '岩手100あ1' } },
+    { op: 'office.resetCode' },
+  ]) {
+    const e = await env.err({ ...body, token: l.token }, 'read_only', 402);
+    assert.equal(e.until, until, body.op);
+  }
+});
+
+test('閲覧とダウンロードだけの期間は、ちょうど30日。それを過ぎると見られず、ログインもできない（データは残る）', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
+  const endedAt = env.clock.t;
+  endContract(env, 'sub_A', endedAt);
+  env.clock.t = endedAt + 29 * DAY;
+  assert.equal((await env.ok({ op: 'office.login', officeCode: co.officeCode })).companyId, co.cid);
+  env.clock.t = endedAt + 31 * DAY;
+  await env.err({ op: 'office.login', officeCode: co.officeCode }, 'subscription_inactive', 402);
+  await env.err({ op: 'ticket.list', token: co.token }, 'unauthorized', 401);        // 札は30日で切れる（ログインし直しが要る）
+  // 31日目に、30日以内に得た札があっても、見られない
+  const l = (() => { env.clock.t = endedAt + 29 * DAY; return env.ok({ op: 'office.login', officeCode: co.officeCode }); })();
+  const token = (await l).token;
+  env.clock.t = endedAt + 30 * DAY + 3 * 3600 * 1000;
+  const blocked = await env.err({ op: 'ticket.list', token }, 'subscription_inactive', 402);
+  assert.equal(blocked.endedAt, endedAt);
+  // データは消えていない（保存先に残っている）
+  assert.ok(await env.store.zcard(`co:${co.cid}:tidx`) >= 1);
+});
+
+test('再契約すれば、元のデータに入れる（古い契約が終わっていても、新しい契約が主になる）', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  await env.ok({ op: 'ticket.put', code: codeA, ticket: ticket() });
+  const endedAt = env.clock.t;
+  endContract(env, 'sub_A', endedAt);
+  env.clock.t = endedAt + 40 * DAY;                             // 閲覧の期間も過ぎている
+  await env.err({ op: 'office.login', officeCode: co.officeCode }, 'subscription_inactive', 402);
+
+  // 同じお客様（顧客）が、再契約する → 新しい契約ID・新しいライセンスコード
+  const codeA2 = lib.signToken({ s: 'sub_A2', c: 'cus_A' });
+  env.active.add('sub_A2');
+  // 事務所の人が先に、ライセンスコードも添えてログインした場合
+  const l = await env.ok({ op: 'office.login', code: codeA2, officeCode: co.officeCode });
+  assert.equal(l.companyId, co.cid);
+  assert.equal((await env.ok({ op: 'ticket.list', token: l.token })).tickets.length, 1);     // 元のデータが見える
+  await env.ok({ op: 'site.put', token: l.token, site: { name: '本谷' } });                   // 変更もできる（閲覧だけではない）
+  assert.equal((await env.ok({ op: 'office.status', token: l.token })).readOnly, false);
+  // 以後は、事務所コードだけで入れる
+  await env.ok({ op: 'office.login', officeCode: co.officeCode });
+});
+
+test('再契約したあと、現場の端末が先に新しいコードを使った場合も、事務所に入れるようになる', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  endContract(env, 'sub_A', env.clock.t);
+  env.clock.t += 40 * DAY;
+  const codeA2 = lib.signToken({ s: 'sub_A2', c: 'cus_A' });
+  env.active.add('sub_A2');
+  await env.ok({ op: 'feed', code: codeA2 });                   // 現場の端末が、新しいライセンスコードで同期する
+  const l = await env.ok({ op: 'office.login', officeCode: co.officeCode });
+  await env.ok({ op: 'site.list', token: l.token });
+  assert.equal((await env.ok({ op: 'office.status', token: l.token })).readOnly, false);
+});
+
+test('別アプリの契約でつながった端末が、有効な主な契約を奪わない', async () => {
+  const env = setupEnv({ active: new Set(['sub_A', 'sub_B', 'sub_X']) });
+  const co = await companyWithOffice(env, codeA);
+  const primaryBefore = await env.store.get(`co:${co.cid}:primary`);
+  const codeX = lib.signToken({ s: 'sub_X', c: 'cus_A' });      // 同じ顧客の、別の契約
+  await env.ok({ op: 'feed', code: codeX });
+  assert.equal(await env.store.get(`co:${co.cid}:primary`), primaryBefore);
+});
+
+test('無料の試用期間中に解約した契約は、閲覧の猶予もなく、すぐ見られなくなる（終わった日を返さない）', async () => {
+  const env = setupEnv();
+  const co = await companyWithOffice(env, codeA);
+  env.active.delete('sub_A');
+  env.clock.t += 2 * 3600 * 1000;
+  await env.err({ op: 'office.login', officeCode: co.officeCode }, 'subscription_inactive', 402);
+  await env.err({ op: 'ticket.list', token: co.token }, 'subscription_inactive', 402);
+});
+
+test('officeSubscriptionState：Stripeの契約から、有効か・終わった日を取り出す', async () => {
+  const { officeSubscriptionState } = await import('../api/_office-core.js');
+  const sec = 1_800_000_000;
+  const ended = officeSubscriptionState({ status: 'canceled', ended_at: sec, canceled_at: sec - 100, items: { data: [{ current_period_end: sec + 5 }] } });
+  assert.deepEqual(ended, { active: false, endedAt: sec * 1000 });
+  // ended_at が無ければ、期間の終わり。それも無ければ、解約の手続きをした日
+  assert.equal(officeSubscriptionState({ status: 'unpaid', items: { data: [{ current_period_end: sec }] } }).endedAt, sec * 1000);
+  assert.equal(officeSubscriptionState({ status: 'canceled', canceled_at: sec }).endedAt, sec * 1000);
+  assert.equal(officeSubscriptionState({ status: 'canceled' }).endedAt, null);
+  // 有効・支払いの遅れ（すぐには止めない）
+  assert.deepEqual(officeSubscriptionState({ status: 'active' }), { active: true, endedAt: null });
+  assert.equal(officeSubscriptionState({ status: 'past_due' }).active, true);
+  // 解約の手続き中でも、期間の終わりまでは有効
+  assert.equal(officeSubscriptionState({ status: 'active', cancel_at_period_end: true }).active, true);
+  // 無料の試用期間中に解約した契約は、閲覧の猶予なし
+  assert.deepEqual(officeSubscriptionState({ status: 'trialing', cancel_at_period_end: true, items: { data: [{ current_period_end: sec }] } }), { active: false, endedAt: null });
 });

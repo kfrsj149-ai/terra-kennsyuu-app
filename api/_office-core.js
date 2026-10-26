@@ -44,6 +44,7 @@ const DAY_MS = 86_400_000;
 const SUB_CACHE_SEC = HOUR;              // サブスクの確認結果を使い回す時間
 const SUB_STALE_OK_MS = 30 * DAY_MS;     // Stripeに繋がらないとき、最後に有効と確認できてからこの期間は通す
 const SESSION_MS = 30 * DAY_MS;          // 事務所端末のログインが続く期間
+const READ_ONLY_MS = 30 * DAY_MS;        // 契約が終わってから、事務所の画面で「閲覧とダウンロードだけ」できる期間（そのあとは見られないが、データは消さない）
 const LOCK_MAX = 8;                      // 事務所コードを間違えてよい回数
 const LOCK_SEC = 15 * 60;
 const OC_IP_MAX = 12;                    // 事務所コードだけでのログインで、同じ接続元が間違えてよい回数（事務所の同じ回線の人どうしの打ち間違いも考えて、やや多め）
@@ -187,7 +188,7 @@ export const isDateString = isRealDate;
  * @param {object} deps
  * @param {import('./_office-store.js').Store|null} deps.store
  * @param {() => number} [deps.now]
- * @param {(subId:string) => Promise<boolean>} [deps.isSubscriptionActive]
+ * @param {(subId:string) => Promise<boolean|{active:boolean, endedAt?:number|null}>} [deps.isSubscriptionActive] 契約が有効か。終わっているときは、終わった時刻（ミリ秒）も返せる（閲覧とダウンロードだけの期間のため）
  * @param {(payload:{s:string,c:string|null}) => Promise<string|null>} [deps.getCustomerEmail] 購入時のメールアドレス（本人確認用）
  * @param {{maxTickets?:number, putsPerMinute?:number, scan?:number, verifyVolume?:boolean}} [deps.limits] 上限（テストで小さくするため差し替え可能）
  * @param {() => string|undefined} [deps.serviceKey] 別アプリのサーバーが使う鍵（既定は環境変数 PLATFORM_SERVICE_KEY。24文字未満なら無効）
@@ -195,24 +196,51 @@ export const isDateString = isRealDate;
 export function createOffice({ store, now = () => Date.now(), isSubscriptionActive = defaultIsActive, getCustomerEmail = defaultCustomerEmail, limits = {}, serviceKey = () => process.env.PLATFORM_SERVICE_KEY }) {
   const LIM = { maxTickets: MAX_TICKETS_PER_COMPANY, putsPerMinute: MAX_PUTS_PER_MINUTE, scan: MAX_TICKETS_SCAN, verifyVolume: true, ...limits };
   /* ---------------- サブスクの確認（キャッシュつき） ---------------- */
-  async function ensureSubscription(cid, subId) {
+  /**
+   * 契約の確認。契約が有効なら { readOnly:false }。
+   * 契約が終わっていても、**終わってから30日以内**は、事務所の画面だけ「閲覧とダウンロードのみ」で通す
+   * （readOnly:true を許したときだけ。現場の端末の便の受信などは、すぐ止める）。30日を過ぎたら 402。
+   * データは削除しない。再契約すれば、元のデータにまた入れる。
+   * @returns {Promise<{readOnly:boolean, until?:number}>}
+   */
+  async function ensureSubscription(cid, subId, { readOnly = false } = {}) {
     const ck = key(cid, `sub:${subId}`);
     const cached = parseJson(await store.get(ck));
-    if (cached && now() - cached.checkedAt < SUB_CACHE_SEC * 1000) {
-      if (!cached.active) throw fail('subscription_inactive', {}, 402);
-      return;
-    }
-    let active;
+    const decide = (s) => {
+      if (s.active) return { readOnly: false };
+      if (readOnly && s.endedAt && now() < s.endedAt + READ_ONLY_MS) return { readOnly: true, until: s.endedAt + READ_ONLY_MS };
+      throw fail('subscription_inactive', s.endedAt ? { endedAt: s.endedAt } : {}, 402);
+    };
+    if (cached && now() - cached.checkedAt < SUB_CACHE_SEC * 1000) return decide(cached);
+    let state;
     try {
-      active = await isSubscriptionActive(subId);
+      state = subState(await isSubscriptionActive(subId));
     } catch (err) {
       // Stripeに繋がらない（通信エラー・Stripe側の障害）。最近まで有効だったなら通す（現場を止めない）。
       // 設定ミスなど「待っても直らない」エラーのときは、猶予を与えない
-      if (!err?.permanent && cached?.active && now() - cached.checkedAt < SUB_STALE_OK_MS) return;
+      if (!err?.permanent && cached?.active && now() - cached.checkedAt < SUB_STALE_OK_MS) return { readOnly: false };
       throw fail('subscription_unverified', {}, 503);
     }
-    await store.set(ck, JSON.stringify({ active, checkedAt: now() }), 40 * 86400);
-    if (!active) throw fail('subscription_inactive', {}, 402);
+    await store.set(ck, JSON.stringify({ active: state.active, endedAt: state.endedAt, checkedAt: now() }), 40 * 86400);
+    return decide(state);
+  }
+
+  /**
+   * いま有効な契約を、この会社の「主な契約」にする。
+   * 再契約すると新しい契約ID（サブスクID）になるので、古い契約のままだと、再契約しても事務所に入れないため。
+   */
+  async function adoptPrimary(cid, subId) {
+    const primary = parseJson(await store.get(key(cid, 'primary')));
+    if (!primary?.s || primary.s === subId) return;
+    // いまの主な契約が生きているなら、そのまま（別アプリの契約でつながった端末が、主な契約を奪わないように）
+    let mode;
+    try {
+      mode = await ensureSubscription(cid, primary.s, { readOnly: true });
+    } catch (err) {
+      if (err instanceof Fail && err.error === 'subscription_inactive') mode = { readOnly: true };
+      else return;
+    }
+    if (mode.readOnly) await store.set(key(cid, 'primary'), JSON.stringify({ ...primary, s: subId }));
   }
 
   /* ---------------- 誰からの要求か ---------------- */
@@ -222,19 +250,21 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const cid = await store.get(licKey(payload));
     if (!cid) throw fail('office_not_set_up');
     await ensureSubscription(cid, payload.s);
+    await adoptPrimary(cid, payload.s);          // 再契約したら、この契約が主な契約になる
     // データを受け取って保存するのは、事務所が現行の同意文に同意しているときだけ
     if (needConsent && parseJson(await store.get(key(cid, 'consent')))?.version !== CONSENT_VERSION) throw fail('consent_required');
     return { cid };
   }
 
+  /** 事務所の札の確認。契約が終わって30日以内は readOnly:true（閲覧とダウンロードだけ） */
   async function officeCtx(body) {
     const tok = verifyPayload('office', String(body.token ?? ''));
     if (!tok || !tok.cid || !(tok.x > now())) throw fail('unauthorized', {}, 401);
     const auth = parseJson(await store.get(key(tok.cid, 'auth')));
     if (!auth || auth.epoch !== tok.ep) throw fail('unauthorized', {}, 401);
     const primary = parseJson(await store.get(key(tok.cid, 'primary')));
-    if (primary?.s) await ensureSubscription(tok.cid, primary.s);
-    return { cid: tok.cid };
+    const mode = primary?.s ? await ensureSubscription(tok.cid, primary.s, { readOnly: true }) : { readOnly: false };
+    return { cid: tok.cid, readOnly: mode.readOnly, until: mode.until };
   }
 
   const issueToken = (cid, epoch) => signPayload('office', { cid, ep: epoch, x: now() + SESSION_MS });
@@ -281,7 +311,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     // データの取り扱い（運営者による閲覧・匿名化しての研究/販売への利用）への同意が先。同意なしには何も作らない
     if (body.consent !== CONSENT_VERSION) throw fail('consent_required');
     let active;
-    try { active = await isSubscriptionActive(payload.s); } catch { throw fail('subscription_unverified', {}, 503); }
+    try { active = subState(await isSubscriptionActive(payload.s)).active; } catch { throw fail('subscription_unverified', {}, 503); }
     if (!active) throw fail('subscription_inactive', {}, 402);
     await verifyOwnerEmail(payload, body.email);
 
@@ -373,9 +403,10 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
 
   /** 事務所の画面が、いまの同意の状態を知るため */
   async function status(body) {
-    const { cid } = await officeCtx(body);
+    const { cid, readOnly, until } = await officeCtx(body);
     const consent = parseJson(await store.get(key(cid, 'consent')));
-    return { consentVersion: CONSENT_VERSION, consentOk: consent?.version === CONSENT_VERSION, consentAt: consent?.at ?? null };
+    // readOnly … 契約が終わっていて、閲覧とダウンロードだけできる期間。until はその終わりの時刻（ミリ秒）
+    return { consentVersion: CONSENT_VERSION, consentOk: consent?.version === CONSENT_VERSION, consentAt: consent?.at ?? null, readOnly, readOnlyUntil: until ?? null };
   }
 
   /** 同意文の版が変わったとき、事務所が改めて同意する */
@@ -427,7 +458,9 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
       throw fail(n >= LOCK_MAX ? 'locked' : 'bad_office_code', n >= LOCK_MAX ? { retryAfterSec: LOCK_SEC } : { triesLeft: LOCK_MAX - n }, n >= LOCK_MAX ? 429 : 200);
     }
     await store.del(failKey);
-    await ensureSubscription(cid, payload.s);
+    // 契約が終わって30日以内でも、ログインはできる（閲覧とダウンロードだけ）。再契約したライセンスコードなら、主な契約を切り替える
+    const mode = await ensureSubscription(cid, payload.s, { readOnly: true });
+    if (!mode.readOnly) await adoptPrimary(cid, payload.s);
     // 古い設定（索引なし）の会社は、ここで索引を作る。以後は事務所コードだけで入れる
     if (!auth.idx) {
       const idx = codeIndexKey(body.officeCode);
@@ -454,7 +487,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     if (!auth || !safeEqualHex(hashCode(norm, auth.salt), auth.hash)) return missed();
     const primary = parseJson(await store.get(key(cid, 'primary')));
     if (!primary?.s) throw fail('office_not_set_up');
-    await ensureSubscription(cid, primary.s);
+    await ensureSubscription(cid, primary.s, { readOnly: true });     // 契約が終わって30日以内は、閲覧とダウンロードだけできる
     return { companyId: cid, token: issueToken(cid, auth.epoch) };
   }
 
@@ -464,7 +497,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const payload = verifyToken(String(body.code ?? '').trim());
     if (!payload) throw fail('invalid_code');
     let active;
-    try { active = await isSubscriptionActive(payload.s); } catch { throw fail('subscription_unverified', {}, 503); }
+    try { active = subState(await isSubscriptionActive(payload.s)).active; } catch { throw fail('subscription_unverified', {}, 503); }
     if (!active) throw fail('subscription_inactive', {}, 402);
     // 契約者本人だけがつなげられる（ライセンスコードは運転手も知っているので、コードだけで他社の契約を奪えないように）
     await verifyOwnerEmail(payload, body.email);
@@ -1065,6 +1098,15 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
   };
 
   /**
+   * 事務所の画面から、データを変える操作。契約が終わって「閲覧とダウンロードだけ」の期間は、これらを止める
+   * （ticket.put など現場の端末からの便の受信は、memberCtx がすぐ止める）
+   */
+  const WRITE_OPS = new Set([
+    'ticket.setFactory', 'ticket.delete', 'site.put', 'master.put', 'quota.put', 'quota.delete',
+    'notice.put', 'notice.delete', 'inbox.put', 'inbox.delete', 'office.link', 'office.resetCode',
+  ]);
+
+  /**
    * @param {{ip?:string}} [ctx] 接続元（サービス間の鍵の試行回数を数えるため）
    * @returns {Promise<{status:number, payload:object}>}
    */
@@ -1076,6 +1118,10 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const limit = op === 'inbox.put' ? 1_000_000 : 120_000;
     if (JSON.stringify(body).length > limit) return { status: 413, payload: { ok: false, error: 'too_large' } };
     try {
+      if (WRITE_OPS.has(op) && body.token) {
+        const access = await officeCtx(body);
+        if (access.readOnly) throw fail('read_only', { until: access.until }, 402);
+      }
       return { status: 200, payload: { ok: true, ...(await run(body, ctx)) } };
     } catch (err) {
       if (err instanceof Fail) return { status: err.status, payload: { ok: false, error: err.error, ...err.extra } };
@@ -1102,6 +1148,26 @@ export function officeAccessAllowed(sub) {
 }
 
 /**
+ * 事務所の画面から見た契約の状態。{ active, endedAt }
+ *   active … いま使える契約か（officeAccessAllowed と同じ）
+ *   endedAt … 契約が終わった時刻（ミリ秒）。契約が終わって30日以内は、事務所の画面で閲覧とダウンロードだけできる
+ *   無料の試用期間中に解約した場合は、払っていない期間のデータは残さないので、閲覧の猶予はない（endedAt なし）
+ */
+export function officeSubscriptionState(sub) {
+  if (officeAccessAllowed(sub)) return { active: true, endedAt: null };
+  const d = describeSubscription(sub);
+  if (d.rawStatus === 'trialing' && d.cancelAtPeriodEnd) return { active: false, endedAt: null };
+  const endedAt = sub?.ended_at ? sub.ended_at * 1000 : (d.expiresAt ?? (sub?.canceled_at ? sub.canceled_at * 1000 : null));
+  return { active: false, endedAt };
+}
+
+/** 契約の確認の返事（true／false、または { active, endedAt }）をそろえる */
+function subState(v) {
+  if (v && typeof v === 'object') return { active: Boolean(v.active), endedAt: Number.isFinite(v.endedAt) ? v.endedAt : null };
+  return { active: Boolean(v), endedAt: null };
+}
+
+/**
  * Stripeの返事を「有効／無効／確認できない」に分ける。
  *   404（その契約は存在しない）  → 無効。猶予は与えない
  *   401・403・400（鍵や設定の誤り）→ 確認できない（permanent）。待っても直らないので猶予も与えない
@@ -1110,10 +1176,10 @@ export function officeAccessAllowed(sub) {
 async function defaultIsActive(subId) {
   try {
     const sub = await stripeGet(`/subscriptions/${encodeURIComponent(subId)}`);
-    return officeAccessAllowed(sub);
+    return officeSubscriptionState(sub);
   } catch (err) {
     const status = err?.httpStatus;
-    if (status === 404) return false;
+    if (status === 404) return { active: false, endedAt: null };
     if (status && status >= 400 && status < 500 && status !== 429) err.permanent = true;
     throw err;
   }
