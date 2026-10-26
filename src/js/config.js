@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'LOG-RA',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v26',
+  cacheVersion: 'terra-kennsyuu-v27',
 
   /** 見た目・操作感の調整値 */
   ui: {
