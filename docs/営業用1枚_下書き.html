@@ -1,0 +1,201 @@
+<title>LOG-RA 紹介ページ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@700;900&display=swap">
+<style>
+/* 配置：1列の縦長ページ。最初に「何が楽になるか」、次に現場、事務所、料金、守れる金額の計算の順 */
+:root {
+  --bg: #f3f7f1;
+  --surface: #ffffff;
+  --ink: #14231a;
+  --ink-soft: #4a5b50;
+  --line: #d3dfd2;
+  --green: #1f6b2d;
+  --green-ink: #ffffff;
+  --accent: #e65100;
+  --tint: #e4efe1;
+  --warn-bg: #fff3e0;
+  --warn-ink: #7a3b00;
+  --font-display: "Zen Kaku Gothic New", "Noto Sans JP", system-ui, sans-serif;
+  --font-body: "Noto Sans JP", system-ui, -apple-system, "Hiragino Sans", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101a13; --surface: #17251b; --ink: #e8f1ea; --ink-soft: #a5b8aa; --line: #2b3f31;
+    --green: #6fbf7f; --green-ink: #0d1f12; --accent: #ff9a4d; --tint: #1d3023;
+    --warn-bg: #3a2a14; --warn-ink: #ffcf9f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101a13; --surface: #17251b; --ink: #e8f1ea; --ink-soft: #a5b8aa; --line: #2b3f31;
+  --green: #6fbf7f; --green-ink: #0d1f12; --accent: #ff9a4d; --tint: #1d3023;
+  --warn-bg: #3a2a14; --warn-ink: #ffcf9f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body);
+  font-size: 16px; line-height: 1.75;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+.wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.35; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.draft {
+  background: var(--warn-bg); color: var(--warn-ink); font-size: 13px; line-height: 1.6;
+  padding: 10px 14px; border-radius: 6px; margin-top: 16px;
+}
+header.hero { display: flex; flex-direction: column; gap: 14px; padding-top: 24px; }
+.brand { font-family: var(--font-display); font-weight: 900; letter-spacing: .12em; color: var(--green); font-size: 15px; }
+h1 { font-size: clamp(28px, 7.5vw, 40px); font-weight: 900; }
+h1 em { font-style: normal; color: var(--accent); }
+.lead { color: var(--ink-soft); font-size: 17px; }
+h2 { font-size: 22px; font-weight: 900; border-bottom: 3px solid var(--green); padding-bottom: 8px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 480px; background: var(--surface); }
+th, td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; font-size: 15px; }
+th { background: var(--tint); font-weight: 700; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.card h3 { font-size: 17px; }
+.card p { font-size: 15px; color: var(--ink-soft); }
+.pain { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.pain div { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; display: grid; gap: 4px; }
+.pain .q { font-size: 14px; color: var(--ink-soft); }
+.pain .a { font-weight: 700; }
+.pain .a::before { content: "→ "; color: var(--accent); }
+.strip { background: var(--green); color: var(--green-ink); border-radius: 8px; padding: 16px 18px; display: grid; gap: 6px; }
+.strip strong { font-family: var(--font-display); font-size: 20px; }
+.price { font-family: var(--font-display); font-size: 26px; font-weight: 900; color: var(--green); }
+.note { font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
+.calc { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 14px; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+label { display: grid; gap: 4px; font-size: 14px; font-weight: 700; min-width: 0; }
+input { font: inherit; font-size: 16px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: 100%; min-width: 0; }
+input:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.result { display: grid; gap: 6px; background: var(--tint); border-radius: 6px; padding: 14px 16px; }
+.result .big { font-family: var(--font-display); font-size: 28px; font-weight: 900; color: var(--green); font-variant-numeric: tabular-nums; }
+footer { font-size: 13px; color: var(--ink-soft); display: grid; gap: 6px; }
+@media (prefers-reduced-motion: no-preference) { input { transition: border-color .15s; } }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <div class="draft">下書きです。数字の例と文面は、公開の前に神田さんが確認します。購入ページとStripeは、まだ旧価格(一律9,800円)です。</div>
+    <div class="brand">LOG-RA</div>
+    <h1>丸太の検収を、<em>手袋のまま</em>、圏外でも。</h1>
+    <p class="lead">径級のボタンを押すだけで、本数と材積がその場で数字になります。山でも、土場でも、工場の前でも、電波がなくても止まりません。</p>
+  </header>
+
+  <section>
+    <h2>検収アプリで、よくある困りごと</h2>
+    <div class="pain">
+      <div><span class="q">径級ごとの小計が出ない。合計しか分からない</span><span class="a">径級ごとの本数と小計材積が、押すたびにその場で変わる</span></div>
+      <div><span class="q">電波がないと固まる</span><span class="a">圏外でも普通に動く。つながったときに、あとから送る</span></div>
+      <div><span class="q">取り消すと、何を取り消したか分からなくなる</span><span class="a">取り消した行は、薄い灰色と赤い線で残る。履歴は消えない</span></div>
+      <div><span class="q">車番や現場など、いらない表示で画面がごちゃつく</span><span class="a">計測中は径級のボタンだけ。車番や現場は裏で記録する</span></div>
+    </div>
+    <p class="note">※ 他社の製品名は出していません。比較の文面は、公開前に実際の製品で確認してから使います。</p>
+  </section>
+
+  <section>
+    <h2>現場の人にうれしいこと</h2>
+    <div class="grid">
+      <div class="card"><h3>1画面で全部見える</h3><p>径級のボタンは大きく、本数と小計がカードの中に並びます。手袋のままでも押せます。</p></div>
+      <div class="card"><h3>押した手応えがある</h3><p>光る、振動する、音が鳴る、押した直後だけ色が濃くなる。押せたかどうかを、画面を見なくても分かります。</p></div>
+      <div class="card"><h3>声で入れられる</h3><p>「18、22、22、24」と続けて言うと、4本入ります。電波があるときの補助機能です。</p></div>
+      <div class="card"><h3>前回と同じ設定で始まる</h3><p>樹種・長さ・車番・現場を覚えています。違うところだけ選び直します。</p></div>
+      <div class="card"><h3>紙の伝票の形でも見られる</h3><p>紙しか受け付けない工場には、本数と材積を伝票の形で表示して書き写せます。手書き用の用紙も印刷できます。</p></div>
+      <div class="card"><h3>LINEやメールでそのまま送る</h3><p>CSVを、共有の画面からLINE、メール、ドライブへ。端末への保存もできます。</p></div>
+      <div class="card"><h3>日本語のほか4言語</h3><p>ベトナム語、タガログ語、タイ語、マレー語に対応しています。</p></div>
+      <div class="card"><h3>計算が合う</h3><p>JASの式で、整数で計算します。公的な丸太材積表の1578か所すべてと一致することを、毎回自動で確かめています。</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>事務所の人にうれしいこと</h2>
+    <div class="grid">
+      <div class="card"><h3>届いた便をそのまま確認</h3><p>現場で出した伝票が、通信できたときに事務所へ届きます。</p></div>
+      <div class="card"><h3>工場との差が数字で出る</h3><p>工場の検収値と現場の値を、納入先別・樹種別・月別に比べます。差が3%以上の便は、確認の候補に出ます。</p></div>
+      <div class="card"><h3>納入枠と「今日は降ろせるか」</h3><p>組合や工場からの納入可能枠の残りと、お知らせ(納入不可・入場制限)が、運転手の画面の一番上に出ます。</p></div>
+      <div class="card"><h3>車番・納入先・樹種を配れる</h3><p>事務所で登録した名前が、運転手の選択肢に入ります。入力のばらつきが減ります。</p></div>
+      <div class="card"><h3>データは持ち出せる</h3><p>全便のCSVと全データを、いつでもダウンロードできます。契約が終わっても、30日は閲覧とダウンロードができ、データは削除しません。再契約すれば元に戻ります。</p></div>
+    </div>
+    <div class="strip"><strong>事務所のログインは、事務所コード1つだけ</strong><span>現場の人に難しい操作を覚えてもらう必要はありません。</span></div>
+  </section>
+
+  <section>
+    <h2>料金(年額・税込)</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>台数(トラクタ・トラックの頭の数)</th><th class="num">通常</th><th class="num">12月末までの申込<br>(初年度のみ)</th></tr></thead>
+        <tbody>
+          <tr><td>1台</td><td class="num">9,800円</td><td class="num">9,800円</td></tr>
+          <tr><td>3台</td><td class="num">24,800円</td><td class="num">19,800円</td></tr>
+          <tr><td>5台</td><td class="num">39,800円</td><td class="num">29,800円</td></tr>
+          <tr><td>10台</td><td class="num">77,300円</td><td class="num">54,800円</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>1台目 9,800円、2台目から1台ごとに 7,500円。合計が 150,000円を超えるときは、150,000円が上限です。1台なら<strong>月あたり約817円</strong>です。</p>
+    <ul class="note" style="margin:0;padding-left:1.2em;">
+      <li>トレーラーと、運転手・事務員の人数は数えません。</li>
+      <li>予備車や、車検・修理中の代車は「休み」にしておけば数えません。計測は、台数にかかわらず止まりません。</li>
+      <li>12月末までの特典は初年度だけです。更新後は通常の料金になります。</li>
+      <li>初回起動から14日間は、無料でお試しできます。</li>
+      <li>事務所の料金は調整中です(現場アプリとは別に、会社で1本の料金にする予定です)。</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>守れる金額を計算してみる</h2>
+    <p>工場との検収値のずれは、1%でも金額になります。下の数字は例です。ご自分の数字に変えてみてください。</p>
+    <div class="calc">
+      <div class="fields">
+        <label for="vol">年間の出荷量(m³)<input id="vol" type="number" inputmode="numeric" min="0" step="100" value="3000"></label>
+        <label for="unit">1m³あたりの単価(円)<input id="unit" type="number" inputmode="numeric" min="0" step="500" value="10000"></label>
+        <label for="gap">ずれ(%)<input id="gap" type="number" inputmode="decimal" min="0" step="0.1" value="1"></label>
+        <label for="trucks">契約台数<input id="trucks" type="number" inputmode="numeric" min="1" step="1" value="3"></label>
+      </div>
+      <div class="result" aria-live="polite">
+        <span>ずれの金額(1年あたり)</span><span class="big" id="out-gap">300,000円</span>
+        <span>LOG-RAの年額(通常)</span><span class="big" id="out-fee">24,800円</span>
+        <span id="out-ratio">年額の約12倍です。</span>
+      </div>
+      <p class="note">例の数字です。実際の単価・出荷量・ずれは会社ごとに違います。ずれが必ず出る、または必ず取り戻せる、という意味ではありません。</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>問い合わせ：support@terra-tx-jp.com</p>
+    <p>規約・特商法・プライバシーポリシー・返金方針は、アプリ内の「規約・ポリシー」から読めます。</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var yen = function (n) { return Math.round(n).toLocaleString("ja-JP") + "円"; };
+  function fee(trucks) {
+    var n = Math.max(1, Math.floor(trucks) || 1);
+    return Math.min(9800 + 7500 * (n - 1), 150000);
+  }
+  function update() {
+    var vol = Math.max(0, parseFloat($("vol").value) || 0);
+    var unit = Math.max(0, parseFloat($("unit").value) || 0);
+    var gap = Math.max(0, parseFloat($("gap").value) || 0);
+    var gapYen = vol * unit * gap / 100;
+    var f = fee(parseFloat($("trucks").value));
+    $("out-gap").textContent = yen(gapYen);
+    $("out-fee").textContent = yen(f);
+    var ratio = f > 0 ? gapYen / f : 0;
+    $("out-ratio").textContent = ratio >= 1
+      ? "ずれの金額は、年額の約" + (Math.round(ratio * 10) / 10) + "倍です。"
+      : "ずれの金額は、年額の" + Math.round(ratio * 100) + "%です。";
+  }
+  ["vol", "unit", "gap", "trucks"].forEach(function (id) { $(id).addEventListener("input", update); });
+  update();
+})();
+</script>
