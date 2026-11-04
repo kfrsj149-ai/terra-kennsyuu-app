@@ -20,6 +20,7 @@ import * as updater from './updater.js';
 import * as officeSync from './office-sync.js';
 import { validateSlip, renderSlip, ticketSlips } from './slip.js';
 import { initViewport } from './viewport.js';
+import { initBackNav } from './backnav.js';
 import { activeOf, isResting, planActivate, registerAsResting } from './fleet.js';
 import { LAST_SETUP_KEY, lastSetupOf, restorableLastSetup } from './lastsetup.js';
 import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading, CONSENT_VERSION } from './office-rules.js';
@@ -49,9 +50,24 @@ const state = {
  * 小物ユーティリティ
  * ================================================================== */
 let toastTimer = null;
-function toast(msg, ms = 2200) {
+/** 「元に戻す」を出しておく時間（ミリ秒） */
+const UNDO_MS = 5000;
+
+function toast(msg, ms = 2200, action = null) {
   const el = $('#toast');
   el.textContent = msg;
+  if (action) {
+    // 「元に戻す」など、押せるボタンつきの知らせ
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-act';
+    btn.textContent = action.label;
+    btn.addEventListener('click', async () => {
+      el.classList.remove('is-show');
+      await action.run();
+    });
+    el.appendChild(btn);
+  }
   el.classList.add('is-show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('is-show'), ms);
@@ -192,6 +208,11 @@ async function renderLists() {
         await db.removeOption(item.id);
         await renderLists();
         await fillSelects();
+        // 手袋で×を押し間違えても、すぐ戻せる（車番は「休み」の状態ごと戻る）
+        toast(t('undo.removed', { name: item.value }), UNDO_MS, {
+          label: t('common.undo'),
+          run: async () => { await db.restoreOption(item); await renderLists(); await fillSelects(); },
+        });
       });
       chip.appendChild(del);
       wrap.appendChild(chip);
@@ -359,6 +380,10 @@ async function renderPresets() {
     del.addEventListener('click', async () => {
       await db.removePreset(p.id);
       await renderPresets();
+      toast(t('undo.removed', { name: p.name }), UNDO_MS, {
+        label: t('common.undo'),
+        run: async () => { await db.savePreset(p); await renderPresets(); },
+      });
     });
     chip.appendChild(del);
     manage.appendChild(chip);
@@ -1896,6 +1921,11 @@ async function boot() {
   await renderPresets();
   await renderQuickChips();
   wireEvents();
+  // 戻るスワイプで、アプリの外へ出てしまわないようにする（開いているものを閉じる／1回目は知らせるだけ）
+  initBackNav({
+    close: (el) => { if (el.id === 'drawer') closeDrawer(); else el.close(); },
+    onRootBack: () => toast(t('nav.backAgain'), 2500),
+  });
   setupVoice();
   initWakeLockAutoRenew(() => state.screen === 'measure');
   backup.initAutoSync();

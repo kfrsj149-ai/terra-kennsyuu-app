@@ -152,6 +152,12 @@ export async function removeOption(id) {
   return write('options', (s) => s.delete(id), () => memory.options.delete(id));
 }
 
+/** 消した登録を、そのままの内容で戻す（「元に戻す」用） */
+export async function restoreOption(item) {
+  await write('options', (s) => s.put(item), () => memory.options.set(item.id, item));
+  return item;
+}
+
 /* ------------ presets（よく使う設定） ------------ */
 export async function listPresets() {
   return read('presets', (s) => asResult(s.getAll()), () => [...memory.presets.values()]);

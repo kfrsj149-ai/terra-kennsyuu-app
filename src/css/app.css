@@ -518,11 +518,26 @@ dialog::backdrop { background: rgba(0,0,0,.55); }
   border-radius: var(--r-lg);
   font-weight: 700;
   z-index: 60;
-  max-width: 90vw;
+  /* left:50% のままだと幅が半分に縮んで、文字が細く折れる */
+  width: max-content;
+  max-width: min(92vw, 380px);
   text-align: center;
+  white-space: pre-line;   /* 文言の中の改行（\n）をそのまま改行にする */
   display: none;
+  /* 知らせが出ている間も、その下の径級カードをそのまま押せる（押した本数が消えないように） */
+  pointer-events: none;
 }
 #toast.is-show { display: block; }
+#toast .toast-act {
+  pointer-events: auto;
+  margin-left: 12px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--r-md);
+  background: #fff;
+  color: var(--c-brand-dark);
+  font-weight: 900;
+}
 
 .banner {
   background: var(--c-warn-bg);
