@@ -13,6 +13,8 @@ export default {
   'nav.backAgain': 'もう一度戻ると閉じます\n（記録は残ります）',
   'common.undo': '元に戻す',
   'undo.removed': '消しました：{name}',
+  'quick.recent': '最近使った',
+  'quick.others': 'ほか',
   'common.ok': 'OK',
   'menu.title': '設定・事前登録',
   'menu.companies': '会社名（自社・得意先）',

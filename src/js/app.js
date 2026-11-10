@@ -12,7 +12,7 @@ import * as db from './db.js';
 import { aggregateTicket, ticketTotals, shareCsv } from './csv.js';
 import { newLot, normalizeTicket, indexOfSameLot, lotLabel, activeCount, clampRangeToEntries } from './lots.js';
 import { feedbackAdd, feedbackUndo, feedbackError, beep, vibrate, requestWakeLock, releaseWakeLock, initWakeLockAutoRenew, initPressFeedback, withBusy } from './feedback.js';
-import { recentValues, lengthChoices, speciesChoices } from './quick.js';
+import { recentValues, recentTicketValues, recentFirst, lengthChoices, speciesChoices } from './quick.js';
 import { VoiceInput, isVoiceSupported, isVoiceAvailable } from './voice.js';
 import * as subscription from './subscription.js';
 import * as backup from './backup.js';
@@ -304,6 +304,22 @@ async function fillSelects() {
     '#in-destination': 'destination',
     '#in-own': 'company',
   };
+  // 直近に使った相手を先頭に出す（長い一覧で、毎日使う相手を探さなくて済むように）
+  const tickets = (await db.listTickets(60)).map(normalizeTicket);
+  const recentOf = {
+    truck: recentTicketValues(tickets, 'truck'),
+    site: recentValues(tickets, 'site'),
+    destination: recentTicketValues(tickets, 'destination'),
+    company: recentTicketValues(tickets, 'ownCompany'),
+  };
+  const addOptions = (parent, list) => {
+    for (const value of list) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = value;
+      parent.appendChild(opt);
+    }
+  };
   for (const [sel, kind] of Object.entries(map)) {
     const el = $(sel);
     const prev = el.value;
@@ -313,11 +329,18 @@ async function fillSelects() {
     blank.value = '';
     blank.textContent = values.length ? t('common.select') : t('common.none');
     el.appendChild(blank);
-    for (const value of values) {
-      const opt = document.createElement('option');
-      opt.value = value;
-      opt.textContent = value;
-      el.appendChild(opt);
+    const { recent, rest } = recentFirst(values, recentOf[kind]);
+    if (recent.length && rest.length) {
+      // 先頭の「最近使った」と、残りを見分けられるように、見出しを付ける
+      const g1 = document.createElement('optgroup');
+      g1.label = t('quick.recent');
+      addOptions(g1, recent);
+      const g2 = document.createElement('optgroup');
+      g2.label = t('quick.others');
+      addOptions(g2, rest);
+      el.append(g1, g2);
+    } else {
+      addOptions(el, [...recent, ...rest]);
     }
     if (prev) el.value = prev;
   }
@@ -1078,6 +1101,7 @@ async function doOutput({ download = false } = {}) {
   await db.kvDelete('draft');
   state.draft = null;
   showScreen('setup');
+  await fillSelects();                  // いま出した相手が、次の準備画面で先頭に並ぶ
   await applyLastSetup();               // 次の伝票は、前回の設定を入れておく（備考は空欄に戻る）
   renderQuickChips().catch(() => {});
   backup.runBackup().catch(() => {});

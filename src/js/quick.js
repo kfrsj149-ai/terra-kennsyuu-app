@@ -70,3 +70,32 @@ export function lengthChoices(recent, limit = 9) {
 export function speciesChoices(recent, masters, limit = 6) {
   return uniq([...(recent ?? []), ...(masters ?? [])].map((v) => String(v ?? '').trim()), nameKey).slice(0, limit);
 }
+
+/**
+ * 伝票ぜんたいの項目（車番・納入先・自社名）について、直近に使った値を新しい順に取り出す。
+ * @param {object[]} tickets 新しい順の伝票
+ * @param {'truck'|'destination'|'ownCompany'} field
+ * @returns {string[]} 新しく使った順、重複なし
+ */
+export function recentTicketValues(tickets, field) {
+  return uniq((tickets ?? []).map((tk) => String(tk?.[field] ?? '').trim()), nameKey);
+}
+
+/**
+ * 選択肢を「最近使った順に先頭へ」並べ直す。長い一覧で、毎日使う相手を探さなくて済むようにする。
+ * 一覧に無い値は出さない（削除・休みにした車番が復活しない）。残りは元の並びのまま。
+ * @param {string[]} values 選択肢（元の並び）
+ * @param {string[]} recent 直近に使った値（新しい順）
+ * @param {number} [limit=5] 先頭に出す数
+ * @returns {{ recent: string[], rest: string[] }}
+ */
+export function recentFirst(values, recent, limit = 5) {
+  const byKey = new Map((values ?? []).map((v) => [nameKey(v), v]));
+  const head = [];
+  for (const r of recent ?? []) {
+    const hit = byKey.get(nameKey(r));
+    if (hit !== undefined && !head.includes(hit)) head.push(hit);
+    if (head.length >= limit) break;
+  }
+  return { recent: head, rest: (values ?? []).filter((v) => !head.includes(v)) };
+}

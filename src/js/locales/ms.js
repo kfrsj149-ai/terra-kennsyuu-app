@@ -13,6 +13,8 @@ export default {
   'nav.backAgain': 'Tekan kembali sekali lagi untuk menutup. Rekod anda disimpan.',
   'common.undo': 'Buat asal',
   'undo.removed': 'Dipadam: {name}',
+  'quick.recent': 'Baru-baru ini digunakan',
+  'quick.others': 'Lain-lain',
   'common.ok': 'OK',
   'menu.title': 'Tetapan dan pendaftaran awal',
   'menu.companies': 'Nama syarikat',

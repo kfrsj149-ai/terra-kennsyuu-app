@@ -13,6 +13,8 @@ export default {
   'nav.backAgain': 'Nhấn quay lại một lần nữa để đóng. Các bản ghi vẫn được giữ lại.',
   'common.undo': 'Hoàn tác',
   'undo.removed': 'Đã xóa: {name}',
+  'quick.recent': 'Đã sử dụng gần đây',
+  'quick.others': 'Các mục khác',
   'common.ok': 'OK',
   'menu.title': 'Cài đặt và đăng ký trước',
   'menu.companies': 'Tên công ty',

@@ -13,6 +13,8 @@ export default {
   'nav.backAgain': 'กดย้อนกลับอีกครั้งเพื่อปิด (บันทึกของคุณยังอยู่)',
   'common.undo': 'เลิกทำ',
   'undo.removed': 'ลบแล้ว: {name}',
+  'quick.recent': 'ใช้ล่าสุด',
+  'quick.others': 'อื่น ๆ',
   'common.ok': 'ตกลง',
   'menu.title': 'ตั้งค่าและลงทะเบียนล่วงหน้า',
   'menu.companies': 'ชื่อบริษัท',

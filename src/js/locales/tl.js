@@ -13,6 +13,8 @@ export default {
   'nav.backAgain': 'Pindutin muli ang pabalik para isara. Mananatili ang iyong mga tala.',
   'common.undo': 'I-undo',
   'undo.removed': 'Binura: {name}',
+  'quick.recent': 'Kamakailan lang ginamit',
+  'quick.others': 'Iba pa',
   'common.ok': 'OK',
   'menu.title': 'Setting at paunang rehistro',
   'menu.companies': 'Pangalan ng kompanya',

@@ -42,3 +42,25 @@ test('樹種の候補：直近 → マスターの順で、最大6つ、重複�
   assert.deepEqual(speciesChoices([], []), []);
   assert.deepEqual(speciesChoices(undefined, ['スギ']), ['スギ']);
 });
+
+import { recentTicketValues, recentFirst } from '../src/js/quick.js';
+
+test('最近使った相手を先頭に、残りは元の並びのまま', () => {
+  const values = ['A商事', 'B木材', 'C運輸', 'D林業', 'E組合', 'F市場', 'G港'];
+  const tickets = [{ destination: 'F市場' }, { destination: 'B木材' }, { destination: 'F市場' }, { destination: 'A商事' }];
+  const r = recentFirst(values, recentTicketValues(tickets, 'destination'));
+  assert.deepEqual(r.recent, ['F市場', 'B木材', 'A商事']);
+  assert.deepEqual(r.rest, ['C運輸', 'D林業', 'E組合', 'G港']);
+});
+
+test('一覧に無い値（削除した相手）は先頭に出ない。数の上限もある', () => {
+  const values = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+  const r = recentFirst(values, ['消した', 'g', 'f', 'e', 'd', 'c', 'b'], 3);
+  assert.deepEqual(r.recent, ['g', 'f', 'e']);
+  assert.equal(r.rest.length, 4);
+});
+
+test('全角半角・大小・空白の違いは同じ相手として扱う', () => {
+  const r = recentFirst(['ＡＢＣ商事', 'xyz'], ['abc 商事'.replace(' ', '')], 5);
+  assert.deepEqual(r.recent, ['ＡＢＣ商事']);
+});
