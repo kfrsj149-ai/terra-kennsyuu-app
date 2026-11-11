@@ -21,6 +21,7 @@ import * as officeSync from './office-sync.js';
 import { validateSlip, renderSlip, ticketSlips } from './slip.js';
 import { initViewport } from './viewport.js';
 import { initBackNav } from './backnav.js';
+import { specsFor, specSetup, specStillMatches } from './specs.js';
 import { activeOf, isResting, planActivate, registerAsResting } from './fleet.js';
 import { LAST_SETUP_KEY, lastSetupOf, restorableLastSetup } from './lastsetup.js';
 import { nameKey, resolveSiteId, noticesFor, quotasFor, blocksUnloading, CONSENT_VERSION } from './office-rules.js';
@@ -37,6 +38,7 @@ const state = {
   screen: 'setup',
   settings: { locale: 'ja', side: 'left', voiceConsent: false },
   setup: { minD: 14, maxD: 30 },
+  specId: null,       // 準備画面で選んだ、納入先の規格（手で変えたら外れる）
   /** 計測中の伝票＝便（入力の都度 IndexedDB に保存される）。lots[] の中に材ごとの入力が入る */
   draft: null,
   /** いま入力している材（ロット）の径級一覧 */
@@ -432,6 +434,60 @@ function renderSetupStatics() {
   renderRange();
 }
 
+/* ==================================================================
+ * 納入先の規格（事務所が登録したもの）
+ * 納入先を選ぶと、その納入先の規格がボタンで出る。選ぶと、樹種・長さ・太さの範囲が自動で入る。
+ * 登録が無い納入先では、何も出ない（今までどおり、手で入力する）。手で変えたら、規格の選択は外れる。
+ * ================================================================== */
+const specsOfDestination = () => (state.settings.office ? specsFor(state.feed, $('#in-destination').value) : []);
+
+const currentSpecInputs = () => ({
+  species: $('#in-species').value, lengthRaw: $('#in-length').value, minD: state.setup.minD, maxD: state.setup.maxD,
+});
+
+/** いま選んでいる規格の名前。入力が規格のままのときだけ（手で変えていたら空） */
+function chosenSpecName() {
+  const sp = specsOfDestination().find((x) => x.id === state.specId);
+  return sp && specStillMatches(sp, currentSpecInputs()) ? sp.name : '';
+}
+
+function renderSpecChips() {
+  const box = $('#spec-field');
+  const chips = $('#spec-chips');
+  if (!box || !chips) return;
+  const list = specsOfDestination();
+  chips.replaceChildren();
+  box.hidden = list.length === 0;
+  if (!list.some((x) => x.id === state.specId)) state.specId = null;
+  for (const sp of list) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'quick-chip';
+    b.setAttribute('aria-pressed', String(sp.id === state.specId));
+    b.textContent = sp.grade && sp.grade !== sp.name ? `${sp.name}（${sp.grade}）` : sp.name;
+    b.addEventListener('click', () => pickSpec(sp));
+    chips.appendChild(b);
+  }
+}
+
+function pickSpec(sp) {
+  const v = specSetup(sp);
+  if (v.species) $('#in-species').value = v.species;
+  if (v.lengthM) $('#in-length').value = v.lengthM;
+  if (v.minD !== null) { state.setup.minD = v.minD; state.setup.maxD = v.maxD; }
+  state.specId = sp.id;
+  renderRange();                 // 樹種・長さの候補ボタンも合わせて更新される
+  renderSpecChips();
+  beep('tap');
+}
+
+/** 手で樹種・長さ・太さを変えたら、規格の選択を外す（ボタンの見た目も戻す） */
+function releaseSpecIfEdited() {
+  if (!state.specId) return;
+  const sp = specsOfDestination().find((x) => x.id === state.specId);
+  if (!sp || !specStillMatches(sp, currentSpecInputs())) { state.specId = null; renderSpecChips(); }
+}
+
 function renderRange() {
   if (state.setup.minD > state.setup.maxD) state.setup.maxD = state.setup.minD;
   $('#val-min').textContent = state.setup.minD;
@@ -470,6 +526,7 @@ function readSetup() {
     destination: $('#in-destination').value,
     ownCompany: $('#in-own').value,
     note: $('#in-note').value.trim(),
+    specName: chosenSpecName(),
   };
 }
 
@@ -1330,6 +1387,7 @@ function staleLine(parent, cls) {
 }
 
 function renderOfficeInfo() {
+  renderSpecChips();
   const band = $('#notice-band');
   const card = $('#quota-card');
   const feed = state.settings.office ? state.feed : null;
@@ -1646,8 +1704,8 @@ function wireSlip() {
  * ================================================================== */
 function wireEvents() {
   initPressFeedback();
-  $('#in-species').addEventListener('input', syncQuickChips);
-  $('#in-length').addEventListener('input', syncQuickChips);
+  $('#in-species').addEventListener('input', () => { syncQuickChips(); releaseSpecIfEdited(); });
+  $('#in-length').addEventListener('input', () => { syncQuickChips(); releaseSpecIfEdited(); });
   $('#menu-btn').addEventListener('click', openDrawer);
   $('#menu-btn-2').addEventListener('click', openDrawer);
 
@@ -1700,7 +1758,7 @@ function wireEvents() {
   }));
   $('#notice-band').addEventListener('click', openNoticeList);
   $('#notices-close').addEventListener('click', () => $('#dlg-notices').close());
-  $('#in-destination').addEventListener('change', renderOfficeInfo);
+  $('#in-destination').addEventListener('change', () => { state.specId = null; renderOfficeInfo(); });
 
   // 事前登録リストの追加
   $$('.menu-section[data-list]').forEach((section) => {
@@ -1738,6 +1796,7 @@ function wireEvents() {
       if (key === 'minD' && state.setup.minD > state.setup.maxD) state.setup.maxD = state.setup.minD;
       if (key === 'maxD' && state.setup.maxD < state.setup.minD) state.setup.minD = state.setup.maxD;
       renderRange();
+      releaseSpecIfEdited();
       beep('tap');
     });
   });

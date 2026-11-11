@@ -15,6 +15,7 @@ export default {
   'undo.removed': 'Dipadam: {name}',
   'quick.recent': 'Baru-baru ini digunakan',
   'quick.others': 'Lain-lain',
+  'setup.spec': 'Pilih spesifikasi untuk mengisi spesies, panjang dan diameter',
   'common.ok': 'OK',
   'menu.title': 'Tetapan dan pendaftaran awal',
   'menu.companies': 'Nama syarikat',

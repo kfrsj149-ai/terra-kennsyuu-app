@@ -92,6 +92,11 @@
       <div class="field">
         <label for="in-destination" data-i18n="setup.destination">納入先</label>
         <select id="in-destination"></select>
+        <!-- 事務所が登録した、この納入先の規格。選ぶと、樹種・長さ・太さの範囲が入る（登録がない納入先では出ない） -->
+        <div id="spec-field" hidden>
+          <span class="note" data-i18n="setup.spec">規格を選ぶと、樹種・長さ・太さが入ります</span>
+          <div class="chip-row" id="spec-chips"></div>
+        </div>
       </div>
       <!-- 事務所が登録した納入枠の残りと、いま荷下ろしできるか -->
       <div id="quota-card" hidden></div>

@@ -15,6 +15,7 @@ export default {
   'undo.removed': 'ลบแล้ว: {name}',
   'quick.recent': 'ใช้ล่าสุด',
   'quick.others': 'อื่น ๆ',
+  'setup.spec': 'เลือกสเปกเพื่อกรอกชนิดไม้ ความยาว และเส้นผ่านศูนย์กลางให้อัตโนมัติ',
   'common.ok': 'ตกลง',
   'menu.title': 'ตั้งค่าและลงทะเบียนล่วงหน้า',
   'menu.companies': 'ชื่อบริษัท',

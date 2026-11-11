@@ -14,7 +14,7 @@
  */
 
 /** ロット1つを作る。entries には径級ごとの入力（取消も残す）が入る */
-export function newLot({ id, species, lengthM, minD, maxD, site = '', siteId = null }) {
+export function newLot({ id, species, lengthM, minD, maxD, site = '', siteId = null, specName = '' }) {
   return {
     id: id ?? `lot-${Math.random().toString(36).slice(2, 10)}`,
     species: String(species ?? '').trim(),
@@ -23,6 +23,7 @@ export function newLot({ id, species, lengthM, minD, maxD, site = '', siteId = n
     maxD: Number(maxD),
     site: String(site ?? ''),
     siteId: siteId || null,         // 事務所の現場台帳のID。台帳に無い名前なら null（記録は止めない）
+    specName: String(specName ?? ''),   // 準備画面で選んだ、納入先の規格の名前（記録時点の名前。選ばなければ空）
     entries: [],
   };
 }

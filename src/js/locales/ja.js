@@ -15,6 +15,7 @@ export default {
   'undo.removed': '消しました：{name}',
   'quick.recent': '最近使った',
   'quick.others': 'ほか',
+  'setup.spec': '規格を選ぶと、樹種・長さ・太さが入ります',
   'common.ok': 'OK',
   'menu.title': '設定・事前登録',
   'menu.companies': '会社名（自社・得意先）',

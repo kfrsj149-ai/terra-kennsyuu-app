@@ -15,6 +15,7 @@ export default {
   'undo.removed': 'Binura: {name}',
   'quick.recent': 'Kamakailan lang ginamit',
   'quick.others': 'Iba pa',
+  'setup.spec': 'Pumili ng espesipikasyon para mapunan ang uri ng kahoy, haba, at diyametro',
   'common.ok': 'OK',
   'menu.title': 'Setting at paunang rehistro',
   'menu.companies': 'Pangalan ng kompanya',

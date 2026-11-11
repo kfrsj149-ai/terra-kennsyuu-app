@@ -657,6 +657,80 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     return { master };
   }
 
+  /* ---------------- 納入先ごとの規格リスト（事務所が登録して、現場の端末に配る） ----------------
+   * 1行＝納入先の規格（製品名）。樹種・長さ・太さの範囲を持つ。運転手は準備画面で規格を選ぶと、これらが自動で入る。
+   * 「等級・用途」には、A材・B材・合板用・製材用のような名前を入れてよい（市場を通す会社は、積み込みのあとで決まるので空でよい）。
+   * ⚠ 単価は、将来ここに足しても、`feed`（運転手の端末に届く情報）には絶対に入れない。
+   *   `feed` はライセンスコードがあれば誰でも読めるため。事務所の画面（`spec.list`）だけに出す。
+   */
+  const SPEC_MAX = 1000;                   // 1社あたりの登録数
+  const SPEC_FIELDS_FEED = ['id', 'name', 'destination', 'species', 'lengthM', 'minD', 'maxD', 'grade'];
+
+  async function loadSpecs(cid) {
+    const all = await store.hgetall(key(cid, 'specs'));
+    return Object.values(all).map((x) => parseJson(x)).filter(Boolean)
+      .sort((a, b) => (a.closed === b.closed
+        ? (a.destination.localeCompare(b.destination, 'ja') || a.name.localeCompare(b.name, 'ja'))
+        : a.closed ? 1 : -1));
+  }
+
+  async function specList(body) {
+    const { cid } = await officeCtx(body);
+    return { specs: await loadSpecs(cid) };
+  }
+
+  function cleanSpec(input) {
+    if (!input || typeof input !== 'object') throw fail('invalid', { field: 'spec' });
+    const name = str(String(input.name ?? '').normalize('NFKC'), 30, { required: true, field: 'specName' });
+    const destination = str(String(input.destination ?? '').normalize('NFKC'), 60, { required: true, field: 'destination' });
+    const species = str(String(input.species ?? '').normalize('NFKC'), 40, { field: 'species' });
+    const lengthM = clean(String(input.lengthM ?? '').normalize('NFKC'));
+    if (lengthM && (!/^\d{1,2}(\.\d{1,2})?$/.test(lengthM) || Number(lengthM) <= 0)) throw fail('invalid', { field: 'lengthM' });
+    const diameter = (v, field) => {
+      const t = clean(String(v ?? '').normalize('NFKC'));
+      return t === '' ? null : intIn(t, 1, 200, field);
+    };
+    const minD = diameter(input.minD, 'minD');
+    const maxD = diameter(input.maxD, 'maxD');
+    if ((minD === null) !== (maxD === null)) throw fail('invalid', { field: minD === null ? 'minD' : 'maxD' });   // 範囲は両方そろえる
+    if (minD !== null && minD > maxD) throw fail('invalid', { field: 'maxD' });
+    return {
+      name, destination, species, lengthM: lengthM || '', minD, maxD,
+      grade: str(input.grade, 20, { field: 'grade' }),
+      note: str(input.note, 200, { field: 'note' }),
+      closed: input.closed === true,
+    };
+  }
+
+  /** 登録・修正。同じ納入先の中で、規格の名前は重ならない（全角半角・空白の違いは同じとみなす）。消さずに「使わない」にする */
+  async function specPut(body) {
+    const { cid } = await officeCtx(body);
+    const fields = cleanSpec(body.spec);
+    const items = await loadSpecs(cid);
+    let existing = null;
+    if (body.spec.id) {
+      if (!isValidId(body.spec.id)) throw fail('invalid', { field: 'id' });
+      existing = items.find((x) => x.id === body.spec.id);
+      if (!existing) throw fail('not_found');
+    } else if (items.length >= SPEC_MAX) {
+      throw fail('limit_reached', { max: SPEC_MAX });
+    }
+    const clash = items.find((x) => x.id !== existing?.id && nameKey(x.destination) === nameKey(fields.destination) && nameKey(x.name) === nameKey(fields.name));
+    if (clash) throw fail('spec_name_taken', { name: fields.name, with: { id: clash.id, name: clash.name } });
+
+    let id = existing?.id;
+    if (!id) {
+      for (let i = 0; i < 10 && !id; i += 1) {
+        const c = randomChars(8);
+        if (!items.some((x) => x.id === c)) id = c;
+      }
+      if (!id) throw fail('server_busy', {}, 503);
+    }
+    const spec = { id, ...fields, createdAt: existing?.createdAt ?? now(), updatedAt: now() };
+    await store.hset(key(cid, 'specs'), id, JSON.stringify(spec));
+    return { spec };
+  }
+
   /** まだ台帳で引けない現場名（現場の端末が自由入力したもの）。名寄せの候補 */
   async function siteUnlinked(body) {
     const { cid } = await officeCtx(body);
@@ -1033,7 +1107,10 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     const m = await loadMasters(cid);
     const slim = (list) => list.filter((x) => !x.closed).map((x) => ({ id: x.id, name: x.name, aliases: x.aliases }));
     const masters = { trucks: slim(m.truck), destinations: slim(m.destination), species: slim(m.species) };
-    return { serverTime: now(), sites, quotas, usage, notices, masters };
+    // 納入先ごとの規格。使わないことにしたものは送らない。**単価など、運転手に見せない項目は送らない**（許可した項目だけ取り出す）
+    const specs = (await loadSpecs(cid)).filter((x) => !x.closed)
+      .map((x) => Object.fromEntries(SPEC_FIELDS_FEED.map((k) => [k, x[k]])));
+    return { serverTime: now(), sites, quotas, usage, notices, masters, specs };
   }
 
   /* ---------------- 受信箱（スマホで撮った写真） ---------------- */
@@ -1091,6 +1168,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
     'ticket.put': ticketPut, 'ticket.list': ticketList, 'ticket.setFactory': ticketSetFactory, 'ticket.delete': ticketDelete,
     'site.list': siteList, 'site.put': sitePut, 'site.unlinked': siteUnlinked,
     'master.list': masterList, 'master.put': masterPut,
+    'spec.list': specList, 'spec.put': specPut,
     'analysis.diff': diffAnalysis,
     'quota.list': quotaList, 'quota.put': quotaPut, 'quota.delete': quotaDelete,
     'notice.list': noticeList, 'notice.put': noticePut, 'notice.delete': noticeDelete,
@@ -1102,7 +1180,7 @@ export function createOffice({ store, now = () => Date.now(), isSubscriptionActi
    * （ticket.put など現場の端末からの便の受信は、memberCtx がすぐ止める）
    */
   const WRITE_OPS = new Set([
-    'ticket.setFactory', 'ticket.delete', 'site.put', 'master.put', 'quota.put', 'quota.delete',
+    'ticket.setFactory', 'ticket.delete', 'site.put', 'master.put', 'spec.put', 'quota.put', 'quota.delete',
     'notice.put', 'notice.delete', 'inbox.put', 'inbox.delete', 'office.link', 'office.resetCode',
   ]);
 

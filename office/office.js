@@ -24,6 +24,7 @@ const state = {
   notices: null,
   sites: null, unlinked: [],
   masters: null,
+  specs: null,
   diff: null, diffFilter: null,
   inbox: null,
 };
@@ -110,6 +111,7 @@ async function api(op, args = {}, { as = 'office' } = {}) {
 const FIELD_NAMES = {
   amount: '数量', from: '開始日', to: '終了日', destination: '工場名', species: '樹種', timeFrom: '開始時刻', timeTo: '終了時刻',
   weekdays: '曜日', body: '本文', kind: '種類', name: '現場名', aliases: '別名', image: '写真', volume: '工場の検収材積',
+  specName: '規格の名前', lengthM: '長さ', minD: '太さ（最小）', maxD: '太さ（最大）', grade: '等級・用途',
   'attrs.rinban': '林班', 'attrs.address': '住所', 'attrs.note': '備考', note: '備考', place: '土場', title: '題名', imageId: '写真',
 };
 
@@ -137,6 +139,7 @@ function explain(e) {
     case 'rate_limited': return '短い時間にたくさん送られたため、少し待ってからやり直してください。';
     case 'limit_reached': return e.info?.max ? `これ以上は登録できません（1種類あたり${e.info.max}件まで）。使わないものは「使わない」にしても数に含まれます。` : '保存できる便の数の上限に達しました。古い便を削除してください。';
     case 'master_name_taken': return `その名前は、すでに${MASTER_LABEL[e.info.kind] ?? ''}「${e.info.with?.name ?? ''}」として登録されています（名前・別名のどちらかが同じです）。`;
+    case 'spec_name_taken': return `その納入先に、同じ名前の規格「${e.info.with?.name ?? ''}」がすでに登録されています（全角半角・空白の違いは同じとみなします）。`;
     case 'in_use': return '枠かお知らせで使っている写真は消せません。';
     case 'not_found': return '見つかりませんでした。画面を開き直してください。';
     case 'invalid': return `${field}の入力を確認してください。`;
@@ -156,7 +159,7 @@ function loadLogin() {
   try { const v = JSON.parse(localStorage.getItem(STORE_KEY) ?? 'null'); if (v?.token) { state.token = v.token; state.code = v.code ?? ''; } } catch { /* 無視 */ }
 }
 function logout(message = '') {
-  state.token = ''; state.quotas = null; state.notices = null; state.sites = null; state.masters = null; state.diff = null; state.diffFilter = null; state.inbox = null; state.tickets = [];
+  state.token = ''; state.quotas = null; state.notices = null; state.sites = null; state.masters = null; state.specs = null; state.diff = null; state.diffFilter = null; state.inbox = null; state.tickets = [];
   try { localStorage.setItem(STORE_KEY, JSON.stringify({ token: '', code: state.code })); } catch { /* 無視 */ }
   showLogin(message);
 }
@@ -293,6 +296,7 @@ const ensureNotices = async (force = false) => { if (force || !state.notices) st
 const ensureSites = async (force = false) => {
   if (force || !state.sites) { const [a, b] = await Promise.all([api('site.list'), api('site.unlinked')]); state.sites = a.sites; state.unlinked = b.unlinked; }
 };
+const ensureSpecs = async (force = false) => { if (force || !state.specs) state.specs = (await api('spec.list')).specs; };
 const ensureMasters = async (force = false) => { if (force || !state.masters) state.masters = (await api('master.list')).masters; };
 const ensureInbox = async (force = false) => { if (force || !state.inbox) state.inbox = (await api('inbox.list')).items; };
 
@@ -916,6 +920,84 @@ function masterDialog(kind, existing) {
 }
 
 /* ==================================================================
+ * タブ：規格（納入先ごと）
+ * 納入先ごとの規格（製品名）。現場アプリの準備画面で、その納入先を選ぶと、規格がボタンで出る。
+ * 選ぶと、樹種・長さ・太さの範囲が自動で入る（運転手が打たなくてよい）。
+ * 現場の端末に届くのは、名前・納入先・樹種・長さ・太さ・等級（用途）だけ。備考は事務所だけに表示する。
+ * ================================================================== */
+const specSummary = (x) => [x.species || '樹種は自由', x.lengthM ? `${x.lengthM}m` : '長さは自由', x.minD !== null && x.minD !== undefined ? `${x.minD}〜${x.maxD}cm` : '太さは自由'].join('・');
+
+async function renderSpecs(force = false) {
+  await Promise.all([ensureSpecs(force), ensureMasters(false)]);
+  const list = state.specs;
+  const open = list.filter((x) => !x.closed);
+  const closed = list.filter((x) => x.closed);
+  const card = (x) => h('div', { class: 'card' },
+    h('div', { class: 'row' },
+      h('b', { class: 'grow' }, x.name, x.grade && x.grade !== x.name ? h('span', { class: 'tag blue' }, x.grade) : null, x.closed ? h('span', { class: 'tag gray' }, '使わない') : null),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => specDialog(x) }, '修正')),
+    h('div', { class: 'muted' }, `${x.destination}　${specSummary(x)}`),
+    x.note ? h('div', { class: 'muted' }, `備考：${x.note}`) : null);
+  const row = (x) => h('tr', {},
+    h('td', {}, x.destination),
+    h('td', {}, h('b', {}, x.name), x.grade && x.grade !== x.name ? h('span', { class: 'tag blue' }, x.grade) : null, x.closed ? h('span', { class: 'tag gray' }, '使わない') : null),
+    h('td', {}, specSummary(x)),
+    h('td', {}, x.note || '—'),
+    h('td', {}, h('button', { type: 'button', class: 'btn sm', onclick: () => specDialog(x) }, '修正')));
+  const table = (items) => (narrow()
+    ? h('div', { class: 'cards' }, items.map(card))
+    : h('div', { class: 'table-wrap' }, h('table', {},
+      h('thead', {}, h('tr', {}, ['納入先', '規格の名前', '樹種・長さ・太さ', '備考（事務所だけ）', ''].map((c) => h('th', {}, c)))),
+      h('tbody', {}, items.map(row)))));
+  setView('specs',
+    h('h2', {}, `規格（${open.length}件）`),
+    h('p', { class: 'hint' }, '納入先ごとの規格（製品名）です。現場アプリの準備画面で、その納入先を選ぶと、ここの規格がボタンで出ます。選ぶと、樹種・長さ・太さの範囲が自動で入ります。ここに登録しなくても、今までどおり、手で入力して使えます。'),
+    h('div', { class: 'toolbar' },
+      h('button', { type: 'button', class: 'btn primary', onclick: () => specDialog() }, '＋ 規格を追加'),
+      h('span', { class: 'hint' }, '「備考」は事務所だけに表示します。現場の端末に届くのは、名前・納入先・樹種・長さ・太さ・等級（用途）です。')),
+    open.length ? table(open) : h('div', { class: 'empty' }, '規格はまだ登録されていません。'),
+    closed.length ? h('details', {}, h('summary', {}, `使わなくなったもの（${closed.length}件）`), table(closed)) : null);
+}
+
+function specDialog(existing) {
+  const x = existing ?? { destination: '', name: '', species: '', lengthM: '', minD: null, maxD: null, grade: '', note: '', closed: false };
+  const { dest, species } = knownValues();
+  const f = {
+    destination: h('input', { type: 'text', list: 'dl-dest', value: x.destination, required: true, maxlength: 60, autocomplete: 'off' }),
+    name: h('input', { type: 'text', value: x.name, required: true, maxlength: 30, autocomplete: 'off', placeholder: '例：3m 柱取り' }),
+    species: h('input', { type: 'text', list: 'dl-species', value: x.species, autocomplete: 'off', placeholder: '空欄なら現場で入力' }),
+    lengthM: h('input', { type: 'text', inputmode: 'decimal', value: x.lengthM, autocomplete: 'off', placeholder: '例：3 または 3.65' }),
+    minD: h('input', { type: 'text', inputmode: 'numeric', value: x.minD ?? '', autocomplete: 'off', placeholder: '例：14' }),
+    maxD: h('input', { type: 'text', inputmode: 'numeric', value: x.maxD ?? '', autocomplete: 'off', placeholder: '例：30' }),
+    grade: h('input', { type: 'text', value: x.grade, maxlength: 20, autocomplete: 'off', placeholder: '例：A材、合板用（任意）' }),
+    note: h('textarea', { rows: 3 }, x.note),
+    closed: h('input', { type: 'checkbox', checked: x.closed }),
+  };
+  dialog(existing ? '規格を修正' : '規格を追加', [
+    datalist('dl-dest', dest), datalist('dl-species', species),
+    h('label', {}, '納入先', f.destination),
+    h('p', { class: 'hint' }, '現場アプリの「納入先」と同じ名前で入れてください（全角半角・空白の違いは同じとみなします）。'),
+    h('label', {}, '規格の名前（30文字まで）', f.name),
+    h('div', { class: 'grid2' }, h('label', {}, '樹種（任意）', f.species), h('label', {}, '長さ（m・任意）', f.lengthM)),
+    h('div', { class: 'grid2' }, h('label', {}, '太さ 最小（cm）', f.minD), h('label', {}, '太さ 最大（cm）', f.maxD)),
+    h('p', { class: 'hint' }, '太さは、最小と最大をそろえて入れます。空欄なら、現場で選びます。'),
+    h('label', {}, '等級・用途（任意）', f.grade),
+    h('label', {}, '備考（事務所だけに表示）', f.note),
+    h('label', { class: 'row', style: 'font-weight:600' }, f.closed, '使わない（選択肢から隠す）'),
+  ], {
+    onOk: async () => {
+      await api('spec.put', { spec: {
+        ...(existing ? { id: existing.id } : {}),
+        destination: normalizeName(f.destination.value), name: f.name.value, species: normalizeName(f.species.value),
+        lengthM: f.lengthM.value, minD: f.minD.value, maxD: f.maxD.value, grade: f.grade.value, note: f.note.value, closed: f.closed.checked,
+      } });
+      await renderSpecs(true);
+      toast('保存しました');
+    },
+  });
+}
+
+/* ==================================================================
  * タブ：受信箱（スマホで撮った写真）
  * ================================================================== */
 async function renderInbox(force = false) {
@@ -993,10 +1075,10 @@ async function exportEverything(kind, setLabel) {
   const stamp = `${today()}`;
   if (kind === 'csv') { download(`terra-全便-${stamp}.csv`, csvOfTickets(tickets)); return tickets.length; }
   setLabel('まとめています…');
-  const [sites, quotas, notices, masters] = await Promise.all([api('site.list'), api('quota.list'), api('notice.list'), api('master.list')]);
+  const [sites, quotas, notices, masters, specs] = await Promise.all([api('site.list'), api('quota.list'), api('notice.list'), api('master.list'), api('spec.list')]);
   const bundle = {
     app: 'TERRA 事務所', exportedAt: new Date().toISOString(), note: '契約の期間中だけ書き出せます。写真（受信箱）は含まれません。材積の数値（*Num）は内部単位で、1 m³ = 40,000,000,000 です。',
-    tickets, sites: sites.sites, quotas: quotas.quotas, notices: notices.notices, masters: masters.masters,
+    tickets, sites: sites.sites, quotas: quotas.quotas, notices: notices.notices, masters: masters.masters, specs: specs.specs,
   };
   download(`terra-全データ-${stamp}.json`, JSON.stringify(bundle, null, 1), 'application/json;charset=utf-8');
   return tickets.length;
@@ -1057,7 +1139,7 @@ function renderSettings() {
  * 画面の切り替え
  * ================================================================== */
 // タブを開くたびに最新を読み直す（現場から便が届くと、枠の残りや名寄せ候補が変わるため）
-const TABS = { tickets: renderTickets, quotas: () => renderQuotas(true), notices: () => renderNotices(true), sites: () => renderSites(true), diff: () => renderDiff(true), masters: () => renderMasters(true), inbox: () => renderInbox(true), settings: renderSettings };
+const TABS = { tickets: renderTickets, quotas: () => renderQuotas(true), notices: () => renderNotices(true), sites: () => renderSites(true), diff: () => renderDiff(true), masters: () => renderMasters(true), specs: () => renderSpecs(true), inbox: () => renderInbox(true), settings: renderSettings };
 
 async function openTab(name) {
   state.tab = name;
@@ -1171,6 +1253,7 @@ async function boot() {
     if (state.tab === 'tickets' && state.tickets.length) drawTickets();
     else if (state.tab === 'sites' && state.sites) guard(() => renderSites(false));
     else if (state.tab === 'masters' && state.masters) guard(() => renderMasters(false));
+    else if (state.tab === 'specs' && state.specs) guard(() => renderSpecs(false));
   });
   loadLogin();
   // スマホ用のログインリンク（#t=…）。札はサーバーに送られない部分（#以降）に入れてある

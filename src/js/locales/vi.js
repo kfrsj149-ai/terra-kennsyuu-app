@@ -15,6 +15,7 @@ export default {
   'undo.removed': 'Đã xóa: {name}',
   'quick.recent': 'Đã sử dụng gần đây',
   'quick.others': 'Các mục khác',
+  'setup.spec': 'Chọn một quy cách để điền loài cây, chiều dài và đường kính',
   'common.ok': 'OK',
   'menu.title': 'Cài đặt và đăng ký trước',
   'menu.companies': 'Tên công ty',

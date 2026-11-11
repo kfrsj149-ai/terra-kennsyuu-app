@@ -728,6 +728,70 @@ test('【点検7】事務所の初期設定で、会社の一覧の索引が契�
 });
 
 /* ------------------------------------------------------------------
+ * 納入先ごとの規格リスト
+ * ------------------------------------------------------------------ */
+test('規格：事務所が登録すると、現場の端末が feed で受け取る。使わないものは送らず、備考など許可していない項目は送らない', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const put = (spec) => env.ok({ op: 'spec.put', token: a.token, spec });
+  const s1 = (await put({ destination: '秋田プライウッド', name: '3m 柱取り', species: 'スギ', lengthM: '3', minD: '14', maxD: '30', grade: 'A材', note: '社内メモ', price: 12345 })).spec;
+  assert.match(s1.id, /^[0-9A-HJKMNP-TV-Z]{8}$/);
+  assert.deepEqual([s1.minD, s1.maxD, s1.lengthM], [14, 30, '3']);
+  assert.equal('price' in s1, false);                          // 単価などの未知の項目は、保存もしない
+  const old = (await put({ destination: '秋田プライウッド', name: '古い規格', closed: true })).spec;
+  await put({ destination: '二和木材', name: '合板用', grade: '合板用' });
+
+  const list = (await env.ok({ op: 'spec.list', token: a.token })).specs;
+  assert.equal(list.length, 3);                                // 事務所の一覧には「使わない」ものも出る
+  assert.equal(list.find((x) => x.id === old.id).closed, true);
+  assert.equal(list.find((x) => x.id === s1.id).note, '社内メモ');
+
+  const feed = await env.ok({ op: 'feed', code: codeA });
+  assert.deepEqual(feed.specs.map((x) => x.name).sort(), ['3m 柱取り', '合板用']);
+  const sent = feed.specs.find((x) => x.id === s1.id);
+  assert.deepEqual(Object.keys(sent).sort(), ['destination', 'grade', 'id', 'lengthM', 'maxD', 'minD', 'name', 'species']);
+  assert.equal(JSON.stringify(feed).includes('社内メモ'), false);    // 備考は事務所だけ
+  assert.equal(JSON.stringify(feed).includes('12345'), false);       // 単価は、運転手の端末に届く情報には絶対に入れない
+});
+
+test('規格：長さ・太さの入力を確かめる。同じ納入先の中で名前は重ならない（別の納入先なら同じ名前でよい）', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const put = (spec) => ({ op: 'spec.put', token: a.token, spec });
+  await env.err(put({ destination: '工場', name: 'x', lengthM: '3.456' }), 'invalid');       // 小数は2桁まで
+  await env.err(put({ destination: '工場', name: 'x', lengthM: '0' }), 'invalid');
+  await env.err(put({ destination: '工場', name: 'x', lengthM: '長い' }), 'invalid');
+  await env.err(put({ destination: '工場', name: 'x', minD: '14' }), 'invalid');               // 太さは最小と最大をそろえる
+  await env.err(put({ destination: '工場', name: 'x', minD: '30', maxD: '14' }), 'invalid');
+  await env.err(put({ destination: '工場', name: 'x', minD: '0', maxD: '14' }), 'invalid');
+  await env.err(put({ destination: '', name: 'x' }), 'invalid');
+  await env.err(put({ destination: '工場', name: '' }), 'invalid');
+  await env.err(put({ destination: '工場', name: 'あ'.repeat(31) }), 'too_long');
+  const ok = (await env.ok(put({ destination: '工場', name: '３ｍ 柱', lengthM: '３．６５' }))).spec;
+  assert.equal(ok.name, '3m 柱');                                                              // 全角は半角にそろう
+  assert.equal(ok.lengthM, '3.65');
+  const taken = await env.err(put({ destination: '工場', name: '3M  柱' }), 'spec_name_taken');
+  assert.equal(taken.with.name, '3m 柱');
+  await env.ok(put({ destination: '別の工場', name: '3m 柱' }));
+  // 修正は、自分自身とはぶつからない。使わないにしても消えない
+  const fixed = (await env.ok(put({ id: ok.id, destination: '工場', name: '3m 柱', lengthM: '3.65', grade: 'B材' }))).spec;
+  assert.equal(fixed.grade, 'B材');
+  assert.equal(fixed.createdAt, ok.createdAt);
+  await env.err(put({ id: 'ZZZZZZZZ', destination: '工場', name: 'q' }), 'not_found');
+});
+
+test('規格：会社ごとに分かれていて、運転手（ライセンスコード）は登録できない', async () => {
+  const env = setupEnv();
+  const a = await companyWithOffice(env, codeA);
+  const b = await companyWithOffice(env, codeB);
+  await env.ok({ op: 'spec.put', token: a.token, spec: { destination: 'A社の工場', name: '3m' } });
+  assert.deepEqual((await env.ok({ op: 'feed', code: codeB })).specs, []);
+  assert.deepEqual((await env.ok({ op: 'spec.list', token: b.token })).specs, []);
+  await env.err({ op: 'spec.put', code: codeA, spec: { destination: 'A社の工場', name: 'x' } }, 'unauthorized', 401);
+  await env.err({ op: 'spec.list', token: 'forged' }, 'unauthorized', 401);
+});
+
+/* ------------------------------------------------------------------
  * 車番・納入先・樹種のマスター
  * ------------------------------------------------------------------ */
 test('マスター：事務所が登録すると、現場の端末が feed で受け取る。使わないものは送らない', async () => {
@@ -1065,6 +1129,7 @@ test('契約が終わって30日以内：事務所の画面は閲覧とダウン
     { op: 'ticket.setFactory', id: 'tk-0001', factoryNum: '1' },
     { op: 'ticket.delete', id: 'tk-0001' },
     { op: 'master.put', master: { kind: 'truck', name: '岩手100あ1' } },
+    { op: 'spec.put', spec: { destination: '秋田プライウッド', name: '3m' } },
     { op: 'office.resetCode' },
   ]) {
     const e = await env.err({ ...body, token: l.token }, 'read_only', 402);
