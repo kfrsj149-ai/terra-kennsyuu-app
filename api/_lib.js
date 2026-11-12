@@ -147,6 +147,17 @@ function periodEndMs(sub) {
   return sec ? sec * 1000 : null;
 }
 
+/**
+ * 契約台数（頭の数）。Stripeの契約の数量（quantity）をそのまま使う。
+ * 数量が読めないときは null（アプリ側は「台数の制限なし」として動く）。
+ */
+export function seatsOf(sub) {
+  const items = sub?.items?.data;
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const n = items.reduce((sum, item) => sum + (Number.isInteger(item?.quantity) && item.quantity > 0 ? item.quantity : 0), 0);
+  return n > 0 ? n : null;
+}
+
 export function describeSubscription(sub) {
   const active = ACTIVE_STATUSES.has(sub?.status);
   return {
@@ -154,6 +165,7 @@ export function describeSubscription(sub) {
     rawStatus: sub?.status ?? null,
     expiresAt: periodEndMs(sub),
     cancelAtPeriodEnd: Boolean(sub?.cancel_at_period_end),
+    seats: seatsOf(sub),
   };
 }
 

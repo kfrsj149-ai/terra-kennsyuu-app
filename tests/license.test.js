@@ -74,6 +74,27 @@ test('有効期限は items 側・本体側のどちらに入っていても取�
   assert.equal(lib.describeSubscription({ ...SUB, status: 'canceled' }).status, 'canceled');
 });
 
+test('契約台数（seats）は、Stripeの契約の数量。読めなければ null（アプリは制限なしで動く）', () => {
+  assert.equal(lib.describeSubscription({ ...SUB, items: { data: [{ quantity: 5, current_period_end: ONE_YEAR_LATER }] } }).seats, 5);
+  assert.equal(lib.describeSubscription({ ...SUB, items: { data: [{ quantity: 2 }, { quantity: 3 }] } }).seats, 5);   // 明細が複数なら合計
+  assert.equal(lib.describeSubscription({ status: 'active', items: { data: [] } }).seats, null);
+  assert.equal(lib.describeSubscription({ status: 'active' }).seats, null);
+  assert.equal(lib.describeSubscription({ status: 'active', items: { data: [{ quantity: 0 }] } }).seats, null);
+  assert.equal(lib.describeSubscription({ status: 'active', items: { data: [{ quantity: 1.5 }] } }).seats, null);
+});
+
+test('有効化と確認の返事に seats が入る', async () => {
+  const sub = { ...SUB, items: { data: [{ quantity: 6, current_period_end: ONE_YEAR_LATER }] } };
+  const res = mockRes();
+  await withFetch({ '/checkout/sessions/cs_SEATS': { id: 'cs_SEATS', subscription: sub } }, () =>
+    activate({ method: 'POST', body: { sessionId: 'cs_SEATS' } }, res));
+  assert.equal(res.out.body.seats, 6);
+  const res2 = mockRes();
+  await withFetch({ '/subscriptions/sub_TEST': sub }, () =>
+    verify({ method: 'POST', body: { code: res.out.body.code } }, res2));
+  assert.equal(res2.out.body.seats, 6);
+});
+
 test('POST以外は405で弾く', async () => {
   const res = mockRes();
   await verify({ method: 'GET' }, res);

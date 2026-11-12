@@ -145,6 +145,7 @@ test('印刷に必要なファイルが、オフラインで読めるようServi
   assert.match(sw, /\.\/src\/js\/lastsetup\.js/);
   assert.match(sw, /\.\/src\/js\/backnav\.js/);
   assert.match(sw, /\.\/src\/js\/specs\.js/);
+  assert.match(sw, /\.\/src\/js\/pricing\.js/);
   assert.ok(existsSync(new URL('../src/js/slip.js', import.meta.url)));
   assert.ok(existsSync(new URL('../src/css/slip.css', import.meta.url)));
   // キャッシュ名は sw.js と config.js で一致している

@@ -6,7 +6,7 @@ export const CONFIG = {
   appName: 'LOG-RA',
 
   /** Service Worker のキャッシュ世代。アプリを更新したら必ず上げる */
-  cacheVersion: 'terra-kennsyuu-v30',
+  cacheVersion: 'terra-kennsyuu-v31',
 
   /** 見た目・操作感の調整値 */
   ui: {
@@ -38,10 +38,14 @@ export const CONFIG = {
    * テスト用のURLと本番用のURLは別物なので、本番公開時に差し替えること。
    */
   stripe: {
-    /** 購入ページ（Stripe Payment Link）。テスト用リンクは test_ を含む */
-    checkoutUrl: 'https://buy.stripe.com/test_14A4gzf849Ck2NQ8EUfjG01',
-    /** 表示用の価格。特商法表記・アプリ内表示と必ず一致させる */
-    priceLabel: '年額 9,800円（税込）',
+    /** 購入ページ（Stripe Payment Link）。通常の料金。テスト用リンクは test_ を含む */
+    checkoutUrl: 'https://buy.stripe.com/test_bJe5kD2li3dWgEGdZefjG03',
+    /** 初年度の特典（2台目から5,000円）の購入ページ。earlyUntil（日本時間）までの申込に使う */
+    earlyCheckoutUrl: 'https://buy.stripe.com/test_dRm4gz1heaGo88a1csfjG02',
+    earlyUntil: '2026-12-31',
+    /** 表示用の価格。特商法表記・Stripeの価格と必ず一致させる（すべて税込） */
+    priceLabel: '1台目 年額 9,800円／2台目から 1台ごとに 年額 7,500円（税込）',
+    earlyPriceLabel: '1台目 年額 9,800円／2台目から 1台ごとに 年額 5,000円（初年度のみ・税込）',
   },
 
   /**

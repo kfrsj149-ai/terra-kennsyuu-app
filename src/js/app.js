@@ -21,6 +21,7 @@ import * as officeSync from './office-sync.js';
 import { validateSlip, renderSlip, ticketSlips } from './slip.js';
 import { initViewport } from './viewport.js';
 import { initBackNav } from './backnav.js';
+import { checkoutUrl, priceLabel } from './pricing.js';
 import { specsFor, specSetup, specStillMatches } from './specs.js';
 import { activeOf, isResting, planActivate, registerAsResting } from './fleet.js';
 import { LAST_SETUP_KEY, lastSetupOf, restorableLastSetup } from './lastsetup.js';
@@ -429,8 +430,8 @@ function renderSetupStatics() {
       sel.appendChild(opt);
     }
   }
-  $('#buy-link').href = CONFIG.stripe.checkoutUrl;
-  $('#price-note').textContent = CONFIG.stripe.priceLabel;
+  $('#buy-link').href = checkoutUrl();
+  $('#price-note').textContent = priceLabel();
   renderRange();
 }
 
