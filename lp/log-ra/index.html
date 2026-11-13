@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LOG-RA（ログラ）｜丸太検収アプリ・圏外でも使える · TERRA TX</title>
+<meta name="description" content="山と土場の丸太検収を、圏外でも手袋のままで。径級ごとの本数と小計材積がその場で見える、JAS準拠の丸太検収アプリ（PWA）。年額9,800円（税込）から。">
+<link rel="canonical" href="https://terra-tx-jp.com/log-ra/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="LOG-RA · TERRA TX">
+<meta property="og:title" content="LOG-RA — 丸太検収アプリ">
+<meta property="og:description" content="山と土場の丸太検収を、圏外でも手袋のままで。径級ごとの小計材積がその場で見える。">
+<meta property="og:url" content="https://terra-tx-jp.com/log-ra/">
+<meta property="og:image" content="https://terra-tx-jp.com/log-ra/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="LOG-RA 丸太検収アプリ。径級をタップするだけ。">
+<meta property="og:locale" content="ja_JP">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0f2a1e">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"LOG-RA","alternateName":["ログラ","丸太検収アプリ"],"applicationCategory":"BusinessApplication","operatingSystem":"Android, iOS（ブラウザ・ホーム画面に追加）","inLanguage":["ja","vi","tl","th","ms"],"description":"山と土場の丸太検収用のアプリ。径級ごとの本数と小計材積をその場で表示し、圏外でも動作する。","offers":{"@type":"Offer","price":"9800","priceCurrency":"JPY","description":"年額（税込）。1台目9,800円、2台目から1台ごとに7,500円。"},"publisher":{"@type":"Organization","name":"TERRA TX","url":"https://terra-tx-jp.com/"}}</script>
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon-96.png" type="image/png" sizes="96x96">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>
+  /*
+   * LOG-RA のテーマカラー
+   *   ベース  … TERRA TX 共通の深い森の緑（トップ・Logging Scorer と同じ）
+   *   木口    … 丸太の切り口の色（クリーム）。見出し・数字・価格に使う
+   *   検収朱  … 検収の印の朱。ボタンと強調に使う（Logging Scorer の橙・ライムとは別の色）
+   * 色を変えるときは、この :root だけを書き換える。
+   */
+  :root{
+    --bg:#0f2a1e; --bg2:#13402c; --panel:#194d35; --border:#2c6647;
+    --silver:#eef1ec; --silver-dim:#a9bdae;
+    --cream:#f1dfb0; --cream-dim:#cdbb8a;
+    --seal:#d9402a; --seal-ink:#ffffff;
+    --font: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  [hidden]{display:none !important;}
+  html{scroll-behavior:smooth;}
+  body{margin:0; background:var(--bg); color:var(--silver); font-family:var(--font); line-height:1.8;}
+  a{color:var(--cream);}
+  .wrap{max-width:720px; margin:0 auto; padding:0 20px;}
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  a.back{font-size:12px; color:var(--silver-dim); text-decoration:none; display:inline-block; margin:20px 0;}
+
+  /* ヒーロー */
+  .hero{
+    position:relative; overflow:hidden; text-align:center;
+    background:linear-gradient(180deg, var(--bg2) 0%, var(--bg) 100%);
+    padding:20px 20px 48px; border-bottom:1px solid var(--border);
+  }
+  .rings{position:absolute; right:-90px; top:-70px; width:340px; height:340px; opacity:.16; pointer-events:none;}
+  .hero > *:not(.rings){position:relative;}
+  .logo{display:inline-flex; align-items:center; gap:12px; font-size:34px; font-weight:900; letter-spacing:.03em; margin:8px 0 10px; color:var(--cream);}
+  .logo .ra{color:var(--seal);}
+  .stamp{
+    display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%;
+    border:2.5px solid var(--seal); color:var(--seal); font-size:18px; font-weight:900; transform:rotate(-10deg); line-height:1;
+  }
+  .lead{font-size:19px; font-weight:800; color:var(--silver); margin:6px auto 6px; max-width:460px; line-height:1.55;}
+  .sub{font-size:14px; color:var(--silver-dim); max-width:460px; margin:0 auto 22px;}
+  .price{
+    display:inline-flex; align-items:baseline; gap:6px; background:var(--panel);
+    border:1px solid var(--border); border-radius:12px; padding:12px 20px; margin-bottom:8px;
+  }
+  .price b{font-size:28px; color:var(--cream); font-weight:900;}
+  .price span{font-size:12.5px; color:var(--silver-dim);}
+  .offer{font-size:13px; color:var(--cream); font-weight:700; margin:0 0 20px;}
+  .cta{
+    display:inline-block; background:var(--seal); color:var(--seal-ink); font-weight:900; font-size:16px;
+    text-decoration:none; padding:14px 34px; border-radius:10px; min-height:48px;
+  }
+  .cta.is-disabled{background:transparent; color:var(--silver-dim); border:2px dashed var(--border); cursor:default;}
+  .cta.secondary{background:transparent; color:var(--cream); border:2px solid var(--cream-dim); font-weight:700; font-size:14px; padding:11px 24px; margin-top:12px;}
+  .cta.ghost{background:transparent; color:var(--silver-dim); border:1px solid var(--border); font-weight:600; font-size:13px; padding:10px 22px; margin-top:12px;}
+
+  /* セクション共通 */
+  section{padding:42px 0;}
+  h2{font-size:12px; letter-spacing:.25em; color:var(--silver-dim); font-weight:700; margin:0 0 20px; text-align:center;}
+  h2 em{display:block; font-style:normal; font-size:20px; letter-spacing:.02em; color:var(--cream); margin-top:6px; line-height:1.5;}
+  .cards{display:flex; flex-direction:column; gap:12px;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px;}
+  .card b{display:block; font-size:15px; color:var(--silver); margin-bottom:4px;}
+  .card span, .card p{font-size:13.5px; color:var(--silver-dim); margin:0;}
+  .card.hl{border-left:4px solid var(--seal);}
+
+  /* スクリーンショット */
+  .shots{display:flex; gap:14px; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; padding:0 0 10px; margin:0 -4px;}
+  .shots figure{flex:0 0 72%; max-width:260px; scroll-snap-align:center; margin:0 4px;}
+  .shots img{width:100%; border-radius:16px; border:1px solid var(--border); display:block; aspect-ratio:390/844; object-fit:cover; background:var(--panel);}
+  .shots figcaption{font-size:12.5px; color:var(--silver-dim); text-align:center; margin-top:8px; line-height:1.55;}
+  .hint{font-size:11.5px; color:var(--silver-dim); text-align:center; margin:-8px 0 12px;}
+  @media (min-width:900px){ .hint{display:none;} .shots{justify-content:center; flex-wrap:wrap; overflow:visible;} .shots figure{flex:0 0 146px;} }
+  figure{margin:0 0 24px;}
+
+  /* 使い方 */
+  .steps{counter-reset:s; display:flex; flex-direction:column; gap:12px;}
+  .step{counter-increment:s; background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 20px 16px 62px; position:relative;}
+  .step::before{
+    content:counter(s); position:absolute; left:18px; top:16px; width:30px; height:30px; border-radius:50%;
+    background:var(--seal); color:var(--seal-ink); font-weight:900; display:flex; align-items:center; justify-content:center;
+  }
+  .step b{display:block; font-size:15px; color:var(--silver); margin-bottom:2px;}
+  .step span{font-size:13.5px; color:var(--silver-dim);}
+
+  /* 料金 */
+  .plan{background:var(--panel); border:1px solid var(--border); border-radius:16px; padding:22px 20px; text-align:center;}
+  .plan .big{font-size:15px; color:var(--silver);}
+  .plan .big b{font-size:30px; color:var(--cream); font-weight:900; margin:0 4px;}
+  .plan p{font-size:13px; color:var(--silver-dim); margin:10px 0 0;}
+  .plan .note{color:var(--cream);}
+  table.ex{width:100%; border-collapse:collapse; margin:18px 0 4px; font-size:13.5px;}
+  table.ex th, table.ex td{border-bottom:1px solid var(--border); padding:9px 6px; text-align:right; white-space:nowrap;}
+  table.ex th:first-child, table.ex td:first-child{text-align:left;}
+  table.ex th{color:var(--silver-dim); font-weight:700; font-size:12px;}
+  table.ex td.em{color:var(--cream); font-weight:800;}
+  .buy{margin-top:18px;}
+
+  /* ホーム画面に追加 */
+  .a2hs{display:grid; grid-template-columns:1fr; gap:12px;}
+  @media (min-width:640px){ .a2hs{grid-template-columns:1fr 1fr;} }
+  .a2hs ol{margin:8px 0 0; padding-left:1.3em; font-size:13.5px; color:var(--silver-dim); line-height:1.75;}
+  .a2hsNote{font-size:12.5px; color:var(--cream); line-height:1.6; margin:12px 0 0;}
+  .lead2{font-size:13.5px; color:var(--silver-dim); margin:0 0 14px; text-align:center;}
+
+  details.faq{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:0 20px; margin-bottom:10px;}
+  details.faq summary{cursor:pointer; padding:15px 0; font-size:14.5px; font-weight:700; color:var(--silver); list-style:none; min-height:48px;}
+  details.faq summary::-webkit-details-marker{display:none;}
+  details.faq summary::after{content:"＋"; float:right; color:var(--cream);}
+  details.faq[open] summary::after{content:"－";}
+  details.faq p{font-size:13.5px; color:var(--silver-dim); margin:0 0 16px;}
+
+  .notice{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; font-size:12.5px; color:var(--silver-dim);}
+  footer{border-top:1px solid var(--border); padding:30px 0 48px; text-align:center; font-size:12.5px; color:var(--silver-dim);}
+  footer .links{display:flex; flex-wrap:wrap; gap:6px 18px; justify-content:center; margin-bottom:14px;}
+  footer a{color:var(--silver-dim);}
+  .draft{background:#4a3a1f; color:#f3dca8; font-size:12px; text-align:center; padding:6px 10px;}
+</style>
+</head>
+<body>
+
+<!-- 下書き用の帯。公開するときはこの1行を消す -->
+<div class="draft">下書き（購入リンクはまだ入れていません）</div>
+
+<div class="hero">
+  <div class="wrap topbar"><a class="back" href="../">← TERRA TX home</a></div>
+  <!-- 年輪（丸太の切り口）の飾り -->
+  <svg class="rings" viewBox="0 0 200 200" aria-hidden="true" fill="none" stroke="#f1dfb0" stroke-width="2">
+    <circle cx="100" cy="100" r="96"/><circle cx="100" cy="100" r="80"/><circle cx="100" cy="100" r="64"/>
+    <circle cx="100" cy="100" r="49"/><circle cx="100" cy="100" r="35"/><circle cx="100" cy="100" r="22"/><circle cx="100" cy="100" r="10"/>
+  </svg>
+  <div class="logo"><span class="stamp" aria-hidden="true">検</span><span>LOG<span class="ra">-RA</span></span></div>
+  <p class="lead">山と土場の丸太検収を、<br>圏外でも、手袋のままで。</p>
+  <p class="sub">径級をタップするだけ。径級ごとの本数と小計材積が、その場で見える。JAS準拠の丸太検収アプリです。</p>
+  <div class="price"><b>9,800円</b><span>／年（税込・1台目）</span></div>
+  <p class="offer when-early">12月31日までのお申し込みは、2台目から5,000円（初年度のみ）</p>
+  <div><a class="cta" href="#price">料金と申し込み</a></div>
+  <div><a class="cta ghost" href="https://log-ra.terra-tx-jp.com/">購入済みの方：アプリを開く →</a></div>
+</div>
+
+<div class="wrap">
+
+  <section>
+    <h2>FEATURES<em>現場で困っていたことを、解決しました</em></h2>
+    <div class="cards">
+      <div class="card hl"><b>径級ごとの本数と小計材積が、その場で見える</b><span>径級のカードに「本数」と「小計材積」を並べて表示。合計も、タップするたびに更新されます。</span></div>
+      <div class="card hl"><b>圏外でも止まらない</b><span>山の中でも、機内モードでも、そのまま起動して計測できます。入力は、押した瞬間に端末へ保存。通信が戻ってからの作業は要りません。</span></div>
+      <div class="card hl"><b>取り消しても、履歴に残る</b><span>「直前取消」は、履歴から消さずに、取り消し線で残します。何を取り消したか、あとから分かります。</span></div>
+      <div class="card hl"><b>必要なものだけを、大きく</b><span>計測画面には、樹種・長さ・径級・本数・材積だけ。車番や現場は、画面に出さず、裏で記録します。炎天下・手袋・騒音の中でも押せる大きさです。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>SCREENSHOTS<em>これが実際の画面です</em></h2>
+    <p class="hint">← 横にスワイプ →</p>
+    <div class="shots">
+      <figure>
+        <img src="shots/ja/app-setup.jpg" alt="検収の準備画面。樹種・規格長さ・径級の範囲を選ぶ" loading="lazy">
+        <figcaption>① 準備：樹種・長さ・径級の範囲を選ぶ。前回の設定が入ります</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/ja/app-measure.jpg" alt="計測画面。径級のカードをタップして本数を数える" loading="lazy">
+        <figcaption>② 計測：径級カードをタップで＋1。長押しで−1。取り消しは取り消し線で残ります</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/ja/app-output.jpg" alt="出力内容の確認。径級ごとの単材積・本数・小計材積" loading="lazy">
+        <figcaption>③ 出力：径級ごとの単材積・本数・小計を確認して、LINE・メール・CSVで送る</figcaption>
+      </figure>
+      <figure>
+        <img src="shots/ja/app-paper.jpg" alt="紙伝票の形で見る。手書き伝票と同じ用紙に数字が入る" loading="lazy">
+        <figcaption>紙しか受け付けない工場へ：手書き伝票と同じ用紙の形で見て、書き写せます</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section>
+    <h2>HOW IT WORKS<em>使い方は、4つだけ</em></h2>
+    <div class="steps">
+      <div class="step"><b>準備する</b><span>樹種・規格長さ・径級の範囲・車番・納入先を選びます。2回目からは、前回の設定が入っています。</span></div>
+      <div class="step"><b>数える</b><span>径級のカードをタップするだけ。間違えたら「直前取消」か、カードの長押しで−1。</span></div>
+      <div class="step"><b>確認して出力する</b><span>径級ごとの本数と材積を見て、「はい」。LINE・メール・Googleドライブなどへ共有できます。CSVは端末にも保存できます。</span></div>
+      <div class="step"><b>履歴を見る</b><span>出力した伝票は全件、端末に残ります。あとから見直して、再出力もできます。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>DETAILS<em>しっかり使える機能</em></h2>
+    <div class="cards">
+      <div class="card"><b>材積は、JAS（末口二乗法）で正確に</b><span>素材の日本農林規格の式で、整数演算で計算します。公的な丸太材積表（長野県「林業積算基準」）の全1,578セルと照合して、すべて一致しています。</span></div>
+      <div class="card"><b>車を入れ替えても、台数は増えない</b><span>車番は無制限に登録できます。数えるのは「使用中」の車番だけ。車検や修理の代車は、「休み」と入れ替えるだけです。</span></div>
+      <div class="card"><b>1台に複数の材を積んでも1枚の伝票に</b><span>樹種・長さ・現場がちがう材を、ひとつの便にまとめて計測できます（設定のスイッチで有効にします）。</span></div>
+      <div class="card"><b>手書き伝票を、そのまま印刷</b><span>径級・単材積・本数の枠（1桁ずつ）つきのA4用紙を、端末から印刷できます。圏外でも動きます。</span></div>
+      <div class="card"><b>5つの言語</b><span>日本語・ベトナム語・タガログ語・タイ語・マレー語。画面もCSVの見出しも切り替わります。</span></div>
+      <div class="card"><b>音声入力（補助）</b><span>「18、22、22、24」と続けて読み上げると、順に入ります。通信できるときだけ使える補助機能です。圏外では、タップ入力に切り替わります。</span></div>
+      <div class="card"><b>事務所の画面（試験運用中）</b><span>現場から届いた便の管理、納入枠とお知らせ、工場の検収値との差の分析、全データのダウンロード。現場の端末と、通信できるときに自動でつながります。</span></div>
+    </div>
+  </section>
+
+  <section id="price">
+    <h2>PRICE<em>料金は、台数に応じた年額</em></h2>
+    <div class="plan">
+      <div class="big when-normal" hidden>1台目 <b>9,800円</b> ／ 2台目から1台ごとに <b>7,500円</b></div>
+      <div class="big when-early">1台目 <b>9,800円</b> ／ 2台目から1台ごとに <b>5,000円</b></div>
+      <p class="note when-early">初年度のみ。2026年12月31日までのお申し込みが対象です。2年目以降と、2027年1月1日以降のお申し込みは、2台目から7,500円。</p>
+      <p>年額・税込。台数が多いときは、合計が150,000円で頭打ちです（通常価格では20台目から）。</p>
+      <table class="ex" aria-label="台数ごとの年額の例">
+        <thead><tr><th>台数</th><th>通常</th><th class="when-early">12/31までの申込（初年度）</th></tr></thead>
+        <tbody>
+          <tr><td>1台</td><td>9,800円</td><td class="em when-early">9,800円</td></tr>
+          <tr><td>3台</td><td>24,800円</td><td class="em when-early">19,800円</td></tr>
+          <tr><td>5台</td><td>39,800円</td><td class="em when-early">29,800円</td></tr>
+          <tr><td>10台</td><td>77,300円</td><td class="em when-early">54,800円</td></tr>
+          <tr><td>20台</td><td>150,000円</td><td class="em when-early">104,800円</td></tr>
+        </tbody>
+      </table>
+      <p>台数は「頭」の数です。トラクタ・トラックを数え、トレーラーと、運転手や事務員の人数は数えません。予備車は「休み」にしておけば数えません。</p>
+      <div class="buy">
+        <!--
+          BUY-LINK：公開するときに、本番の購入リンクをここに入れる（いまは空のまま）。
+            data-early  … 2026-12-31 までのリンク（初年度特典）
+            data-normal … 2027-01-01 からのリンク（通常価格）
+          どちらも空の間は、ボタンは「準備中」と出て、押せません。
+        -->
+        <a id="buy" class="cta is-disabled" aria-disabled="true" data-early="" data-normal="">お申し込みは、準備中です</a>
+      </div>
+      <p>解約・支払い方法の変更は、アプリのメニュー「支払い・プラン管理」から、いつでもできます。</p>
+    </div>
+  </section>
+
+  <section id="a2hs">
+    <h2>INSTALL<em>アプリとして使う（ホーム画面に追加）</em></h2>
+    <p class="lead2">アプリストアは使いません。ブラウザで開いて、ホーム画面に追加すると、アイコンから開けて、圏外でも動きます。</p>
+    <div class="a2hs">
+      <div class="card">
+        <b>Android（Chrome）</b>
+        <ol>
+          <li>右上の「⋮」（三点）をタップ</li>
+          <li>「ホーム画面に追加」または「アプリをインストール」</li>
+          <li>「インストール」をタップ</li>
+        </ol>
+      </div>
+      <div class="card">
+        <b>iPhone / iPad（Safari）</b>
+        <ol>
+          <li>下の共有ボタン（□に↑）をタップ</li>
+          <li>「ホーム画面に追加」を選ぶ</li>
+          <li>右上の「追加」をタップ</li>
+        </ol>
+      </div>
+    </div>
+    <p class="a2hsNote" style="text-align:center;">LINEやInstagramの中で開いたときは、右上の「…」から「ブラウザで開く」を選んでから、追加してください。</p>
+  </section>
+
+  <section>
+    <h2>FAQ<em>よくある質問</em></h2>
+    <details class="faq"><summary>本当に、電波がなくても使えますか？</summary><p>使えます。いちど開いたあとは、機内モードでも起動して、計測・保存・CSVの作成ができます。通信が必要なのは、契約の確認（1日に1回、通信できるとき）と、音声入力、事務所とのデータ共有だけです。</p></details>
+    <details class="faq"><summary>台数は、どう数えますか？</summary><p>トラクタ・トラックの「頭」の数です。トレーラーは数えません。車番は何台でも登録でき、数えるのは「使用中」にしたものだけです。</p></details>
+    <details class="faq"><summary>データは、どこに保存されますか？</summary><p>入力した内容と、出力した伝票は、お使いの端末の中に保存されます。端末を替えるときは、ライセンスコードかご購入時のメールアドレスで、使い始められます。</p></details>
+    <details class="faq"><summary>途中で、やめることはできますか？</summary><p>できます。アプリのメニュー「支払い・プラン管理」から、いつでも解約できます。返金の考え方は、返金方針のページに書いてあります。</p></details>
+    <details class="faq"><summary>質問や不具合は、どこへ連絡しますか？</summary><p><a href="mailto:support@terra-tx-jp.com">support@terra-tx-jp.com</a> へどうぞ。</p></details>
+  </section>
+
+  <section>
+    <div class="notice">
+      LOG-RAは、現場の経験をもとに、林業従事者自らが作っているツールです。材積は、素材の日本農林規格（末口二乗法）の式による計算です。取引上の数量の取り決めは、お取引先との契約によります。
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="links">
+    <a href="https://log-ra.terra-tx-jp.com/legal/tokushoho/">特定商取引法に基づく表記</a>
+    <a href="https://log-ra.terra-tx-jp.com/legal/terms/">利用規約</a>
+    <a href="https://log-ra.terra-tx-jp.com/legal/privacy/">プライバシーポリシー</a>
+    <a href="https://log-ra.terra-tx-jp.com/legal/refund/">返金方針</a>
+  </div>
+  <div>© TERRA TX（TERRA TACTICAL TRANSFORMATION）　<a href="mailto:support@terra-tx-jp.com">support@terra-tx-jp.com</a></div>
+</footer>
+
+<script>
+  /* 日付（日本時間）で、特典の期間の表示と購入リンクを切り替える。アプリの src/js/pricing.js と同じ考え方 */
+  (function () {
+    var EARLY_UNTIL = '2026-12-31';
+    var jst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    var early = jst <= EARLY_UNTIL;
+    document.querySelectorAll('.when-early').forEach(function (e) { e.hidden = !early; });
+    document.querySelectorAll('.when-normal').forEach(function (e) { e.hidden = early; });
+    var b = document.getElementById('buy');
+    var url = early ? b.getAttribute('data-early') : b.getAttribute('data-normal');
+    if (url) {
+      b.href = url;
+      b.classList.remove('is-disabled');
+      b.removeAttribute('aria-disabled');
+      b.textContent = '年額プランを申し込む';
+    }
+  })();
+</script>
+</body>
+</html>
