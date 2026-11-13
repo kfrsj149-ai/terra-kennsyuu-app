@@ -231,4 +231,9 @@ export default {
   'measure.voiceBatch': 'Đã nhập {count} cây: {list}',
   'measure.voiceSkipped': 'Đã nhập {count} cây: {list} (không nhập: {skipped})',
   'setup.prefilled': 'Đã điền sẵn cài đặt lần trước. Chỉ cần sửa chỗ khác.',
+  'setup.needTruckRegister': 'Chưa đăng ký biển số xe tải. Hãy đăng ký biển số ở menu trước',
+  'history.emptyHint': 'Chưa có phiếu nào. Sau khi đo và xuất, phiếu sẽ được lưu ở đây',
+  'history.startNow': 'Bắt đầu đo',
+  'menu.search': 'Tìm trong menu (ví dụ: biển số, ngôn ngữ)',
+  'menu.searchNone': 'Không tìm thấy',
 };

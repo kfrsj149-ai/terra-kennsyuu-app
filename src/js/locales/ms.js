@@ -231,4 +231,9 @@ export default {
   'measure.voiceBatch': '{count} batang dimasukkan: {list}',
   'measure.voiceSkipped': '{count} batang dimasukkan: {list} (tidak dimasukkan: {skipped})',
   'setup.prefilled': 'Tetapan kali lepas telah diisi. Ubah bahagian yang berbeza sahaja.',
+  'setup.needTruckRegister': 'Nombor plat lori belum didaftarkan. Sila daftarkan di menu dahulu',
+  'history.emptyHint': 'Belum ada nota hantar. Selepas mengukur dan mengeksport, ia disimpan di sini',
+  'history.startNow': 'Mula mengukur',
+  'menu.search': 'Cari dalam menu (cth: nombor plat, bahasa)',
+  'menu.searchNone': 'Tidak dijumpai',
 };

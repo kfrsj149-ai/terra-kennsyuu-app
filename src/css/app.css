@@ -718,3 +718,21 @@ details.more > summary { min-height: 52px; display: flex; align-items: center; f
 /* 出力確認の「紙伝票の形で見る」「端末に保存」／履歴の操作ボタン */
 .out-actions, .ticket .actions { display: flex; gap: 8px; margin-top: 8px; }
 .out-actions .btn, .ticket .actions .btn { flex: 1; margin-top: 0; }
+
+/* ---------------- 迷わない（足りない項目の目印・メニューの検索） ---------------- */
+/* 色だけに頼らない：赤い枠＋⚠＋言葉（トースト） */
+.field.is-needed > label { color: var(--c-danger); }
+.field.is-needed > label::before { content: '⚠ '; }
+.field.is-needed input,
+.field.is-needed select,
+.field.is-needed .picker { outline: 3px solid var(--c-danger); outline-offset: 1px; border-radius: var(--r-md); }
+.menu-section.is-needed > h3 { color: var(--c-danger); }
+.menu-section.is-needed > h3::before { content: '⚠ '; }
+.menu-section.is-needed .inline-add input { outline: 3px solid var(--c-danger); outline-offset: 1px; }
+.menu-search { margin-bottom: 12px; }
+.menu-search input {
+  width: 100%; min-height: var(--tap-min); padding: 8px 10px; font-size: 1rem;
+  border: 2px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface);
+}
+.menu-section.is-filtered-out { display: none; }
+.hist-empty { display: flex; flex-direction: column; gap: 10px; padding: 8px 0; }

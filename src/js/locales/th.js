@@ -231,4 +231,9 @@ export default {
   'measure.voiceBatch': 'ป้อน {count} ท่อนแล้ว: {list}',
   'measure.voiceSkipped': 'ป้อน {count} ท่อนแล้ว: {list} (ไม่ได้ป้อน: {skipped})',
   'setup.prefilled': 'ใส่ค่าที่ตั้งไว้ครั้งก่อนให้แล้ว แก้เฉพาะส่วนที่ต่างไป',
+  'setup.needTruckRegister': 'ยังไม่ได้ลงทะเบียนทะเบียนรถบรรทุก กรุณาลงทะเบียนในเมนูก่อน',
+  'history.emptyHint': 'ยังไม่มีใบส่งของ เมื่อวัดและส่งออกแล้ว จะเก็บไว้ที่นี่',
+  'history.startNow': 'เริ่มวัด',
+  'menu.search': 'ค้นหาในเมนู (เช่น ทะเบียนรถ ภาษา)',
+  'menu.searchNone': 'ไม่พบ',
 };

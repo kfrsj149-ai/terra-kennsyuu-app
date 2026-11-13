@@ -167,6 +167,11 @@
     <button class="bar-btn" id="drawer-close" data-i18n-aria="common.close" aria-label="閉じる">✕</button>
   </div>
   <div class="drawer-body scroll">
+    <!-- メニューが長いので、探したい項目の言葉（車番・言語など）で絞り込む -->
+    <div class="menu-search">
+      <input type="text" id="menu-search" autocomplete="off" enterkeyhint="search" data-i18n-placeholder="menu.search" placeholder="メニューを探す（例：車番、言語）">
+    </div>
+    <p class="note" id="menu-search-none" data-i18n="menu.searchNone" hidden>見つかりません</p>
     <!-- 計測中だけ出る。押しても、すぐには戻らず、確認の画面を挟む -->
     <div class="menu-section" id="home-section" hidden>
       <button type="button" class="btn btn-sm btn-danger" id="go-home" data-i18n="home.menu">計測をやめてホームへ戻る</button>

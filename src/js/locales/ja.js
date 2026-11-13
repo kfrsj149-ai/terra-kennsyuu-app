@@ -231,4 +231,9 @@ export default {
   'measure.voiceBatch': '{count}本を入れました：{list}',
   'measure.voiceSkipped': '{count}本を入れました：{list}（入れなかった数：{skipped}）',
   'setup.prefilled': '前回の設定を入れてあります。違うところだけ変えてください',
+  'setup.needTruckRegister': '車番がまだ登録されていません。メニューで、先に車番を登録してください',
+  'history.emptyHint': 'まだ伝票がありません。計測して出力すると、ここに残ります',
+  'history.startNow': '計測を始める',
+  'menu.search': 'メニューを探す（例：車番、言語）',
+  'menu.searchNone': '見つかりません',
 };

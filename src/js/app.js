@@ -501,22 +501,29 @@ function renderRange() {
 function readSetup() {
   const species = $('#in-species').value.trim();
   const lengthRaw = $('#in-length').value.trim();
-  if (!species) return { error: t('setup.needSpecies') };
+  // field：足りない項目。開始ボタンを押したとき、その項目に赤い枠と⚠を付けて、画面を寄せる（markNeeded）
+  if (!species) return { error: t('setup.needSpecies'), field: '#in-species' };
   let lengthM;
   try {
     lengthM = formatLength(toHundredths(lengthRaw));
   } catch {
-    return { error: t('setup.needLength') };
+    return { error: t('setup.needLength'), field: '#in-length' };
   }
-  if (Number(lengthM) <= 0) return { error: t('setup.needLength') };
-  if (state.setup.minD > state.setup.maxD) return { error: t('setup.needRange') };
+  if (Number(lengthM) <= 0) return { error: t('setup.needLength'), field: '#in-length' };
+  if (state.setup.minD > state.setup.maxD) return { error: t('setup.needRange'), field: '#val-min' };
   /*
    * 車番は必須。
    * 工場側は「どの会社の、どの車で来た荷か」でこの伝票を探すことになるため、
    * 車番が入っていない伝票は工場で永久に見つからない。
    * 後から必須に変えると既に溜まった伝票が壊れるので、先に入れておく。
    */
-  if (!$('#in-truck').value) return { error: t('setup.needTruck') };
+  if (!$('#in-truck').value) {
+    // 車番がひとつも登録されていないときは、選ぶものが無い。メニューの車番の欄へ案内する（行き止まりにしない）
+    const registered = [...$('#in-truck').options].some((o) => o.value);
+    return registered
+      ? { error: t('setup.needTruck'), field: '#in-truck' }
+      : { error: t('setup.needTruckRegister'), field: '#in-truck', openMenuList: 'truck' };
+  }
   return {
     species,
     lengthM,
@@ -529,6 +536,48 @@ function readSetup() {
     note: $('#in-note').value.trim(),
     specName: chosenSpecName(),
   };
+}
+
+/**
+ * 足りない項目の目印。赤い枠＋⚠＋（トーストの）言葉の3つで示し、その項目まで画面を寄せる。
+ * 入れ直す・選び直すと消える。何秒かで勝手には消さない（直すまで、どこが足りないか分かるように）
+ */
+function markNeeded(selector) {
+  clearNeeded();
+  const el = selector ? $(selector) : null;
+  const box = el && el.closest('.field');
+  if (!box) return;
+  box.classList.add('is-needed');
+  box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  const off = () => { box.classList.remove('is-needed'); };
+  for (const ev of ['input', 'change', 'click']) box.addEventListener(ev, off, { once: true });
+}
+function clearNeeded() {
+  document.querySelectorAll('.field.is-needed, .menu-section.is-needed').forEach((e) => e.classList.remove('is-needed'));
+}
+
+/** メニューを開いて、指定した登録の欄（車番など）まで寄せる。足りない欄は赤くする */
+function openMenuAt(listKey) {
+  openDrawer();
+  const sec = document.querySelector(`.menu-section[data-list="${listKey}"]`);
+  if (!sec) return;
+  sec.classList.add('is-needed');
+  sec.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  sec.querySelector('.inline-add button')?.addEventListener('click', () => sec.classList.remove('is-needed'), { once: true });
+}
+
+/** メニューの絞り込み。見出しと中の文字（登録した車番など）に、入れた言葉が含まれる項目だけを出す */
+function applyMenuSearch(q) {
+  const norm = (s) => String(s || '').normalize('NFKC').toLowerCase();
+  const key = norm(q).trim();
+  let shown = 0;
+  document.querySelectorAll('#drawer .menu-section').forEach((sec) => {
+    if (sec.id === 'home-section') return;   // 計測中だけ出る「ホームへ戻る」は、絞り込みの対象にしない
+    const hit = !key || norm(sec.textContent).includes(key);
+    sec.classList.toggle('is-filtered-out', !hit);
+    if (hit) shown += 1;
+  });
+  $('#menu-search-none').hidden = !key || shown > 0;
 }
 
 /* ==================================================================
@@ -1244,7 +1293,17 @@ async function openHistory() {
   const box = $('#ticket-list');
   box.innerHTML = '';
   if (tickets.length === 0) {
-    box.innerHTML = `<p class="note">${t('history.empty')}</p>`;
+    // 空っぽの画面にしない。何も無い理由と、次の一手（計測を始める）を出す
+    const empty = document.createElement('div');
+    empty.className = 'hist-empty';
+    empty.innerHTML = `<p class="note">${esc(t('history.emptyHint'))}</p>`;
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'btn btn-primary';
+    go.textContent = t('history.startNow');
+    go.addEventListener('click', () => { $('#dlg-history').close(); closeDrawer(); });
+    empty.appendChild(go);
+    box.appendChild(empty);
   }
   for (const raw of tickets) {
     const ticket = normalizeTicket(raw);   // 古い形（1伝票＝1材）の伝票もそのまま読める
@@ -1494,6 +1553,8 @@ function openDrawer() {
 }
 
 function closeDrawer() {
+  $('#menu-search').value = '';
+  applyMenuSearch('');
   $('#drawer').classList.remove('is-open');
   $('#drawer').setAttribute('aria-hidden', 'true');
   $('#drawer-scrim').classList.remove('is-open');
@@ -1715,6 +1776,7 @@ function wireEvents() {
   });
   $('#drawer-close').addEventListener('click', closeDrawer);
   $('#drawer-scrim').addEventListener('click', closeDrawer);
+  $('#menu-search').addEventListener('input', (e) => applyMenuSearch(e.target.value));
 
   $('#sel-language').addEventListener('change', (e) => {
     saveSettings({ locale: e.target.value });
@@ -1838,7 +1900,14 @@ function wireEvents() {
   // 計測開始 → 画面2の確認ポップアップ（樹種の切替忘れ防止）
   $('#start-btn').addEventListener('click', async () => {
     const setup = readSetup();
-    if (setup.error) { feedbackError(); toast(setup.error); return; }
+    if (setup.error) {
+      feedbackError();
+      toast(setup.error, setup.openMenuList ? 3200 : 2200);
+      if (setup.openMenuList) openMenuAt(setup.openMenuList);
+      else markNeeded(setup.field);
+      return;
+    }
+    clearNeeded();
     const sub = await subscription.evaluate();
     if (!sub.allowed) {
       feedbackError();

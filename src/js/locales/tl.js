@@ -231,4 +231,9 @@ export default {
   'measure.voiceBatch': 'Naipasok ang {count} piraso: {list}',
   'measure.voiceSkipped': 'Naipasok ang {count} piraso: {list} (hindi naipasok: {skipped})',
   'setup.prefilled': 'Inilagay na ang mga setting noong huli. Baguhin lang ang kakaiba.',
+  'setup.needTruckRegister': 'Wala pang naka-register na plate number ng trak. Mag-register muna sa menu',
+  'history.emptyHint': 'Wala pang resibo. Pagkatapos sumukat at mag-export, maiimbak ito rito',
+  'history.startNow': 'Simulan ang pagsukat',
+  'menu.search': 'Maghanap sa menu (hal. plate number, wika)',
+  'menu.searchNone': 'Walang nahanap',
 };
