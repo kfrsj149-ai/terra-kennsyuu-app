@@ -236,4 +236,5 @@ export default {
   'history.startNow': 'เริ่มวัด',
   'menu.search': 'ค้นหาในเมนู (เช่น ทะเบียนรถ ภาษา)',
   'menu.searchNone': 'ไม่พบ',
+  'license.buyPreparing': 'กำลังเตรียมการสมัครใช้งานใหม่ กรุณารอสักครู่',
 };

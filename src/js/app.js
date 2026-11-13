@@ -430,8 +430,11 @@ function renderSetupStatics() {
       sel.appendChild(opt);
     }
   }
-  $('#buy-link').href = checkoutUrl();
-  $('#price-note').textContent = priceLabel();
+  // いまの期間の購入リンクが設定されていない（通常価格のリンクを作り忘れた等）ときは、ボタンを隠して「準備中」と出す
+  const buyUrl = checkoutUrl();
+  $('#buy-link').style.display = buyUrl ? '' : 'none';
+  if (buyUrl) $('#buy-link').href = buyUrl;
+  $('#price-note').textContent = buyUrl ? priceLabel() : t('license.buyPreparing');
   renderRange();
 }
 

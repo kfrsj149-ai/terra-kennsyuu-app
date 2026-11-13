@@ -236,4 +236,5 @@ export default {
   'history.startNow': 'Mula mengukur',
   'menu.search': 'Cari dalam menu (cth: nombor plat, bahasa)',
   'menu.searchNone': 'Tidak dijumpai',
+  'license.buyPreparing': 'Pendaftaran baharu sedang disediakan. Sila tunggu sebentar.',
 };

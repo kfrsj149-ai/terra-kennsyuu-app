@@ -27,3 +27,10 @@ test('アプリ内の価格表示は、特商法の金額と一致している�
   assert.match(priceLabel(at('2026-11-12T00:00:00Z')), /9,800円.*5,000円.*初年度のみ.*税込/);
   assert.notEqual(priceLabel(at('2026-11-12T00:00:00Z')), priceLabel(at('2027-02-01T00:00:00Z')));
 });
+
+test('通常価格のリンクが未設定なら、その期間の購入リンクは空になる（アプリは購入ボタンを隠して「準備中」と出す）', () => {
+  const cfg = { ...CONFIG.stripe, checkoutUrl: '' };
+  assert.equal(checkoutUrl(at('2027-02-01T00:00:00Z'), cfg), '');
+  assert.equal(checkoutUrl(at('2026-11-12T00:00:00Z'), cfg), cfg.earlyCheckoutUrl);   // 特典の期間は、特典のリンクのまま
+});
+

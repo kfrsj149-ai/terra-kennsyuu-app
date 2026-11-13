@@ -236,4 +236,5 @@ export default {
   'history.startNow': '計測を始める',
   'menu.search': 'メニューを探す（例：車番、言語）',
   'menu.searchNone': '見つかりません',
+  'license.buyPreparing': '新しいお申し込みの準備中です。しばらくお待ちください',
 };

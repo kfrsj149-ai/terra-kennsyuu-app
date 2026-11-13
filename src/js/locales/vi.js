@@ -236,4 +236,5 @@ export default {
   'history.startNow': 'Bắt đầu đo',
   'menu.search': 'Tìm trong menu (ví dụ: biển số, ngôn ngữ)',
   'menu.searchNone': 'Không tìm thấy',
+  'license.buyPreparing': 'Chúng tôi đang chuẩn bị cho đợt đăng ký mới. Xin vui lòng chờ một lát.',
 };

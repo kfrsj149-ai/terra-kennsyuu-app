@@ -236,4 +236,5 @@ export default {
   'history.startNow': 'Simulan ang pagsukat',
   'menu.search': 'Maghanap sa menu (hal. plate number, wika)',
   'menu.searchNone': 'Walang nahanap',
+  'license.buyPreparing': 'Kasalukuyan naming inihahanda ang bagong pag-sign up. Mangyaring maghintay sandali.',
 };
