@@ -15,7 +15,7 @@
 - 検収朱 `#d9402a` … 検収の印の朱。ボタン・強調（Logging Scorer の橙・ライムとは別の色）
 - 色は、`index.html` の先頭の `:root` だけを書き換えれば、全体に反映されます
 
-## 公開するときにやること（神田さんのOKのあと）
+## 公開するときにやること（しんたろうさんのOKのあと）
 1. PCの `C:\Users\user\terra-tx-jitsugi-site\public\log-ra\` に、この `lp/log-ra/` の中身を、そのままコピーする（`index.html`・`shots\`・`og-image.jpg`）
 2. `index.html` を直す
    - 先頭近くの「下書き」の帯（`<div class="draft">`）を、1行ごと消す
